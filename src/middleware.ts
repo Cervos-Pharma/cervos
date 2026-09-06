@@ -1,8 +1,8 @@
 /**
- * @file proxy.ts (middleware)
+ * @file middleware.ts
  * @description Next.js middleware for route protection and session refresh.
  *
- * Exported as `proxy()` and called from `middleware.ts` on every non-static request.
+ * This IS the Next.js middleware entry point — the file must be named exactly this, at exactly this path, for Next.js to invoke it automatically.
  *
  * Responsibilities:
  *  1. Refresh the Supabase auth session on every request (required by @supabase/ssr)
@@ -39,7 +39,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // The desktop POS app calls these API routes from a Tauri webview (different origin).
