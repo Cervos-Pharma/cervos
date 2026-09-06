@@ -145,23 +145,23 @@ export default async function DashboardPage() {
                   {t(branches.length === 1 ? "dash.branch.count" : "dash.branch.count.p").replace("{n}", String(branches.length))}
                 </span>
               </div>
-              <div className="h-72">
-                {mapMarkers.length > 0 ? (
-                  <CervosMap
-                    center={
-                      mapMarkers.length > 0
-                        ? [mapMarkers[0].lat, mapMarkers[0].lng]
-                        : [-6.816, 39.2803]
-                    }
-                    zoom={12}
-                    markers={mapMarkers}
-                    className="h-72 w-full"
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center bg-surface-container-low">
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">
-                      {t("dash.nolocation")}
-                    </p>
+              <div className="relative h-72">
+                <CervosMap
+                  center={mapMarkers.length > 0 ? [mapMarkers[0].lat, mapMarkers[0].lng] : [-6.816, 39.2803]}
+                  zoom={mapMarkers.length > 0 ? 12 : 11}
+                  markers={mapMarkers}
+                  className="h-72 w-full"
+                />
+                {mapMarkers.length === 0 && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-surface/70 backdrop-blur-[1px]">
+                    <div className="pointer-events-auto max-w-sm rounded-lg border border-outline-variant bg-surface-base p-5 text-center shadow-lg">
+                      <span className="material-symbols-outlined text-4xl text-primary">location_on</span>
+                      <p className="mt-2 font-body-md text-ink-deep">Your branches do not have saved locations yet.</p>
+                      <p className="mt-1 text-sm text-on-surface-variant">Set each branch on the map or use its device location to display it here.</p>
+                      <Link href="/dashboard/branches" className="mt-3 inline-flex rounded bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90">
+                        Set branch locations
+                      </Link>
+                    </div>
                   </div>
                 )}
               </div>
@@ -190,7 +190,8 @@ export default async function DashboardPage() {
                         ? "bg-amber-500"
                         : "bg-error";
                     return (
-                      <div
+                      <Link
+                        href="/dashboard/branches"
                         key={b.id}
                         className="px-6 py-4 flex items-center justify-between hover:bg-surface-container-low/40 transition-colors"
                       >
@@ -212,7 +213,7 @@ export default async function DashboardPage() {
                             {new Date(b.last_synced_at).toLocaleDateString()}
                           </span>
                         )}
-                      </div>
+                      </Link>
                     );
                   })
                 )}
