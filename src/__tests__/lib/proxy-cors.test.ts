@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware as proxy } from "@/middleware";
+import { proxy } from "@/proxy";
 
 describe("Proxy CORS Handling", () => {
   it("returns 204 with CORS headers for OPTIONS on /api/marketplace/:path*", async () => {
