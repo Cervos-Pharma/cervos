@@ -1,0 +1,6 @@
+Contact: mailto:hq@cervos.online
+Contact: mailto:support@cervos.online
+Contact: tel:+255723202610
+Expires: 2027-09-01T00:00:00.000Z
+Acknowledgments: https://cervos.online/support
+Preferred-Languages: en, sw
