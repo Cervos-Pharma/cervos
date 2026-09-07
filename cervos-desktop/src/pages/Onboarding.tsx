@@ -66,6 +66,11 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
       }
       if (status.branches.length === 1) {
         await linkToExistingBranch(status.branches[0].id)
+        // Populate the local POS cache before the user reaches the dashboard.
+        // Without this, a newly linked terminal shows an empty dashboard and
+        // inventory until the background sync's first delayed run.
+        const sync = await runSyncCycle()
+        if (!sync.ok) throw new Error(sync.message ?? 'The branch was linked, but its data could not be downloaded yet.')
         await finishLink()
         return
       }
@@ -83,6 +88,8 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
     setError(null)
     try {
       await linkToExistingBranch(branchId)
+      const sync = await runSyncCycle()
+      if (!sync.ok) throw new Error(sync.message ?? 'The branch was linked, but its data could not be downloaded yet.')
       await finishLink()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to link this branch')

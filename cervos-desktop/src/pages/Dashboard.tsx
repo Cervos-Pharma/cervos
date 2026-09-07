@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { queryDb } from '../lib/database'
+import { getLinkedBranchOverview, runSyncCycle } from '../lib/sync'
 import {
   LineChart,
   Line,
@@ -18,11 +19,23 @@ interface DashboardData {
   pendingSync: number
   lowStock: number
   expiringSoon: number
+  branchCount: number | null
+  subscriptionStatus: string | null
+  graceEndsAt: string | null
+  branchName: string | null
+  dataWarning: string | null
   chartData: { label: string; value: number }[]
 }
 
 const LOW_STOCK_THRESHOLD = 10
 const EXPIRY_DAYS_THRESHOLD = 30
+
+function subscriptionDetail(graceEndsAt: string | null): string {
+  if (!graceEndsAt) return 'No grace deadline'
+  const days = Math.ceil((new Date(graceEndsAt).getTime() - Date.now()) / 86_400_000)
+  if (days < 0) return 'Grace period expired'
+  return `${days} day${days === 1 ? '' : 's'} of grace left`
+}
 
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData>({
@@ -32,6 +45,11 @@ export default function Dashboard() {
     pendingSync: 0,
     lowStock: 0,
     expiringSoon: 0,
+    branchCount: null,
+    subscriptionStatus: null,
+    graceEndsAt: null,
+    branchName: null,
+    dataWarning: null,
     chartData: [],
   })
   const [isLoading, setIsLoading] = useState(true)
@@ -41,11 +59,18 @@ export default function Dashboard() {
   }, [])
 
   async function loadData() {
+    // Refresh the linked branch before reading the local cache. This keeps the
+    // POS useful offline while ensuring a connected dashboard uses real data.
+    const sync = await runSyncCycle()
+    const overview = await getLinkedBranchOverview()
+    const branchId = overview.branchId
     const today = new Date().toDateString()
-    const sales = await queryDb(
-      `SELECT * FROM sales ORDER BY created_at DESC LIMIT 50`
-    )
-    const batches = await queryDb('SELECT * FROM batches')
+    const sales = branchId
+      ? await queryDb(`SELECT * FROM sales WHERE branch_id = ? ORDER BY created_at DESC LIMIT 50`, [branchId])
+      : []
+    const batches = branchId
+      ? await queryDb('SELECT * FROM batches WHERE branch_id = ?', [branchId])
+      : []
 
     const todaySales = sales.filter(
       (s: any) => s.created_at && new Date(s.created_at).toDateString() === today
@@ -99,6 +124,11 @@ export default function Dashboard() {
       pendingSync,
       lowStock: lowStockCount,
       expiringSoon: expiringSoonCount,
+      branchCount: overview.branchCount,
+      subscriptionStatus: overview.subscriptionStatus,
+      graceEndsAt: overview.graceEndsAt,
+      branchName: overview.branchName,
+      dataWarning: overview.error ?? (sync.ok ? null : sync.message ?? 'Could not refresh branch data.'),
       chartData,
     })
     setIsLoading(false)
@@ -115,6 +145,11 @@ export default function Dashboard() {
   }
 
   const stats = [
+    {
+      label: 'Account branches',
+      value: data.branchCount === null ? '—' : String(data.branchCount),
+      sub: data.branchName ? `This POS: ${data.branchName}` : 'linked branches',
+    },
     {
       label: "Today's revenue",
       value: `TZS ${data.todayRevenue.toLocaleString()}`,
@@ -138,11 +173,22 @@ export default function Dashboard() {
       sub: `< ${EXPIRY_DAYS_THRESHOLD} days`,
       alert: data.expiringSoon > 0,
     },
+    {
+      label: 'Subscription',
+      value: data.subscriptionStatus ? data.subscriptionStatus.replace(/_/g, ' ') : '—',
+      sub: subscriptionDetail(data.graceEndsAt),
+      alert: data.subscriptionStatus === 'grace' || data.subscriptionStatus === 'locked',
+    },
   ]
 
   return (
     <div className="p-6 flex flex-col gap-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {data.dataWarning && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm">
+          {data.dataWarning} Showing the latest locally stored branch data.
+        </div>
+      )}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map((stat) => (
           <div
             key={stat.label}

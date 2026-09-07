@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { queryDb, executeDb, generateId, nowIso } from "../lib/database";
-import { queueForSync, runSyncCycle } from "../lib/sync";
+import { getLinkedBranchId, queueForSync, runSyncCycle } from "../lib/sync";
 import { PHARMACY_CATEGORIES } from "../lib/branding";
 import { useAuthStore } from "../lib/store";
 import type { Product, Batch } from "../types";
@@ -23,6 +23,8 @@ export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [branchId, setBranchId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
@@ -34,8 +36,31 @@ export default function Inventory() {
   }, []);
 
   async function loadData() {
-    const prods = await queryDb("SELECT * FROM products ORDER BY generic_name");
-    const bats = await queryDb("SELECT * FROM batches");
+    setIsLoading(true);
+    const linkedBranchId = await getLinkedBranchId();
+    setBranchId(linkedBranchId);
+    if (!linkedBranchId) {
+      setProducts([]);
+      setBatches([]);
+      setSyncError("This POS is not linked to a branch. Link it in Settings before managing inventory.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Pull first so this view reflects the branch selected during onboarding,
+    // rather than only an old local cache. Offline use still falls back safely
+    // to the last successful local pull.
+    const sync = await runSyncCycle();
+    setSyncError(sync.ok ? null : (sync.message ?? "Could not refresh branch inventory."));
+
+    const prods = await queryDb(
+      `SELECT DISTINCT p.* FROM products p
+       INNER JOIN batches b ON b.product_id = p.id
+       WHERE b.branch_id = ?
+       ORDER BY p.generic_name`,
+      [linkedBranchId]
+    );
+    const bats = await queryDb("SELECT * FROM batches WHERE branch_id = ?", [linkedBranchId]);
     setProducts(prods);
     setBatches(bats);
     setIsLoading(false);
@@ -129,6 +154,12 @@ export default function Inventory() {
           )}
         </div>
       </div>
+
+      {syncError && (
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm">
+          {syncError} Displaying the latest data stored for this branch.
+        </div>
+      )}
 
       {getLowStockProducts().length > 0 && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
@@ -287,6 +318,10 @@ export default function Inventory() {
             setEditingProduct(null);
           }}
           onSave={async (productData) => {
+            if (!branchId) {
+              setSyncError("This POS is not linked to a branch. Inventory cannot be added until it is linked.");
+              return;
+            }
             const now = nowIso();
             let productId: string;
             if (editingProduct) {
@@ -362,8 +397,6 @@ export default function Inventory() {
             }
 
             if (productData.quantity > 0) {
-              const branchRes = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'");
-              const branchId = branchRes.length > 0 ? JSON.parse(branchRes[0].value) : null;
               const batchId = generateId();
               await executeDb(
                 `INSERT INTO batches (id, branch_id, product_id, batch_number, quantity, cost_price, sale_price, expiry_date, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,

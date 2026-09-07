@@ -159,6 +159,65 @@ export interface LinkStatus {
   branches: RemoteBranch[]
 }
 
+export interface LinkedBranchOverview {
+  branchId: string | null
+  branchName: string | null
+  branchCount: number | null
+  subscriptionStatus: string | null
+  graceEndsAt: string | null
+  error: string | null
+}
+
+/** Returns the branch assigned to this device, without ever fabricating one. */
+export async function getLinkedBranchId(): Promise<string | null> {
+  const result = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
+  if (result.length === 0) return null
+  try {
+    return JSON.parse(result[0].value) as string
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Gets account-level branch and subscription information for the POS dashboard.
+ * The local branch remains usable offline; remote values are returned only when
+ * the authenticated Supabase session can confirm them.
+ */
+export async function getLinkedBranchOverview(): Promise<LinkedBranchOverview> {
+  const branchId = await getLinkedBranchId()
+  const nameRows = await queryDb("SELECT value FROM app_settings WHERE key = 'centre_name'")
+  let branchName: string | null = null
+  try { branchName = nameRows.length ? JSON.parse(nameRows[0].value) as string : null } catch { /* use null */ }
+
+  if (!(await ensureLinked()) || !Ie || !branchId) {
+    return { branchId, branchName, branchCount: branchId ? 1 : null, subscriptionStatus: null, graceEndsAt: null, error: branchId ? 'Offline — showing local branch data.' : 'This POS is not linked to a branch.' }
+  }
+
+  const accountRows = await queryDb("SELECT value FROM app_settings WHERE key = 'account_id'")
+  let accountId: string | null = null
+  try { accountId = accountRows.length ? JSON.parse(accountRows[0].value) as string : null } catch { /* use null */ }
+  if (!accountId) return { branchId, branchName, branchCount: 1, subscriptionStatus: null, graceEndsAt: null, error: 'No linked account found on this device.' }
+
+  const { data: branches, error } = await Ie
+    .from('branches')
+    .select('id, name, subscription_status, grace_ends_at')
+    .eq('account_id', accountId)
+
+  if (error) {
+    return { branchId, branchName, branchCount: 1, subscriptionStatus: null, graceEndsAt: null, error: error.message }
+  }
+  const linkedBranch = (branches ?? []).find((branch: any) => branch.id === branchId)
+  return {
+    branchId,
+    branchName: linkedBranch?.name ?? branchName,
+    branchCount: (branches ?? []).length,
+    subscriptionStatus: linkedBranch?.subscription_status ?? null,
+    graceEndsAt: linkedBranch?.grace_ends_at ?? null,
+    error: null,
+  }
+}
+
 /**
  * Call after signIn(). Looks at the real pharmacy account behind the
  * credentials just used and returns its actual branches from Supabase, so
@@ -625,9 +684,8 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
   _syncing = true
   useSyncStore.getState().setSyncing(true)
   try {
-    const branchResult = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
-    if (!branchResult.length) return { ok: false, message: 'no branch' }
-    const branchId = JSON.parse(branchResult[0].value)
+    const branchId = await getLinkedBranchId()
+    if (!branchId) return { ok: false, message: 'no linked branch' }
     const accountResult = await queryDb("SELECT value FROM app_settings WHERE key = 'account_id'")
     const accountId = accountResult.length ? JSON.parse(accountResult[0].value) : null
     if (!accountId) return { ok: false, message: 'no account' }
@@ -653,6 +711,10 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
         .eq('buyer_branch_id', branchId)
         .gt('updated_at', since),
     ])
+
+    const pullError = [prodRes, batchRes, cmdRes, branchRes, opRes, orderRes]
+      .find((result) => result.error)?.error
+    if (pullError) throw pullError
 
     const products = prodRes.data || []
     const batches = batchRes.data || []
