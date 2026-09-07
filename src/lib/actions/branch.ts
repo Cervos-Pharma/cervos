@@ -366,6 +366,85 @@ export async function addBranchBatch(input: {
   return { error: insertError?.message ?? null };
 }
 
+/**
+ * Owner-level equivalent of addBranchBatch — for the pharmacy owner's
+ * cross-branch /dashboard/inventory page, where the owner picks WHICH of
+ * their branches to add stock to (a branch operator's own view always knows
+ * its one branch; the owner's view doesn't). Authenticates via the same
+ * accounts.auth_user_id pattern the rest of pharmacy.ts uses, not the
+ * operator session addBranchBatch relies on.
+ *
+ * If `newProduct` is provided instead of `productId`, creates that product
+ * in the shared catalog first, then adds the batch against it.
+ */
+export async function addPharmacyBranchBatch(input: {
+  branchId: string;
+  productId?: string;
+  newProduct?: { genericName: string; brandName?: string; category?: string };
+  quantity: number;
+  expiryDate: string;
+  costPrice?: number;
+  salePrice?: number;
+  batchNumber?: string;
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!account) return { error: "Account not found." };
+
+  const qty = Math.floor(Number(input.quantity));
+  if (!Number.isFinite(qty) || qty <= 0) return { error: "Enter a valid quantity." };
+  if (!input.expiryDate) return { error: "Expiry date is required." };
+  if (!input.productId && !input.newProduct) return { error: "Select a product or add a new one." };
+
+  const service = await createServiceClient();
+
+  // Ownership check — the branch must actually belong to this account.
+  const { data: branch } = await service
+    .from("branches")
+    .select("id")
+    .eq("id", input.branchId)
+    .eq("account_id", account.id)
+    .maybeSingle();
+  if (!branch) return { error: "Branch not found on this account." };
+
+  let productId = input.productId ?? null;
+  if (!productId && input.newProduct) {
+    if (!input.newProduct.genericName?.trim()) return { error: "New product needs a generic name." };
+    const { data: created, error: createError } = await service
+      .from("products")
+      .insert({
+        generic_name: input.newProduct.genericName.trim(),
+        brand_name: input.newProduct.brandName?.trim() || null,
+        category: input.newProduct.category?.trim() || null,
+      })
+      .select("id")
+      .single();
+    if (createError || !created) return { error: createError?.message ?? "Failed to create product." };
+    productId = created.id;
+  }
+
+  const { error: insertError } = await service.from("batches").insert({
+    branch_id: input.branchId,
+    product_id: productId,
+    quantity: qty,
+    expiry_date: input.expiryDate,
+    cost_price: Number(input.costPrice) || 0,
+    sale_price: Number(input.salePrice) || 0,
+    batch_number: input.batchNumber?.trim() || null,
+  });
+
+  return { error: insertError?.message ?? null };
+}
+
 /** Delta-based stock adjustment (positive = stock-in, negative = stock-out). */
 export async function adjustBranchBatch(
   batchId: string,

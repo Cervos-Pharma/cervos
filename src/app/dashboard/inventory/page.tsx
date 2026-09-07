@@ -12,6 +12,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PharmacySidebar from "@/components/PharmacySidebar";
 import InventoryTable, { type BatchRow } from "@/components/InventoryTable";
+import AddStockModal from "@/components/AddStockModal";
+import { getBranchProducts } from "@/lib/actions/branch";
 import { getT } from "@/lib/i18n/server";
 
 export default async function InventoryPage() {
@@ -45,8 +47,8 @@ export default async function InventoryPage() {
     expiry_date: string;
     batch_number: string | null;
     branch_id: string;
-    products: { generic_name: string; brand_name: string | null }[] | null;
-    branches: { name: string }[] | null;
+    products: { generic_name: string; brand_name: string | null } | null;
+    branches: { name: string } | null;
   };
 
   const { data: rawBatches } = branchIds.length === 0
@@ -61,8 +63,8 @@ export default async function InventoryPage() {
   const toDaysLeft = (iso: string) => Math.ceil((new Date(iso).getTime() - now) / 86400000);
 
   const batches: BatchRow[] = ((rawBatches ?? []) as unknown as RawBatch[]).map((row) => {
-    const products = row.products?.[0];
-    const branches = row.branches?.[0];
+    const products = row.products;
+    const branches = row.branches;
     return {
       id: row.id,
       productName: products?.brand_name ?? products?.generic_name ?? "—",
@@ -77,6 +79,8 @@ export default async function InventoryPage() {
 
   const branchNames = [...branchNameMap.values()];
   const criticalCount = batches.filter((b) => b.daysLeft <= 14).length;
+  const catalogProducts = await getBranchProducts();
+  const branchOptions = (branches ?? []).map((b) => ({ id: b.id, name: b.name }));
 
   return (
     <div className="flex min-h-screen bg-surface">
@@ -92,14 +96,17 @@ export default async function InventoryPage() {
             </p>
             <h1 className="font-headline-md text-headline-md text-ink-deep leading-none">{t("dash.inventory.title")}</h1>
           </div>
-          {criticalCount > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-error animate-pulse" />
-              <span className="font-mono text-label-md text-error uppercase">
-                {t(criticalCount === 1 ? "dash.inventory.critical" : "dash.inventory.critical.p").replace("{n}", String(criticalCount))}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {criticalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-error animate-pulse" />
+                <span className="font-mono text-label-md text-error uppercase">
+                  {t(criticalCount === 1 ? "dash.inventory.critical" : "dash.inventory.critical.p").replace("{n}", String(criticalCount))}
+                </span>
+              </div>
+            )}
+            <AddStockModal branches={branchOptions} products={catalogProducts} />
+          </div>
         </header>
         <div className="pt-16 flex-1 flex">
           <InventoryTable batches={batches} branches={branchNames} />
