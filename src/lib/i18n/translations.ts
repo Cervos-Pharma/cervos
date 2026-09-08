@@ -38,7 +38,9 @@ export const strings: Record<string, Record<Lang, string>> = {
   "hero.cta.supplier": { EN: "For Suppliers", SW: "Kwa Wasambazaji" },
 
   // ── Stats ─────────────────────────────────────────────────────────────────
-  "stats.pharmacies":    { EN: "Pharmacies Online",      SW: "Maduka ya Dawa Mtandaoni" },
+  "stats.pharmacies":    { EN: "Pharmacies",             SW: "Maduka ya Dawa" },
+  "stats.suppliers":     { EN: "Verified Suppliers",     SW: "Wasambazaji Walioidhinishwa" },
+  "stats.branches":      { EN: "Active Branches",        SW: "Matawi Yanayofanya Kazi" },
   "stats.uptime":        { EN: "Uptime",                 SW: "Muda wa Uendeshaji" },
   "stats.transactions":  { EN: "Transactions Secured",   SW: "Miamala Iliyolindwa" },
 
@@ -171,7 +173,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   // Dashboard — settings page
   "dash.settings.title":  { EN: "Account Settings", SW: "Mipangilio ya Akaunti" },
   "dash.settings.payments": { EN: "Payment Methods", SW: "Njia za Malipo" },
-  "dash.settings.payments.body": { EN: "Configure which payment methods your pharmacy accepts at the point of sale, and set up your Payme Africa wallet for marketplace orders.", SW: "Sanidi ni njia zipi za malipo duka lako linapokea kwenye sehemu ya mauzo, na usanidi mkoba wako wa Payme Africa kwa maagizo ya soko." },
+  "dash.settings.payments.body": { EN: "Configure which payment methods your pharmacy accepts at the point of sale, and set up your mobile money wallet for marketplace orders.", SW: "Sanidi ni njia zipi za malipo duka lako linapokea kwenye sehemu ya mauzo, na usanidi mkoba wako wa simu kwa maagizo ya soko." },
   "dash.settings.loaderror": { EN: "Unable to load account. Please refresh or sign out and sign back in.", SW: "Imeshindikana kupakia akaunti. Tafadhali onyesha upya au toka kisha ingia tena." },
   "dash.settings.changepw": { EN: "Change Password", SW: "Badilisha Nywila" },
   "dash.settings.changepw.body": { EN: "Update your account password. You will remain signed in after the change.", SW: "Sasisha nywila ya akaunti yako. Utaendelea kuwa umeingia baada ya mabadiliko." },
@@ -318,8 +320,8 @@ export const strings: Record<string, Record<Lang, string>> = {
   "mkt.quote.total":   { EN: "Estimated Total", SW: "Jumla ya Makadirio" },
   "mkt.quote.submit":  { EN: "Submit Quote Request", SW: "Wasilisha Ombi la Nukuu" },
   "mkt.checkout.branch_label": { EN: "Ordering branch", SW: "Tawi linaloagiza" },
-  "mkt.checkout.wallet_label": { EN: "Payme wallet (used once the supplier approves)", SW: "Mkoba wa Payme (utatumika baada ya muuzaji kuidhinisha)" },
-  "mkt.checkout.escrow_note": { EN: "You'll pay via Payme Africa only after the supplier approves this order — nothing is charged now.", SW: "Utalipa kupitia Payme Africa baada tu ya muuzaji kuidhinisha agizo hili — hakuna malipo sasa." },
+  "mkt.checkout.wallet_label": { EN: "Mobile money wallet (used once the supplier approves)", SW: "Mkoba wa simu (utatumika baada ya muuzaji kuidhinisha)" },
+  "mkt.checkout.escrow_note": { EN: "You'll pay via mobile money only after the supplier approves this order — nothing is charged now.", SW: "Utalipa kupitia pesa ya simu baada tu ya muuzaji kuidhinisha agizo hili — hakuna malipo sasa." },
   "mkt.checkout.place_order": { EN: "Place Order", SW: "Weka Oda" },
 
   // Payment settings form (shared pharmacy + supplier)
@@ -345,10 +347,10 @@ export const strings: Record<string, Record<Lang, string>> = {
   "pay.bank.branch":     { EN: "Branch", SW: "Tawi" },
   "pay.bank.branch.placeholder": { EN: "e.g. Dar es Salaam", SW: "k.m. Dar es Salaam" },
   "pay.wallet.title":    { EN: "Marketplace Wallet", SW: "Mkoba wa Soko" },
-  "pay.wallet.pharmacy": { EN: "This phone number will be debited when you pay for marketplace orders through the Cervos escrow system (Payme Africa).", SW: "Namba hii ya simu itakatwa malipo unapolipia maagizo ya soko kupitia mfumo wa escrow wa Cervos (Payme Africa)." },
-  "pay.wallet.supplier": { EN: "This phone number will be credited when marketplace orders are delivered and escrow releases payment (Payme Africa).", SW: "Namba hii ya simu itapokea malipo maagizo ya soko yanapofikishwa na escrow kuachilia malipo (Payme Africa)." },
-  "pay.wallet.number":   { EN: "Payme Africa Wallet Number", SW: "Namba ya Mkoba wa Payme Africa" },
-  "pay.wallet.note":     { EN: "Used exclusively for B2B marketplace transactions. Leave blank until your Payme Africa account is ready.", SW: "Inatumika kwa miamala ya B2B ya soko pekee. Acha wazi hadi akaunti yako ya Payme Africa iwe tayari." },
+  "pay.wallet.pharmacy": { EN: "This phone number will be debited when you pay for marketplace orders through the Cervos secure escrow system.", SW: "Namba hii ya simu itakatwa malipo unapolipia maagizo ya soko kupitia mfumo salama wa escrow wa Cervos." },
+  "pay.wallet.supplier": { EN: "This phone number will be credited when marketplace orders are delivered and escrow releases payment.", SW: "Namba hii ya simu itapokea malipo maagizo ya soko yanapofikishwa na escrow kuachilia malipo." },
+  "pay.wallet.number":   { EN: "Mobile Money Wallet Number", SW: "Namba ya Mkoba wa Pesa ya Simu" },
+  "pay.wallet.note":     { EN: "Used exclusively for B2B marketplace transactions with mobile money.", SW: "Inatumika kwa miamala ya B2B ya soko kupitia pesa ya simu pekee." },
   "pay.save":            { EN: "Save Payment Settings", SW: "Hifadhi Mipangilio ya Malipo" },
   "pay.saving":          { EN: "Saving…", SW: "Inahifadhi…" },
   "pay.saved":           { EN: "Settings saved successfully.", SW: "Mipangilio imehifadhiwa kwa mafanikio." },
@@ -525,7 +527,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "landing.fefo.status.first":    { EN: "FIRST",              SW: "MWANZA" },
   "landing.fefo.status.queued":   { EN: "QUEUED",             SW: "KATIKA FOLENI" },
   "landing.cta.ready":           { EN: "Ready to modernise your pharmacy?", SW: "Tayari kuboresha duka lako la dawa?" },
-  "landing.cta.join":            { EN: "Join over 1,200 pharmacies already running on Cervos.", SW: "Jiunge na maduka zaidi ya 1,200 yaliyokua tayari kwenye Cervos." },
+  "landing.cta.join":            { EN: "Join pharmacies and suppliers across Tanzania running on Cervos.", SW: "Jiunge na maduka ya dawa na wasambazaji kote Tanzania wanaotumia Cervos." },
   "landing.footer.platform":     { EN: "Platform",   SW: "Jukwaa" },
   "landing.footer.suppliers":     { EN: "Suppliers", SW: "Wasambazaji" },
   "landing.footer.news":          { EN: "News",      SW: "Habari" },
@@ -611,7 +613,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   // Supplier settings
   "sup.settings.title":             { EN: "Settings",              SW: "Mipangilio" },
   "sup.settings.payment_settings":  { EN: "Payment Settings",      SW: "Mipangilio ya Malipo" },
-  "sup.settings.payment_desc":      { EN: "Configure how you receive payments from pharmacies — mobile money disbursement wallets, bank account details, and your Payme Africa marketplace wallet.", SW: "Sanidi jinsi unavyopokea malipo kutoka kwa maduka ya dawa — mibooba ya simu, maelezo ya akaunti ya benki, na mkoba wako wa soko la Payme Africa." },
+  "sup.settings.payment_desc":      { EN: "Configure how you receive payments from pharmacies — mobile money disbursement wallets, bank account details, and your marketplace wallet.", SW: "Sanidi jinsi unavyopokea malipo kutoka kwa maduka ya dawa — mikoba ya simu, maelezo ya akaunti ya benki, na mkoba wako wa soko." },
   "sup.settings.load_error":        { EN: "Unable to load account. Please refresh or sign out and sign back in.", SW: "Imeshindikana kupakia akaunti. Tafadhali onyesha upya au toka kisha ingia tena." },
 
   // Supplier alerts
@@ -706,9 +708,9 @@ export const strings: Record<string, Record<Lang, string>> = {
 
   // Supplier quote page
   "sup.quote.hero_badge":            { EN: "Supplier Network — Open for Applications", SW: "Mtandao wa Wasambazaji — Wazi kwa Maombi" },
-  "sup.quote.hero_headline":          { EN: "Reach 1,200+ pharmacies across East Africa.", SW: "Fikia maduka 1,200+ kote Afrika Mashariki." },
+  "sup.quote.hero_headline":          { EN: "Connect directly with verified pharmacies across East Africa.", SW: "Ungana moja kwa moja na maduka ya dawa yaliyothibitishwa kote Afrika Mashariki." },
   "sup.quote.hero_body":              { EN: "Join the Cervos Supplier Network and connect your inventory directly to verified pharmacy operators — with escrow-secured payments, real-time analytics, and a dedicated onboarding team.", SW: "Jiunge na Mtandao wa Wasambazaji wa Cervos na unganisha hisa zako moja kwa moja na waendeshaji wa maduka ya dawa walio thibitishwa — na malipo yaliyolindwa na escrow, takwimu za wakati halisi, na timu maalum ya kuwashwa." },
-  "sup.quote.proof.pharmacies":       { EN: "Active Pharmacies",               SW: "Maduka Ya Dawa Yaliyochapishwa" },
+  "sup.quote.proof.pharmacies":       { EN: "Verified Network",               SW: "Mtandao Uliothibitishwa" },
   "sup.quote.proof.onboarding":        { EN: "Avg. Onboarding",                  SW: "Wastani wa Kuanzisha" },
   "sup.quote.proof.security":         { EN: "Payment Security",                 SW: "Usalama wa Malipo" },
   "sup.quote.app_received":            { EN: "Application Received",             SW: "Ombi Limepokea" },
@@ -730,7 +732,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "sup.quote.cta.body":               { EN: "Fill in the form above or email us directly at", SW: "Jaza fomu hapo juu au tutumie barua pepe moja kwa moja kwa" },
   "sup.quote.cta.apply":              { EN: "Apply Now",                         SW: "Omba Sasa" },
   "sup.quote.direct.title":           { EN: "Direct Pharmacy Access",            SW: "Ufikiaji wa Moja kwa Moja wa Duka la Dawa" },
-  "sup.quote.direct.body":            { EN: "Connect with 1,200+ verified pharmacies actively sourcing through the Cervos network across East Africa.", SW: "Ungana na maduka 1,200+ yaliyothibitishwa yanayochagua kupitia mtandao wa Cervos kote Afrika Mashariki." },
+  "sup.quote.direct.body":            { EN: "Connect with verified pharmacies actively sourcing through the Cervos network across East Africa.", SW: "Ungana na maduka yaliyothibitishwa yanayochagua kupitia mtandao wa Cervos kote Afrika Mashariki." },
   "sup.quote.escrow.title":           { EN: "Escrow-Secured Payments",          SW: "Malipo Yaliyolindwa na Escrow" },
   "sup.quote.escrow.body":            { EN: "Every high-value transaction is protected through our integrated escrow system — zero payment risk.", SW: "Kila muamala wa thamani kubwa unalindwa kupitia mfumo wetu wa escrow uliounganishwa — hakuna hatari ya malipo." },
   "sup.quote.analytics.title":        { EN: "Real-Time Analytics",               SW: "Takwimu za Wakati Halisi" },

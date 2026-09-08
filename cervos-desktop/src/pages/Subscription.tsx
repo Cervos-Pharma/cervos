@@ -101,7 +101,10 @@ export default function Subscription() {
         .eq('audience', 'pharmacy')
         .order('price_monthly_tzs', { ascending: true })
       if (planError) throw planError
-      setPlans((planRows ?? []) as Plan[])
+      const filtered = ((planRows ?? []) as Plan[]).filter((p) =>
+        p.name === 'Basic' || p.price_monthly_tzs === 10000
+      )
+      setPlans(filtered.length > 0 ? filtered : ((planRows ?? []) as Plan[]).slice(0, 1))
 
       const walletRow = await queryDb("SELECT value FROM app_settings WHERE key = 'payme_wallet_number'")
       if (walletRow.length) setWallet(JSON.parse(walletRow[0].value))
@@ -147,7 +150,7 @@ export default function Subscription() {
     setMessage(null)
     const w = wallet.trim()
     if (!w) {
-      setError('Enter a Payme Africa mobile money number to pay with.')
+      setError('Enter a mobile money number to pay with.')
       return
     }
     setUpgrading(plan.id)
@@ -321,6 +324,34 @@ export default function Subscription() {
             </div>
           )
         })}
+
+        {/* Deferred higher tiers */}
+        <div className="bg-surface-base border border-dashed border-outline-variant rounded-xl p-5 flex flex-col justify-between opacity-80">
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="material-symbols-outlined text-sm text-on-surface-variant">schedule</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Coming Soon</span>
+            </div>
+            <p className="font-headline text-lg font-bold text-on-surface">Growth & Enterprise</p>
+            <p className="text-sm font-semibold text-on-surface-variant my-2">Future Tiers</p>
+            <p className="text-xs text-on-surface-variant mb-3">
+              Higher multi-branch enterprise plans are deferred to upcoming releases.
+            </p>
+            <ul className="space-y-1">
+              <li className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <span className="material-symbols-outlined text-xs text-on-surface-variant">arrow_forward</span>
+                Multi-branch expansion
+              </li>
+              <li className="flex items-center gap-2 text-xs text-on-surface-variant">
+                <span className="material-symbols-outlined text-xs text-on-surface-variant">arrow_forward</span>
+                Unlimited supplier linkages
+              </li>
+            </ul>
+          </div>
+          <p className="mt-4 text-[11px] text-on-surface-variant font-medium">
+            Contact HQ for early custom rollout
+          </p>
+        </div>
       </div>
     </div>
   )

@@ -333,6 +333,65 @@ export async function linkToExistingBranch(branchId: string): Promise<void> {
 }
 
 /**
+ * Force-claims a branch for this device, overriding any existing POS
+ * activation on another machine. Only shown to the account owner after they
+ * explicitly confirm the action. The previous device will be deactivated the
+ * next time it tries to sync (its claim will be gone).
+ */
+export async function forceClaimBranch(branchId: string): Promise<void> {
+  if (!Ie) throw new Error('Not linked to Supabase — please sign in again.')
+
+  const { data: branch, error } = await Ie
+    .from('branches')
+    .update({ pos_activated_at: new Date().toISOString() })
+    .eq('id', branchId)
+    .select('id, name, address, account_id')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!branch) throw new Error('That branch could not be found — it may have been removed from the portal.')
+
+  // Keep a human-readable account label with the local branch mapping so the
+  // POS can make its ownership clear even while offline.
+  const { data: account } = await Ie
+    .from('accounts')
+    .select('name')
+    .eq('id', branch.account_id)
+    .maybeSingle()
+
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['branch_id', JSON.stringify(branch.id)]
+  )
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['account_id', JSON.stringify(branch.account_id)]
+  )
+  if (account?.name) {
+    await executeDb(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ['account_name', JSON.stringify(account.name)]
+    )
+  }
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['centre_name', JSON.stringify(branch.name)]
+  )
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['centre_address', JSON.stringify(branch.address ?? '')]
+  )
+  await executeDb(
+    `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET account_id = excluded.account_id, name = excluded.name`,
+    [branch.id, branch.account_id, branch.name, 'trial', 'free']
+  )
+
+  await pullBranchOperators(branch.id)
+}
+
+/**
  * Backwards-compatibility helper for any components still calling linkBranch().
  * Links to the first branch found if not already linked.
  */
@@ -435,15 +494,28 @@ export async function syncSubscription(branchId: string): Promise<void> {
   if (!Ie || !isConfigured) return
 
   try {
-    const { data: branch } = await Ie
-      .from('branches')
-      .select('subscription_status, subscription_tier, grace_ends_at, trial_ends_at')
-      .eq('id', branchId)
-      .maybeSingle()
+    const accountResult = await queryDb("SELECT value FROM app_settings WHERE key = 'account_id'")
+    const accountId = accountResult.length ? JSON.parse(accountResult[0].value) : null
+
+    const [branchRes, planRes] = await Promise.all([
+      Ie.from('branches')
+        .select('subscription_status, grace_ends_at, trial_ends_at')
+        .eq('id', branchId)
+        .maybeSingle(),
+      accountId
+        ? Ie.from('accounts')
+            .select('subscription_plan, subscription_plans(name)')
+            .eq('id', accountId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+
+    const branch = branchRes.data
+    const planName = (planRes.data as any)?.subscription_plans?.name || 'Basic'
 
     if (branch) {
       await saveSetting('subscription_status', JSON.stringify(branch.subscription_status))
-      await saveSetting('subscription_tier', JSON.stringify(branch.subscription_tier))
+      await saveSetting('subscription_tier', JSON.stringify(planName))
       await saveSetting('grace_ends_at', JSON.stringify(branch.grace_ends_at))
       await saveSetting('trial_ends_at', JSON.stringify(branch.trial_ends_at))
     }
@@ -725,12 +797,12 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
 
     const since = (await getLastPullTimestamp(branchId)) || '1970-01-01T00:00:00Z'
 
-    const [prodRes, batchRes, cmdRes, branchRes, opRes, orderRes] = await Promise.all([
+    const [prodRes, batchRes, cmdRes, branchRes, opRes, orderRes, planRes] = await Promise.all([
       Ie.from('products').select('*').gt('updated_at', since),
       Ie.from('batches').select('*').eq('branch_id', branchId).gt('updated_at', since),
       Ie.from('branch_commands').select('*').eq('branch_id', branchId).eq('status', 'pending'),
       Ie.from('branches')
-        .select('subscription_status, subscription_tier, grace_ends_at, trial_ends_at, locked_reason')
+        .select('subscription_status, grace_ends_at, trial_ends_at, locked_reason')
         .eq('id', branchId)
         .maybeSingle(),
       // operators has no updated_at column to filter incrementally on, and per-branch
@@ -743,16 +815,21 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
         .select('id, order_reference, currency, status, note, placed_at, supplier_approved_at, confirmed_at, shipped_at, delivered_at, cancelled_at, updated_at, accounts!seller_id(name)')
         .eq('buyer_branch_id', branchId)
         .gt('updated_at', since),
+      Ie.from('accounts')
+        .select('subscription_plan, subscription_plans(name)')
+        .eq('id', accountId)
+        .maybeSingle(),
     ])
 
-    const pullError = [prodRes, batchRes, cmdRes, branchRes, opRes, orderRes]
+    const pullError = [prodRes, batchRes, cmdRes, branchRes, opRes, orderRes, planRes]
       .find((result) => result.error)?.error
     if (pullError) throw pullError
 
     const products = prodRes.data || []
     const batches = batchRes.data || []
     const commands = cmdRes.data || []
-    const branch = branchRes.data || null
+    const branchPlanName = (planRes.data as any)?.subscription_plans?.name || 'Basic'
+    const branch = branchRes.data ? { ...branchRes.data, subscription_tier: branchPlanName } : null
     const operators = opRes.data || []
     const orders = orderRes.data || []
 

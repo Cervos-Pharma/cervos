@@ -3,16 +3,16 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../lib/hooks'
 import { queryDb } from '../lib/database'
 import { fetchOperators, validateOperatorPin, fetchBranchSubscription } from '../lib/queries'
-import type { Operator } from '../types'
+import type { Operator, OperatorRole } from '../types'
 import Logo from '../components/Logo'
 
 export default function Login() {
   const navigate = useNavigate()
   const { setOperator } = useAuth()
   const [operators, setOperators] = useState<Operator[]>([])
+  const [selectedRole, setSelectedRole] = useState<OperatorRole>('operator')
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(null)
   const [pin, setPin] = useState('')
-  const [adminPin, setAdminPin] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [blocked, setBlocked] = useState(false)
@@ -43,6 +43,8 @@ export default function Login() {
     setOperators(ops)
   }
 
+  const filteredOperators = operators.filter((o) => o.role === selectedRole)
+
   async function handlePinSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedOperator) return
@@ -54,19 +56,16 @@ export default function Login() {
         setError('Invalid PIN')
         return
       }
-      // The portal PIN identifies the administrator. The explicit main PIN
-      // is a second, local terminal gate requested for the admin role.
-      if (op.role === 'admin' && adminPin !== '1234') {
-        setError('Enter the main admin PIN to continue')
-        return
-      }
+
       const branchRes = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
       const branchId = branchRes.length > 0 ? JSON.parse(branchRes[0].value) : null
       const sub = branchId ? await fetchBranchSubscription(branchId) : null
       if (sub && sub.subscription_status === 'locked') {
-        setLockedReason(sub.locked_reason === 'max_branches_exceeded'
-          ? "This branch isn't covered by your current plan. Upgrade your subscription to restore POS access here."
-          : 'Upgrade your subscription for desktop POS access.')
+        setLockedReason(
+          sub.locked_reason === 'max_branches_exceeded'
+            ? "This branch isn't covered by your current plan. Upgrade your subscription to restore POS access here."
+            : 'Upgrade your subscription for desktop POS access.'
+        )
         setBlocked(true)
         return
       }
@@ -128,44 +127,97 @@ export default function Login() {
             <Logo size="lg" className="mx-auto" />
           </div>
           <h1 className="text-3xl font-display font-bold text-on-surface mb-2">Cervos POS</h1>
-          <p className="text-on-surface-variant">Select your profile and enter PIN</p>
+          <p className="text-on-surface-variant">Choose your role and enter your PIN</p>
         </div>
 
-        <div className="bg-surface-base border border-outline-variant rounded-xl p-8">
+        <div className="bg-surface-base border border-outline-variant rounded-xl p-8 shadow-sm">
           {operators.length > 0 ? (
             <>
-              <h2 className="text-xl font-semibold text-on-surface mb-6">Sign In</h2>
+              {/* Role Selection Tabs */}
+              <div className="grid grid-cols-2 p-1 bg-surface rounded-lg border border-outline-variant mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole('operator')
+                    setSelectedOperator(null)
+                    setPin('')
+                    setError('')
+                  }}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-semibold transition-all ${
+                    selectedRole === 'operator'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-lg">badge</span>
+                  Operator
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole('admin')
+                    setSelectedOperator(null)
+                    setPin('')
+                    setError('')
+                  }}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-semibold transition-all ${
+                    selectedRole === 'admin'
+                      ? 'bg-primary text-white shadow-sm'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-lg">admin_panel_settings</span>
+                  Admin
+                </button>
+              </div>
+
               {error && (
                 <div className="mb-4 p-4 bg-error/10 border border-error/20 rounded-lg text-error text-sm">
                   {error}
                 </div>
               )}
-              <form onSubmit={handlePinSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-on-surface-variant mb-2">Operator</label>
-                  <select
-                    value={selectedOperator?.id || ''}
-                    onChange={(e) => {
-                      const op = operators.find((o) => o.id === e.target.value)
-                      setSelectedOperator(op || null)
-                      setPin('')
-                      setAdminPin('')
-                    }}
-                    required
-                    className="w-full px-4 py-3 bg-surface border border-outline-variant rounded-lg text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="">Select operator</option>
-                    {operators.map((op) => (
-                      <option key={op.id} value={op.id}>{op.name} ({op.role})</option>
-                    ))}
-                  </select>
+
+              {filteredOperators.length === 0 ? (
+                <div className="text-center py-6 text-on-surface-variant text-sm">
+                  <span className="material-symbols-outlined text-3xl mb-2 text-on-surface-variant/70">person_off</span>
+                  <p>No {selectedRole === 'admin' ? 'Admin' : 'Operator'} profiles registered for this branch.</p>
+                  <p className="text-xs text-on-surface-variant/70 mt-1">
+                    Manage operators in the web dashboard or switch role above.
+                  </p>
                 </div>
-                {selectedOperator && (
-                  <>
+              ) : (
+                <form onSubmit={handlePinSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-on-surface-variant mb-2">
+                      {selectedRole === 'admin' ? 'Admin Account' : 'Operator Account'}
+                    </label>
+                    <select
+                      value={selectedOperator?.id || ''}
+                      onChange={(e) => {
+                        const op = filteredOperators.find((o) => o.id === e.target.value)
+                        setSelectedOperator(op || null)
+                        setPin('')
+                      }}
+                      required
+                      className="w-full px-4 py-3 bg-surface border border-outline-variant rounded-lg text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">Select profile</option>
+                      {filteredOperators.map((op) => (
+                        <option key={op.id} value={op.id}>
+                          {op.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedOperator && (
                     <div>
-                      <label className="block text-sm font-semibold text-on-surface-variant mb-2">Portal PIN</label>
+                      <label className="block text-sm font-semibold text-on-surface-variant mb-2">
+                        Enter PIN
+                      </label>
                       <input
                         type="password"
+                        inputMode="numeric"
                         value={pin}
                         onChange={(e) => setPin(e.target.value)}
                         required
@@ -175,36 +227,24 @@ export default function Login() {
                         autoFocus
                       />
                     </div>
-                    {selectedOperator.role === 'admin' && (
-                      <div>
-                        <label className="block text-sm font-semibold text-on-surface-variant mb-2">Main admin PIN</label>
-                        <input
-                          type="password"
-                          inputMode="numeric"
-                          value={adminPin}
-                          onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                          required
-                          maxLength={8}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                          placeholder="Enter main PIN"
-                        />
-                      </div>
-                    )}
-                  </>
-                )}
-                <button
-                  type="submit"
-                  disabled={loading || !selectedOperator}
-                  className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {loading ? 'Signing in...' : 'Sign In'}
-                </button>
-              </form>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loading || !selectedOperator || !pin}
+                    className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {loading ? 'Signing in...' : `Sign In as ${selectedRole === 'admin' ? 'Admin' : 'Operator'}`}
+                  </button>
+                </form>
+              )}
             </>
           ) : (
             <div className="text-center py-8">
-              <span className="material-symbols-outlined text-4xl text-on-surface-variant animate-spin">progress_activity</span>
-              <p className="mt-2 text-on-surface-variant">Loading...</p>
+              <span className="material-symbols-outlined text-4xl text-on-surface-variant animate-spin">
+                progress_activity
+              </span>
+              <p className="mt-2 text-on-surface-variant">Loading accounts...</p>
             </div>
           )}
         </div>

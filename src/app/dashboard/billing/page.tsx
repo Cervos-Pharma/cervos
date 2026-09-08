@@ -59,16 +59,18 @@ export default async function BillingPage() {
   const branchList = branches ?? [];
   const branchCount = branchList.length;
 
-  const plans = (plansData ?? []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    price_monthly_tzs: p.price_monthly_tzs,
-    price_annual_tzs: p.price_annual_tzs,
-    max_branches: p.max_branches,
-    max_operators: p.max_operators,
-    max_suppliers: p.max_suppliers,
-    features: Array.isArray(p.features) ? p.features.map((f) => String(f)) : [],
-  }));
+  const plans = (plansData ?? [])
+    .filter((p) => p.name === "Basic" || p.price_monthly_tzs === 10000)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      price_monthly_tzs: p.price_monthly_tzs,
+      price_annual_tzs: p.price_annual_tzs,
+      max_branches: p.max_branches,
+      max_operators: p.max_operators,
+      max_suppliers: p.max_suppliers,
+      features: Array.isArray(p.features) ? p.features.map((f) => String(f)) : [],
+    }));
 
   const currentPlan = plans.find((p) => p.id === account.subscription_plan) ?? null;
   const subscribed = isSubscribedActive(account);

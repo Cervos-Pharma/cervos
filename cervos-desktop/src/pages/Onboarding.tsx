@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn, getLinkStatus, linkToExistingBranch, runSyncCycle, type RemoteBranch } from '../lib/sync'
+import { signIn, getLinkStatus, linkToExistingBranch, forceClaimBranch, runSyncCycle, type RemoteBranch } from '../lib/sync'
 import { queryDb } from '../lib/database'
 import { open } from '@tauri-apps/plugin-shell'
 import { WEB_URL } from '../lib/web'
@@ -21,6 +21,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
   const [isLoading, setIsLoading] = useState(false)
   const [branches, setBranches] = useState<RemoteBranch[]>([])
   const [linkedBranch, setLinkedBranch] = useState<{ name: string; address: string } | null>(null)
+  const [forceClaimBranchId, setForceClaimBranchId] = useState<string | null>(null)
 
   const inputClass = 'w-full h-12 px-4 bg-surface-base border border-ink-deep/20 rounded-none text-body-md text-ink-deep focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-text-muted'
   const btnClass = 'w-full h-12 bg-primary text-white rounded-none font-label-md font-bold flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-60'
@@ -86,14 +87,37 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
   async function handleSelectBranch(branchId: string) {
     setIsLoading(true)
     setError(null)
+    setForceClaimBranchId(null)
     try {
       await linkToExistingBranch(branchId)
       const sync = await runSyncCycle()
       if (!sync.ok) throw new Error(sync.message ?? 'The branch was linked, but its data could not be downloaded yet.')
       await finishLink()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to link this branch')
+      const msg = err instanceof Error ? err.message : 'Failed to link this branch'
+      setError(msg)
+      // Surface the force-claim option only for the conflict error
+      if (msg.includes('already has an activated POS device')) {
+        setForceClaimBranchId(branchId)
+      }
     } finally {
+      setIsLoading(false)
+    }
+  }
+
+  async function handleForceClaim() {
+    if (!forceClaimBranchId) return
+    setIsLoading(true)
+    setError(null)
+    try {
+      await forceClaimBranch(forceClaimBranchId)
+      const sync = await runSyncCycle()
+      if (!sync.ok) throw new Error(sync.message ?? 'Branch claimed, but its data could not be downloaded yet.')
+      await finishLink()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to force-claim this branch')
+    } finally {
+      setForceClaimBranchId(null)
       setIsLoading(false)
     }
   }
@@ -218,9 +242,40 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   This account has multiple branches. Which one is this device for?
                 </p>
 
-                {error && (
+                {error && !forceClaimBranchId && (
                   <div className="p-3 bg-error/10 border border-error/20 rounded text-error text-sm">
                     {error}
+                  </div>
+                )}
+
+                {forceClaimBranchId && (
+                  <div className="p-4 bg-warning/10 border border-warning/30 rounded flex flex-col gap-3">
+                    <div className="flex items-start gap-2">
+                      <span className="material-symbols-outlined text-warning text-xl mt-0.5">warning</span>
+                      <div>
+                        <p className="font-label-md font-bold text-ink-deep text-sm">Branch already activated</p>
+                        <p className="text-xs text-on-surface-variant mt-1">
+                          Another POS device holds this branch. Force-claiming will deactivate that device — it will be locked out on its next sync.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={handleForceClaim}
+                      className="w-full h-10 bg-warning text-white rounded-none font-label-md font-bold text-sm flex items-center justify-center gap-2 hover:bg-warning/90 active:scale-[0.98] transition-all disabled:opacity-60"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">device_reset</span>
+                      {isLoading ? 'Claiming…' : 'Force Claim This Device'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => { setForceClaimBranchId(null); setError(null) }}
+                      className="text-xs text-on-surface-variant hover:text-primary text-center"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 )}
 

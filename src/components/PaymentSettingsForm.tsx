@@ -8,7 +8,7 @@
  *     bank transfer, invoice/credit) plus mobile money number fields and bank details.
  *   - "supplier" — shows receiving-method toggles (mobile money disbursement, bank for
  *     invoices) without the cash/card POS section.
- * Both account types show the Payme Africa marketplace wallet section.
+ * Both account types show the marketplace mobile money wallet section.
  *
  * Loading state: uses useState(false) per the React 18 quirk documented in memory
  * (startTransition cannot wrap async functions in React 18).

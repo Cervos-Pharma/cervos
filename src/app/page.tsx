@@ -1,13 +1,29 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import PublicNav from "@/components/PublicNav";
 import MapClientWrapper from "@/components/MapClientWrapper";
 import { useI18n } from "@/lib/i18n/context";
 
+interface PublicStats {
+  pharmacies: number;
+  suppliers: number;
+  branches: number;
+  markers?: Array<{ lat: number; lng: number; label: string; status: "online" | "grace" | "offline" }>;
+}
+
 export default function LandingPage() {
   const { t } = useI18n();
+  const [stats, setStats] = useState<PublicStats | null>(null);
+
+  useEffect(() => {
+    fetch("/api/public/stats")
+      .then((r) => r.json())
+      .then((data) => setStats(data))
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="bg-surface-base text-on-surface font-body-md antialiased">
@@ -62,9 +78,9 @@ export default function LandingPage() {
         <div className="max-w-container-max mx-auto px-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
-              { value: "1,200+", labelKey: "stats.pharmacies" },
-              { value: "99.9%",  labelKey: "stats.uptime" },
-              { value: "5M+",    labelKey: "stats.transactions" },
+              { value: stats ? stats.pharmacies.toLocaleString() : "—", labelKey: "stats.pharmacies" },
+              { value: stats ? stats.suppliers.toLocaleString() : "—",   labelKey: "stats.suppliers" },
+              { value: stats ? stats.branches.toLocaleString() : "—",    labelKey: "stats.branches" },
             ].map((stat) => (
               <div
                 key={stat.labelKey}
@@ -183,11 +199,15 @@ export default function LandingPage() {
             <MapClientWrapper
               center={[-6.816, 39.2803]}
               zoom={11}
-              markers={[
-                { lat: -6.816,  lng: 39.2803, label: "Kariakoo Branch", status: "online" },
-                { lat: -6.8,    lng: 39.2833, label: "Upanga Branch",   status: "online" },
-                { lat: -6.7667, lng: 39.25,   label: "Mikocheni Branch",status: "grace" },
-              ]}
+              markers={
+                stats?.markers && stats.markers.length > 0
+                  ? stats.markers
+                  : [
+                      { lat: -6.816,  lng: 39.2803, label: "Kariakoo Branch", status: "online" },
+                      { lat: -6.8,    lng: 39.2833, label: "Upanga Branch",   status: "online" },
+                      { lat: -6.7667, lng: 39.25,   label: "Mikocheni Branch",status: "grace" },
+                    ]
+              }
               className="h-[400px] w-full"
             />
           </div>
@@ -199,18 +219,11 @@ export default function LandingPage() {
         <div className="max-w-container-max mx-auto px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="relative custom-notch overflow-hidden border border-outline-variant/20 p-2 h-[500px]">
-              <Image src="/pharmacist-2.png" alt="Confident East African pharmacist" fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover saturate-90" />
+              <Image src="/pharmacist-2.png" alt="East African pharmacist" fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover saturate-90" />
             </div>
             <div className="flex flex-col justify-center">
               <span className="material-symbols-outlined text-[48px] text-primary/20 mb-6 block" style={{ fontVariationSettings: '"FILL" 1' }}>format_quote</span>
-              <h3 className="font-headline-lg text-headline-lg text-ink-deep mb-8 leading-tight">{t("quote.text")}</h3>
-              <div className="flex items-center gap-4 border-t border-outline-variant/20 pt-6">
-                <div className="w-12 h-12 bg-surface-container rounded-full flex items-center justify-center text-primary font-headline-md text-headline-md">DA</div>
-                <div>
-                  <p className="font-label-md text-label-md text-ink-deep uppercase">{t("quote.name")}</p>
-                  <p className="font-body-sm text-body-sm text-on-surface-variant">{t("quote.title")}</p>
-                </div>
-              </div>
+              <h3 className="font-headline-lg text-headline-lg text-ink-deep mb-4 leading-tight">{t("quote.text")}</h3>
             </div>
           </div>
         </div>

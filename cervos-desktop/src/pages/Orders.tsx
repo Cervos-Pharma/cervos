@@ -127,7 +127,7 @@ export default function Orders() {
     setPayError(null)
     const wallet = payWallet.trim()
     if (!wallet) {
-      setPayError('Enter a Payme Africa wallet number to pay with.')
+      setPayError('Enter a mobile money wallet number to pay with.')
       return
     }
     setPayBusy(order.id)
@@ -181,7 +181,7 @@ export default function Orders() {
             <div className="text-center">
               <span className="material-symbols-outlined text-5xl text-secondary">check_circle</span>
               <h2 className="mt-2 text-xl font-bold">Payment receipt</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">Payme Africa payment completed</p>
+              <p className="mt-1 text-sm text-on-surface-variant">Mobile money payment completed</p>
             </div>
             <div className="mt-5 space-y-2 border-y border-outline-variant py-4 text-sm">
               <div className="flex justify-between"><span>Order</span><strong>{paymentReceipt.orderReference}</strong></div>

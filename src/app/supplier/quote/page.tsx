@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import PublicNav from "@/components/PublicNav";
@@ -34,6 +34,14 @@ export default function SupplierGatePage() {
   const [submitted, setSubmitted] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "error" | "success" | "info" } | null>(null);
   const [form, setForm] = useState({ companyName: "", contactName: "", email: "", phone: "", message: "" });
+  const [stats, setStats] = useState<{ pharmacies: number } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/public/stats")
+      .then((r) => r.json())
+      .then((data) => setStats(data))
+      .catch(() => {});
+  }, []);
 
   function update(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -81,9 +89,9 @@ export default function SupplierGatePage() {
               {/* Social proof strip */}
               <div className="flex flex-wrap gap-8 pb-4">
                 {[
-                  { value: "1,200+", labelKey: "sup.quote.proof.pharmacies" },
-                  { value: "5 days", labelKey: "sup.quote.proof.onboarding" },
-                  { value: "99.9%", labelKey: "sup.quote.proof.security" },
+                  { value: stats ? stats.pharmacies.toLocaleString() : "Verified", labelKey: "sup.quote.proof.pharmacies" },
+                  { value: "Direct", labelKey: "sup.quote.proof.onboarding" },
+                  { value: "Escrow", labelKey: "sup.quote.proof.security" },
                 ].map(s => (
                   <div key={s.labelKey}>
                     <div className="font-headline-lg text-headline-lg text-primary font-black">{s.value}</div>

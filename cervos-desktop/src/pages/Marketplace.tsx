@@ -298,7 +298,7 @@ export default function Marketplace() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-headline text-2xl font-black text-on-surface">Marketplace</h1>
-          <p className="text-sm text-on-surface-variant mt-1">Browse products from suppliers — escrow payment via Payme Africa</p>
+          <p className="text-sm text-on-surface-variant mt-1">Browse products from suppliers — escrow-secured mobile money payments</p>
         </div>
         {activeTab === 'browse' && (
           <button
@@ -512,7 +512,7 @@ export default function Marketplace() {
                     <span>TZS {getCartTotal().toLocaleString()}</span>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-on-surface-variant">Payme wallet (charged on order)</label>
+                    <label className="text-xs font-semibold text-on-surface-variant">Mobile money wallet (charged on order)</label>
                     <input
                       value={walletMsisdn}
                       onChange={(e) => setWalletMsisdn(e.target.value)}
@@ -528,7 +528,7 @@ export default function Marketplace() {
                     {placing ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : null}
                     {placing ? 'Placing order...' : 'Place Order & Pay'}
                   </button>
-                  <p className="text-xs text-on-surface-variant text-center">Payment held in escrow via Payme Africa until delivery. Set PAYME keys in web .env.local first.</p>
+                  <p className="text-xs text-on-surface-variant text-center">Payment held securely in Cervos escrow until delivery is confirmed.</p>
                 </div>
               </>
             )}

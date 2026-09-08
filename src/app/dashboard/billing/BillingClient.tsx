@@ -228,6 +228,37 @@ export default function BillingClient({
             </div>
           );
         })}
+
+        {/* Deferred higher tiers */}
+        <div className="bg-surface-muted border border-dashed border-outline-variant rounded p-6 flex flex-col justify-between opacity-80">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-[16px] text-on-surface-variant">schedule</span>
+              <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Future Expansion</span>
+            </div>
+            <h3 className="font-headline-md text-headline-md text-ink-deep mb-2">Growth & Enterprise Tiers</h3>
+            <p className="font-body-sm text-body-sm text-on-surface-variant mb-4">
+              Multi-branch enterprise plans and custom supply tiers are deferred to future updates. The Basic plan covers all essential POS and marketplace operations today.
+            </p>
+            <ul className="space-y-1.5 text-xs text-on-surface-variant">
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] text-on-surface-variant">arrow_forward</span>
+                Multi-branch volume scaling
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] text-on-surface-variant">arrow_forward</span>
+                Expanded supplier quotas
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] text-on-surface-variant">arrow_forward</span>
+                Custom ERP integrations
+              </li>
+            </ul>
+          </div>
+          <div className="mt-6 pt-4 border-t border-outline-variant/40 text-xs text-on-surface-variant">
+            Available in future releases
+          </div>
+        </div>
       </div>
 
       {confirmPlanId && (
