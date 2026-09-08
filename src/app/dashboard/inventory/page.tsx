@@ -1,23 +1,30 @@
 /**
  * @route /dashboard/inventory
  * @access Authenticated pharmacy accounts only.
- * @description FEFO batch inventory view across all pharmacy branches.
- *   Displays all stock batches with expiry-band colour coding (critical/warning/safe).
- *   Supports search, branch filter, expiry filter, and column sort in the client component.
+ * @description FEFO batch & product inventory view across pharmacy branches.
+ *   Displays active branch details, live POS connection status, and POS-synced stock batches.
+ *   Supports search, branch filter, expiry filter, column sorting, and view toggle (Batches vs Products).
  *
  * @data Live Supabase query — batches JOIN products JOIN branches, scoped to
- *   the pharmacy's branch IDs. No mock data.
+ *   the pharmacy's branch IDs.
  */
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import PharmacySidebar from "@/components/PharmacySidebar";
-import InventoryTable, { type BatchRow } from "@/components/InventoryTable";
+import InventoryTable, { type BatchRow, type BranchItem } from "@/components/InventoryTable";
 import AddStockModal from "@/components/AddStockModal";
 import { getBranchProducts } from "@/lib/actions/branch";
 import { getT } from "@/lib/i18n/server";
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ branch?: string }> | { branch?: string };
+}) {
   const t = await getT();
+  const resolvedParams = searchParams ? await Promise.resolve(searchParams) : undefined;
+  const initialBranchId = resolvedParams?.branch;
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/auth?next=/dashboard/inventory");
@@ -33,21 +40,28 @@ export default async function InventoryPage() {
 
   const { data: branches } = await supabase
     .from("branches")
-    .select("id, name")
-    .eq("account_id", account?.id ?? "");
+    .select("id, name, address, subscription_status, pos_activated_at")
+    .eq("account_id", account?.id ?? "")
+    .order("name");
 
-  const branchIds = (branches ?? []).map((b) => b.id);
-  const branchNameMap = new Map((branches ?? []).map((b) => [b.id, b.name]));
+  const branchList = (branches ?? []) as BranchItem[];
+  const branchIds = branchList.map((b) => b.id);
+  const branchNameMap = new Map(branchList.map((b) => [b.id, b.name]));
 
-  // Fetch all batches across branches (FEFO sorted), joined with product + branch names.
-  // Return empty if no branches exist yet.
+  // Active branch for sidebar display (either matching initialBranchId or first branch)
+  const activeBranch = branchList.find((b) => b.id === initialBranchId) || branchList[0];
+
+  // Fetch all batches across branches (FEFO sorted), joined with product + branch metadata.
   type RawBatch = {
     id: string;
+    product_id: string;
     quantity: number;
     expiry_date: string;
     batch_number: string | null;
     branch_id: string;
-    products: { generic_name: string; brand_name: string | null } | null;
+    cost_price: number | null;
+    sale_price: number | null;
+    products: { id?: string; generic_name: string; brand_name: string | null; category?: string | null } | null;
     branches: { name: string } | null;
   };
 
@@ -55,7 +69,7 @@ export default async function InventoryPage() {
     ? { data: [] }
     : await supabase
         .from("batches")
-        .select("id, quantity, expiry_date, batch_number, branch_id, products(generic_name, brand_name), branches(name)")
+        .select("id, product_id, quantity, expiry_date, batch_number, branch_id, cost_price, sale_price, products(id, generic_name, brand_name, category), branches(name)")
         .in("branch_id", branchIds)
         .order("expiry_date", { ascending: true });
 
@@ -67,25 +81,29 @@ export default async function InventoryPage() {
     const branches = row.branches;
     return {
       id: row.id,
+      productId: row.product_id || products?.id,
       productName: products?.brand_name ?? products?.generic_name ?? "—",
       genericName: products?.generic_name ?? "—",
+      category: products?.category ?? "General",
       batchNo: row.batch_number ?? "—",
+      branchId: row.branch_id,
       branch: branches?.name ?? branchNameMap.get(row.branch_id) ?? "—",
       quantity: row.quantity,
+      costPrice: row.cost_price ?? undefined,
+      salePrice: row.sale_price ?? undefined,
       expiryDate: row.expiry_date,
       daysLeft: toDaysLeft(row.expiry_date),
     };
   });
 
-  const branchNames = [...branchNameMap.values()];
   const criticalCount = batches.filter((b) => b.daysLeft <= 14).length;
   const catalogProducts = await getBranchProducts();
-  const branchOptions = (branches ?? []).map((b) => ({ id: b.id, name: b.name }));
+  const branchOptions = branchList.map((b) => ({ id: b.id, name: b.name }));
 
   return (
     <div className="flex min-h-screen bg-surface">
       <PharmacySidebar
-        branchName={branchNames[0]}
+        branchName={activeBranch?.name}
         accountName={account?.name}
       />
       <div className="ml-64 flex-1 flex flex-col">
@@ -109,7 +127,11 @@ export default async function InventoryPage() {
           </div>
         </header>
         <div className="pt-16 flex-1 flex">
-          <InventoryTable batches={batches} branches={branchNames} />
+          <InventoryTable
+            batches={batches}
+            branches={branchList}
+            initialBranchId={initialBranchId}
+          />
         </div>
       </div>
     </div>

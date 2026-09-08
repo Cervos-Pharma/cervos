@@ -253,10 +253,27 @@ export default function Pos() {
           `INSERT INTO sale_items (id, sale_id, batch_id, quantity, unit_price) VALUES (?,?,?,?,?)`,
           [saleItemId, saleId, item.batch.id, item.quantity, item.unit_price]
         );
+        const batchUpdateIso = nowIso();
         await executeDb(
           `UPDATE batches SET quantity = quantity - ?, updated_at = ? WHERE id = ?`,
-          [item.quantity, nowIso(), item.batch.id]
+          [item.quantity, batchUpdateIso, item.batch.id]
         );
+        const updatedBatches = await queryDb("SELECT * FROM batches WHERE id = ?", [item.batch.id]);
+        if (updatedBatches.length > 0) {
+          const b = updatedBatches[0];
+          await queueForSync("batches", b.id, "upsert", {
+            id: b.id,
+            branch_id: b.branch_id,
+            product_id: b.product_id,
+            batch_number: b.batch_number ?? null,
+            quantity: b.quantity ?? 0,
+            cost_price: b.cost_price ?? 0,
+            sale_price: b.sale_price ?? 0,
+            expiry_date: b.expiry_date ?? null,
+            sync_version: (b.sync_version ?? 1) + 1,
+            updated_at: batchUpdateIso,
+          });
+        }
       }
 
       await executeDb(

@@ -356,6 +356,39 @@ export async function signOut(): Promise<void> {
   await saveSession(null)
 }
 
+/**
+ * Fully unlinks this device from its branch: releases the server-side
+ * pos_activated_at claim (so another device — or this one, re-onboarding —
+ * can claim the branch) and clears the local branch/account link, alongside
+ * a normal sign-out. Unlike signOut() alone (which leaves the branch claim
+ * and local link intact — good for "just re-enter your password", wrong for
+ * "move this device to a different branch"), this makes the device fully
+ * forget its branch, sending it back to onboarding.
+ *
+ * Requires an active session — the branch release needs to run as the
+ * account owner, not the (already-cleared-by-then) old session.
+ */
+export async function unlinkDevice(): Promise<{ error: string | null }> {
+  const branchRow = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
+  const branchId = branchRow.length > 0 ? JSON.parse(branchRow[0].value) as string : null
+
+  if (branchId && Ie) {
+    const { error } = await Ie
+      .from('branches')
+      .update({ pos_activated_at: null })
+      .eq('id', branchId)
+    // Don't block the local unlink on this failing (e.g. offline) — the
+    // device should still forget its branch locally. A stale server-side
+    // claim can be released later via the web "Deactivate POS" action.
+    if (error) console.error('Failed to release branch claim:', error.message)
+  }
+
+  await executeDb("DELETE FROM app_settings WHERE key IN ('branch_id', 'account_id')")
+  await signOut()
+
+  return { error: null }
+}
+
 export async function getDashboardStats(): Promise<DashboardStats> {
   const linked = await ensureLinked()
   const pendingResult = await queryDb('SELECT COUNT(*) AS c FROM sync_queue')

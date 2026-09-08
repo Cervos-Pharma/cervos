@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import type { Branch } from "@/lib/actions/branches";
+import { deactivatePosForBranch } from "@/lib/actions/branches";
 import CervosMap from "@/components/MapClientWrapper";
 
 interface BranchesTableProps {
@@ -44,6 +45,22 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
   const [branchOperators, setBranchOperators] = useState<unknown[]>([]);
   const [branchOrders, setBranchOrders] = useState<unknown[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+
+  async function handleDeactivatePos(branch: Branch) {
+    const confirmed = window.confirm(
+      `Deactivate the POS device linked to "${branch.name}"? Only do this if that device is lost, broken, or being replaced — a new device will be able to claim this branch immediately.`
+    );
+    if (!confirmed) return;
+    setDeactivatingId(branch.id);
+    const result = await deactivatePosForBranch(accountId, branch.id);
+    setDeactivatingId(null);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+    router.refresh();
+  }
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
@@ -205,6 +222,9 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
               <th className="text-left px-6 py-3 font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider">
                 {t("dash.branches.subscription")}
               </th>
+              <th className="text-left px-6 py-3 font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider">
+                POS
+              </th>
               <th className="text-right px-6 py-3 font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider">
                 {t("dash.branches.actions")}
               </th>
@@ -244,7 +264,31 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
                     </span>
                   </td>
                   <td className="px-6 py-4">
+                    {branch.pos_activated_at ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-label-md bg-secondary/10 text-secondary">
+                        <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                        POS linked
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-label-md bg-surface-container text-on-surface-variant">
+                        Unclaimed
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      {branch.pos_activated_at && (
+                        <button
+                          onClick={() => handleDeactivatePos(branch)}
+                          disabled={deactivatingId === branch.id}
+                          className="p-2 hover:bg-error-container rounded transition-colors disabled:opacity-60"
+                          title="Deactivate POS — only if the linked device is lost, broken, or being replaced"
+                        >
+                          <span className="material-symbols-outlined text-[16px] text-error">
+                            {deactivatingId === branch.id ? "hourglass_empty" : "phonelink_erase"}
+                          </span>
+                        </button>
+                      )}
                       <button
                         onClick={() => openEdit(branch)}
                         className="p-2 hover:bg-surface-container rounded transition-colors"

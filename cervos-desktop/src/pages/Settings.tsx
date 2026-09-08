@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { queryDb, executeDb } from '../lib/database'
-import { getDashboardStats, signOut, runSyncCycle } from '../lib/sync'
+import { getDashboardStats, signOut, unlinkDevice, runSyncCycle } from '../lib/sync'
 import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
 import { fetchOperators, createOperator, deleteOperator } from '../lib/queries'
@@ -166,9 +166,13 @@ export default function Settings() {
   }
 
   async function handleUnlink() {
-    await signOut()
+    const confirmed = window.confirm(
+      'This will unlink this device from its branch and free the branch for another device. Any unsynced local data may be lost. Continue?'
+    )
+    if (!confirmed) return
+    await unlinkDevice()
     logout()
-    navigate('/login')
+    navigate('/onboarding')
   }
 
   async function handleSignOut() {

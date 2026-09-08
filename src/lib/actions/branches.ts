@@ -13,6 +13,7 @@ export interface Branch {
   trial_ends_at?: string | null;
   grace_ends_at?: string | null;
   created_at?: string;
+  pos_activated_at?: string | null;
 }
 
 export interface CreateBranchInput {
@@ -35,12 +36,45 @@ export async function getBranches(accountId: string): Promise<Branch[]> {
   const { data } = await supabase
     .from("branches")
     .select(
-      "id, account_id, name, address, lat, lng, subscription_status, trial_ends_at, grace_ends_at, created_at"
+      "id, account_id, name, address, lat, lng, subscription_status, trial_ends_at, grace_ends_at, created_at, pos_activated_at"
     )
     .eq("account_id", accountId)
     .order("name");
 
   return (data ?? []) as Branch[];
+}
+
+/**
+ * Releases a branch's POS device claim from the web dashboard — for when
+ * the device itself is lost, broken, or otherwise unreachable, so the
+ * owner isn't stuck waiting for that device to unlink itself (see
+ * unlinkDevice() in cervos-desktop/src/lib/sync.ts for the device-side
+ * equivalent, which is preferred when the device is actually available).
+ */
+export async function deactivatePosForBranch(
+  accountId: string,
+  branchId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  if (!account || account.id !== accountId) return { error: "Not authorized for this account." };
+
+  const { error } = await supabase
+    .from("branches")
+    .update({ pos_activated_at: null })
+    .eq("id", branchId)
+    .eq("account_id", accountId);
+
+  return { error: error?.message ?? null };
 }
 
 export async function createBranch(
