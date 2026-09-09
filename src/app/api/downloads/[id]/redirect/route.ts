@@ -38,6 +38,13 @@ export async function GET(
     return NextResponse.json({ error: "No file associated with this release" }, { status: 404 });
   }
 
+  // Count this as a real download. Best-effort — a logging failure should
+  // never block the actual file from being served.
+  supabase.rpc("increment_release_download_count", { p_release_id: id }).then(
+    () => {},
+    (err) => console.error("Failed to record download count:", err)
+  );
+
   // If file_url is already a full public URL (starts with http), redirect directly
   if (release.file_url && release.file_url.startsWith("http")) {
     return NextResponse.redirect(release.file_url);

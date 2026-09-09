@@ -11,6 +11,7 @@ interface PublicStats {
   pharmacies: number;
   suppliers: number;
   branches: number;
+  downloads: number;
   markers?: Array<{ lat: number; lng: number; label: string; status: "online" | "grace" | "offline" }>;
 }
 
@@ -76,11 +77,12 @@ export default function LandingPage() {
       {/* ── Stats bar ── */}
       <section className="py-16 bg-surface-base border-y border-outline-variant/20" id="features">
         <div className="max-w-container-max mx-auto px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {[
               { value: stats ? stats.pharmacies.toLocaleString() : "—", labelKey: "stats.pharmacies" },
               { value: stats ? stats.suppliers.toLocaleString() : "—",   labelKey: "stats.suppliers" },
               { value: stats ? stats.branches.toLocaleString() : "—",    labelKey: "stats.branches" },
+              { value: stats ? stats.downloads.toLocaleString() : "—",   labelKey: "stats.downloads" },
             ].map((stat) => (
               <div
                 key={stat.labelKey}

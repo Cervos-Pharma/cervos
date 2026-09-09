@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const supabase = await createServiceClient();
 
-    const [pharmacyRes, supplierRes, branchRes, mapRes] = await Promise.all([
+    const [pharmacyRes, supplierRes, branchRes, mapRes, releasesRes] = await Promise.all([
       supabase
         .from("accounts")
         .select("id", { count: "exact", head: true })
@@ -28,11 +28,18 @@ export async function GET() {
         .not("lat", "is", null)
         .not("lng", "is", null)
         .limit(50),
+      // Real download counter — sum of actual redirects served, not a
+      // placeholder number.
+      supabase.from("app_releases").select("download_count"),
     ]);
 
     const pharmacies = pharmacyRes.count ?? 0;
     const suppliers = supplierRes.count ?? 0;
     const branches = branchRes.count ?? 0;
+    const downloads = (releasesRes.data ?? []).reduce(
+      (sum, r) => sum + (r.download_count ?? 0),
+      0
+    );
 
     const markers = (mapRes.data ?? [])
       .filter((b) => typeof b.lat === "number" && typeof b.lng === "number")
@@ -47,11 +54,12 @@ export async function GET() {
       pharmacies,
       suppliers,
       branches,
+      downloads,
       markers,
     });
   } catch (err: any) {
     return NextResponse.json(
-      { pharmacies: 0, suppliers: 0, branches: 0, markers: [], error: err?.message },
+      { pharmacies: 0, suppliers: 0, branches: 0, downloads: 0, markers: [], error: err?.message },
       { status: 500 }
     );
   }

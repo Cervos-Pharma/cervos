@@ -19,6 +19,7 @@ export default function Inventory() {
   const navigate = useNavigate();
   const { isAdmin, permissions } = useAuthStore()
   const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -26,6 +27,7 @@ export default function Inventory() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddStockModal, setShowAddStockModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [productBatches, setProductBatches] = useState<Batch[]>([]);
@@ -61,8 +63,14 @@ export default function Inventory() {
       [linkedBranchId]
     );
     const bats = await queryDb("SELECT * FROM batches WHERE branch_id = ?", [linkedBranchId]);
+    // Full local catalog (synced from the web dashboard), independent of
+    // whether this branch has stocked it yet — this is what "Add Stock"
+    // searches, since a product can exist in the catalog with zero batches
+    // here.
+    const allProds = await queryDb("SELECT * FROM products ORDER BY generic_name");
     setProducts(prods);
     setBatches(bats);
+    setAllProducts(allProds);
     setIsLoading(false);
   }
 
@@ -144,13 +152,22 @@ export default function Inventory() {
             Make Sale
           </button>
           {isAdmin && (
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:opacity-90 transition-opacity"
-            >
-              <span className="material-symbols-outlined">add</span>
-              Add Product
-            </button>
+            <>
+              <button
+                onClick={() => setShowAddStockModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary text-primary font-semibold hover:bg-primary/10 transition-colors"
+              >
+                <span className="material-symbols-outlined">inventory</span>
+                Add Stock
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined">add</span>
+                Add Product
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -432,6 +449,92 @@ export default function Inventory() {
           }}
         />
       )}
+
+      {showAddStockModal && (
+        <AddStockModal
+          catalog={allProducts}
+          onClose={() => setShowAddStockModal(false)}
+          onSave={async (data) => {
+            if (!branchId) {
+              setSyncError("This POS is not linked to a branch. Inventory cannot be added until it is linked.");
+              return;
+            }
+            const now = nowIso();
+            let productId = data.productId;
+
+            if (!productId) {
+              // New product — same path "Add Product" uses, just inline here
+              // so the operator doesn't have to leave the Add Stock flow.
+              productId = generateId();
+              await executeDb(
+                `INSERT INTO products (id, generic_name, brand_name, category, formulation, requires_prescription, barcode, default_expiry, default_cost_price, default_sale_price, low_stock_threshold, notify_threshold, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [
+                  productId,
+                  data.newGenericName || "",
+                  data.newBrandName || "",
+                  data.newCategory || "",
+                  null,
+                  0,
+                  null,
+                  null,
+                  data.costPrice ?? null,
+                  data.salePrice ?? null,
+                  10,
+                  5,
+                  now,
+                ]
+              );
+              await queueForSync("products", productId, "insert", {
+                id: productId,
+                generic_name: data.newGenericName || "",
+                brand_name: data.newBrandName || "",
+                category: data.newCategory || "",
+                formulation: null,
+                requires_prescription: 0,
+                barcode: null,
+                default_expiry: null,
+                default_cost_price: data.costPrice ?? null,
+                default_sale_price: data.salePrice ?? null,
+                low_stock_threshold: 10,
+                notify_threshold: 5,
+                updated_at: now,
+              });
+            }
+
+            const batchId = generateId();
+            await executeDb(
+              `INSERT INTO batches (id, branch_id, product_id, batch_number, quantity, cost_price, sale_price, expiry_date, updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
+              [
+                batchId,
+                branchId,
+                productId,
+                data.batchNumber || null,
+                data.quantity,
+                data.costPrice ?? 0,
+                data.salePrice ?? 0,
+                data.expiryDate,
+                now,
+              ]
+            );
+            await queueForSync("batches", batchId, "insert", {
+              id: batchId,
+              branch_id: branchId,
+              product_id: productId,
+              batch_number: data.batchNumber || null,
+              quantity: data.quantity,
+              cost_price: data.costPrice ?? 0,
+              sale_price: data.salePrice ?? 0,
+              expiry_date: data.expiryDate,
+              sync_version: 1,
+              updated_at: now,
+            });
+
+            loadData();
+            setShowAddStockModal(false);
+            runSyncCycle().catch(() => {});
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -706,6 +809,276 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
       </div>
     </div>
     </>
+  );
+}
+
+interface AddStockModalProps {
+  catalog: Product[];
+  onClose: () => void;
+  onSave: (data: {
+    productId?: string;
+    newGenericName?: string;
+    newBrandName?: string;
+    newCategory?: string;
+    batchNumber?: string;
+    quantity: number;
+    costPrice?: number;
+    salePrice?: number;
+    expiryDate: string;
+  }) => void;
+}
+
+function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
+  const [mode, setMode] = useState<"existing" | "new">("existing");
+  const [productSearch, setProductSearch] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [newGenericName, setNewGenericName] = useState("");
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [batchNumber, setBatchNumber] = useState("");
+  const [quantity, setQuantity] = useState("");
+  const [costPrice, setCostPrice] = useState("");
+  const [salePrice, setSalePrice] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [error, setError] = useState("");
+
+  const inputClass =
+    "w-full px-3 py-2.5 rounded-md border border-outline-variant bg-white text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary";
+  const labelClass = "block text-xs font-semibold text-on-surface-variant mb-1";
+
+  const filteredCatalog = productSearch.trim()
+    ? catalog.filter((p) => {
+        const q = productSearch.toLowerCase();
+        return (
+          p.generic_name?.toLowerCase().includes(q) ||
+          p.brand_name?.toLowerCase().includes(q)
+        );
+      })
+    : catalog;
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (mode === "existing" && !selectedProduct) {
+      setError("Select a product from the catalog, or switch to 'New product'.");
+      return;
+    }
+    if (mode === "new" && !newGenericName.trim()) {
+      setError("Enter a generic name for the new product.");
+      return;
+    }
+    const qty = parseInt(quantity, 10);
+    if (!qty || qty <= 0) {
+      setError("Enter a valid quantity.");
+      return;
+    }
+    if (!expiryDate) {
+      setError("Expiry date is required.");
+      return;
+    }
+    onSave({
+      productId: mode === "existing" ? selectedProduct!.id : undefined,
+      newGenericName: mode === "new" ? newGenericName.trim() : undefined,
+      newBrandName: mode === "new" ? newBrandName.trim() : undefined,
+      newCategory: mode === "new" ? newCategory : undefined,
+      batchNumber: batchNumber.trim() || undefined,
+      quantity: qty,
+      costPrice: costPrice ? parseFloat(costPrice) : undefined,
+      salePrice: salePrice ? parseFloat(salePrice) : undefined,
+      expiryDate,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-6 pb-4 shrink-0">
+          <h2 className="font-headline text-xl font-bold text-on-surface">Add Stock</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-outline-variant transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-6 space-y-4">
+            {error && (
+              <div className="p-3 rounded-md bg-error/10 border border-error/20 text-error text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 p-1 bg-surface rounded-lg border border-outline-variant">
+              <button
+                type="button"
+                onClick={() => setMode("existing")}
+                className={`py-2 rounded-md text-sm font-semibold transition-all ${
+                  mode === "existing" ? "bg-primary text-white" : "text-on-surface-variant"
+                }`}
+              >
+                Existing product
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("new")}
+                className={`py-2 rounded-md text-sm font-semibold transition-all ${
+                  mode === "new" ? "bg-primary text-white" : "text-on-surface-variant"
+                }`}
+              >
+                New product
+              </button>
+            </div>
+
+            {mode === "existing" ? (
+              <div>
+                <label className={labelClass}>Product *</label>
+                <input
+                  type="text"
+                  value={selectedProduct ? `${selectedProduct.generic_name}${selectedProduct.brand_name ? " — " + selectedProduct.brand_name : ""}` : productSearch}
+                  onChange={(e) => {
+                    setSelectedProduct(null);
+                    setProductSearch(e.target.value);
+                  }}
+                  placeholder="Search the catalog (generic or brand name)"
+                  className={inputClass}
+                  autoFocus
+                />
+                {!selectedProduct && productSearch.trim() && (
+                  <div className="mt-1 max-h-40 overflow-y-auto border border-outline-variant rounded-md divide-y divide-outline-variant/60">
+                    {filteredCatalog.length === 0 ? (
+                      <p className="p-3 text-sm text-on-surface-variant">No matches in the catalog. Try 'New product' instead.</p>
+                    ) : (
+                      filteredCatalog.slice(0, 20).map((p) => (
+                        <button
+                          type="button"
+                          key={p.id}
+                          onClick={() => {
+                            setSelectedProduct(p);
+                            setProductSearch("");
+                            if (p.default_cost_price) setCostPrice(String(p.default_cost_price));
+                            if (p.default_sale_price) setSalePrice(String(p.default_sale_price));
+                          }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-surface-container-low"
+                        >
+                          <span className="font-medium">{p.generic_name}</span>
+                          {p.brand_name && <span className="text-on-surface-variant"> — {p.brand_name}</span>}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className={labelClass}>Generic Name *</label>
+                  <input
+                    type="text"
+                    value={newGenericName}
+                    onChange={(e) => setNewGenericName(e.target.value)}
+                    className={inputClass}
+                    placeholder="e.g. Paracetamol"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Brand Name</label>
+                  <input
+                    type="text"
+                    value={newBrandName}
+                    onChange={(e) => setNewBrandName(e.target.value)}
+                    className={inputClass}
+                    placeholder="e.g. Panadol"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Category</label>
+                  <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className={inputClass}>
+                    <option value="">Select category</option>
+                    {PHARMACY_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className={labelClass}>Batch Number</label>
+              <input
+                type="text"
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                className={inputClass}
+                placeholder="Optional"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className={labelClass}>Quantity *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className={inputClass}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Cost/Unit</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(e.target.value)}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Sell/Unit</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={salePrice}
+                  onChange={(e) => setSalePrice(e.target.value)}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>Expiry Date *</label>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="shrink-0 flex gap-3 border-t border-outline-variant px-6 py-4 bg-surface-base">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-md border border-outline-variant text-on-surface font-medium hover:bg-outline-variant/30 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 py-2.5 rounded-md bg-primary text-on-primary font-semibold hover:opacity-90 transition-opacity"
+            >
+              Add Stock
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 

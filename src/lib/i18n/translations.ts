@@ -41,8 +41,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "stats.pharmacies":    { EN: "Pharmacies",             SW: "Maduka ya Dawa" },
   "stats.suppliers":     { EN: "Verified Suppliers",     SW: "Wasambazaji Walioidhinishwa" },
   "stats.branches":      { EN: "Active Branches",        SW: "Matawi Yanayofanya Kazi" },
-  "stats.uptime":        { EN: "Uptime",                 SW: "Muda wa Uendeshaji" },
-  "stats.transactions":  { EN: "Transactions Secured",   SW: "Miamala Iliyolindwa" },
+  "stats.downloads":     { EN: "App Downloads",          SW: "Upakuaji wa Programu" },
 
   // ── Features ─────────────────────────────────────────────────────────────
   "features.title":   { EN: "Core Architecture",        SW: "Miundo Msingi" },
@@ -60,7 +59,6 @@ export const strings: Record<string, Record<Lang, string>> = {
 
   // ── Testimonial ───────────────────────────────────────────────────────────
   "quote.text":   { EN: "\"The predictability of the inventory grid and the speed of the interface have completely transformed our daily operations.\"", SW: "\"Utabiriaji wa gridi ya hisa na kasi ya kiolesura umebadilisha kabisa shughuli zetu za kila siku.\"" },
-  "quote.name":   { EN: "Dr. Amina Hassan",         SW: "Dkt. Amina Hassan" },
   "quote.title":  { EN: "Director of Operations, MedLife East Africa", SW: "Mkurugenzi wa Uendeshaji, MedLife Afrika Mashariki" },
 
   // ── FAQ ───────────────────────────────────────────────────────────────────
