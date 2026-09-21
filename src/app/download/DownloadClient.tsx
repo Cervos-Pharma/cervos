@@ -350,10 +350,6 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
 
   useEffect(() => { setOs(detectOS()); }, []);
 
-  const handleDownload = (releaseId: string) => {
-    window.location.href = `/api/downloads/${releaseId}/redirect`;
-  };
-
   // Capture card bounding rect for clip-path start values
   const captureRect = useCallback(() => {
     if (!cardRef.current) return;
@@ -585,14 +581,18 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
                       </div>
 
                       {hasCurrentRelease ? (
-                        <button
-                          onClick={() => handleDownload(currentRelease.id)}
+                        // A real <a>, not a JS button: the download must work
+                        // even before React hydrates (slow mobile networks),
+                        // and support long-press → "Download link".
+                        <a
+                          href={`/api/downloads/${currentRelease.id}/redirect`}
+                          download
                           className="btn-shimmer w-full bg-primary text-on-primary py-4 px-6 rounded-xl flex justify-center items-center gap-3 font-label-md text-label-md shadow-md text-base hover:scale-[1.02] hover:shadow-[0_6px_32px_rgba(16,57,185,0.35)] active:scale-[0.98] transition-all duration-200"
                         >
                           <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
                           {t(OS_CONFIG[os].labelKey)}
                           <span className="ml-auto font-body-sm text-sm opacity-70">{OS_CONFIG[os].ext}</span>
-                        </button>
+                        </a>
                       ) : (
                         <button onClick={() => setToast(true)}
                           className="btn-shimmer w-full bg-primary text-on-primary py-4 px-6 rounded-xl flex justify-center items-center gap-3 font-label-md text-label-md shadow-md text-base animate-glow-pulse hover:scale-[1.02] hover:shadow-[0_6px_32px_rgba(16,57,185,0.35)] active:scale-[0.98] transition-all duration-200"
@@ -779,13 +779,14 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
           <h2 className="font-headline-lg text-headline-lg text-on-primary mb-4">{t("download.cta.title")}</h2>
           <p className="font-body-lg text-body-lg text-on-primary/75 mb-8 max-w-lg mx-auto">{t("download.cta.body")}</p>
           {hasCurrentRelease ? (
-            <button
-              onClick={() => handleDownload(currentRelease.id)}
+            <a
+              href={`/api/downloads/${currentRelease.id}/redirect`}
+              download
               className="inline-flex items-center gap-3 bg-on-primary text-primary font-label-md text-label-md py-4 px-8 rounded-xl shadow-lg text-base hover:scale-[1.03] hover:shadow-[0_12px_48px_rgba(0,0,0,0.25)] active:scale-[0.98] transition-all duration-200"
             >
               <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
               {t(OS_CONFIG[os].labelKey)}
-            </button>
+            </a>
           ) : (
             <button onClick={() => setToast(true)} className="inline-flex items-center gap-3 bg-on-primary text-primary font-label-md text-label-md py-4 px-8 rounded-xl shadow-lg text-base hover:scale-[1.03] hover:shadow-[0_12px_48px_rgba(0,0,0,0.25)] active:scale-[0.98] transition-all duration-200">
               <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
