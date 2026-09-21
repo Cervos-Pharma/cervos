@@ -399,9 +399,11 @@ export const strings: Record<string, Record<Lang, string>> = {
   "download.for.windows": { EN: "Download for Windows", SW: "Pakua kwa Windows" },
   "download.for.macos":   { EN: "Download for macOS",   SW: "Pakua kwa macOS" },
   "download.for.linux":   { EN: "Download for Linux",   SW: "Pakua kwa Linux" },
+  "download.for.android": { EN: "Download for Android", SW: "Pakua kwa Android" },
   "download.req.windows": { EN: "Windows 10 or later",  SW: "Windows 10 au matoleo ya baadaye" },
   "download.req.macos":   { EN: "macOS 11.0 or later",  SW: "macOS 11.0 au matoleo ya baadaye" },
   "download.req.linux":   { EN: "Ubuntu 20.04 / glibc 2.31+", SW: "Ubuntu 20.04 / glibc 2.31+" },
+  "download.req.android": { EN: "Android 7.0 (API 24) or later", SW: "Android 7.0 (API 24) au matoleo ya baadaye" },
   "download.free.noaccount": { EN: "Free · No account needed", SW: "Bure · Hakuna akaunti inayohitajika" },
   "download.scroll.hint": { EN: "Scroll to explore",  SW: "Sogeza chini kuona zaidi" },
 

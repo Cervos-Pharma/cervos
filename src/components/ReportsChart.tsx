@@ -93,9 +93,9 @@ export default function ReportsChart({ initialReport, branches, accountId }: Rep
   ];
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+    <div className="p-4 sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-3 min-w-0">
           <div className="flex bg-surface-base border border-outline-variant rounded overflow-hidden">
             {([["7d", "7d"], ["30d", "30d"], ["90d", "90d"], ["custom", t("dash.reports.custom")]] as const).map(([value, label]) => (
               <button
@@ -155,7 +155,7 @@ export default function ReportsChart({ initialReport, branches, accountId }: Rep
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         {kpis.map((kpi) => (
           <div key={kpi.labelKey} className="bg-surface-base border border-outline-variant rounded p-5">
             <div className="flex items-center gap-2 mb-2">
@@ -209,7 +209,7 @@ export default function ReportsChart({ initialReport, branches, accountId }: Rep
         </div>
       </div>
 
-      <div className="bg-surface-base border border-outline-variant rounded">
+      <div className="bg-surface-base border border-outline-variant rounded overflow-x-auto">
         <div className="px-6 py-4 border-b border-outline-variant">
           <h2 className="font-headline-md text-headline-md text-ink-deep">
             {t("dash.reports.topProducts")}

@@ -136,9 +136,9 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
   };
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+    <div className="p-4 sm:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
@@ -153,7 +153,7 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
             <option value="delivered">{t("dash.orders.status.delivered")}</option>
             <option value="cancelled">{t("dash.orders.status.cancelled")}</option>
           </select>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-on-surface-variant font-label-md">{t("dash.orders.from")}</span>
             <input
               type="date"
@@ -179,7 +179,8 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
         </button>
       </div>
 
-      <div className="bg-surface-base border border-outline-variant rounded overflow-hidden">
+      {/* Desktop table (lg+) — phones get the card list below */}
+      <div className="hidden lg:block bg-surface-base border border-outline-variant rounded overflow-hidden">
         <table className="w-full">
           <thead className="bg-surface-container-low">
             <tr>
@@ -246,8 +247,54 @@ export default function OrdersTable({ orders }: OrdersTableProps) {
         </table>
       </div>
 
+      {/* Mobile card list (< lg) — same data, tap to open details */}
+      <div className="lg:hidden flex flex-col gap-3">
+        {filtered.length === 0 ? (
+          <div className="bg-surface-base border border-outline-variant rounded p-8 text-center text-on-surface-variant text-sm">
+            {t("dash.orders.noOrders")}
+          </div>
+        ) : (
+          filtered.map((order) => (
+            <button
+              key={order.id}
+              type="button"
+              onClick={() => handleRowClick(order)}
+              className="text-left bg-surface-base border border-outline-variant rounded-lg p-4 hover:bg-surface-container-low/40 active:bg-surface-container-low transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="font-mono text-sm text-primary">
+                    {order.order_reference ?? `#${order.id.slice(0, 8).toUpperCase()}`}
+                  </span>
+                  <p className="text-sm text-ink-deep mt-1 truncate">
+                    {order.supplier_name ?? "—"}
+                  </p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    {order.branch_name ?? "—"} ·{" "}
+                    {order.placed_at ? new Date(order.placed_at).toLocaleDateString() : "—"}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-medium text-sm text-ink-deep">
+                    {typeof order.total === "number" ? `TSh ${order.total.toLocaleString()}` : "—"}
+                  </p>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-label-md mt-1.5 ${STATUS_COLORS[order.status] ?? ""}`}
+                  >
+                    {order.status}
+                  </span>
+                </div>
+              </div>
+              <span className="flex items-center justify-end text-on-surface-variant/60 mt-1">
+                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+
       {selectedOrder && (
-        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50" onClick={closeDetail}>
+        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50 p-4" onClick={closeDetail}>
           <div className="bg-surface-base rounded-lg border border-outline-variant w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-headline-md text-headline-md text-ink-deep">

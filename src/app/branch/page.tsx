@@ -52,7 +52,7 @@ export default async function BranchHomePage() {
   ];
 
   return (
-    <div className="p-8 max-w-container-max mx-auto w-full">
+    <div className="p-4 sm:p-8 max-w-container-max mx-auto w-full">
       <div className="mb-8">
         <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-1">
           {data.branch.name}

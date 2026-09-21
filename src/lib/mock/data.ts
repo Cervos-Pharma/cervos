@@ -629,16 +629,23 @@ export function createMockData(): MockTable {
   ];
 
   // ── App releases (HQ Downloads) ────────────────────────────────────────────
+  // Shape matches the real `app_releases` table; file_url points at the mock
+  // storage route, which serves binaries from <repo>/.mock-releases.
   const app_releases = [
-    { id: "rel-1", version: "2.4.0", platform: "Windows", notes: "Faster sync, barcode scan fix, printer presets.", release_notes: "Faster sync, barcode scan fix, printer presets.", download_url: "/mock/downloads/cervos-setup-2.4.0.exe", is_current: true, created_at: iso(6 * DAY) },
-    { id: "rel-2", version: "2.3.1", platform: "Android", notes: "Marketplace map performance.", release_notes: "Marketplace map performance.", download_url: "/mock/downloads/cervos-2.3.1.apk", is_current: false, created_at: iso(20 * DAY) },
-    { id: "rel-3", version: "2.3.0", platform: "macOS", notes: "Initial macOS support.", release_notes: "Initial macOS support.", download_url: "/mock/downloads/cervos-2.3.0.dmg", is_current: false, created_at: iso(35 * DAY) },
+    { id: "rel-1", platform: "windows", version: "2.4.0", file_path: "windows/cervos-setup-2.4.0.exe", file_url: "/mock/storage/app-releases/windows/cervos-setup-2.4.0.exe", file_size_bytes: 96000000, release_notes: "Faster sync, barcode scan fix, printer presets.", is_current: true, created_at: iso(6 * DAY), uploaded_at: iso(6 * DAY) },
+    { id: "rel-2", platform: "android", version: "0.2.0", file_path: "android/cervos-pos-0.2.0-arm64.apk", file_url: "/mock/storage/app-releases/android/cervos-pos-0.2.0-arm64.apk", file_size_bytes: 14700000, release_notes: "First Android build of the Cervos POS app (arm64).", is_current: true, created_at: iso(1 * DAY), uploaded_at: iso(1 * DAY) },
+    { id: "rel-3", platform: "mac", version: "2.3.0", file_path: "mac/cervos-2.3.0.dmg", file_url: "/mock/storage/app-releases/mac/cervos-2.3.0.dmg", file_size_bytes: 88000000, release_notes: "Initial macOS support.", is_current: true, created_at: iso(35 * DAY), uploaded_at: iso(35 * DAY) },
   ];
 
-  // ── Payment settings (supplier settings) ───────────────────────────────────
+  // ── Payment settings (dashboard/settings + supplier/settings) ──────────────
+  // Shape must match the `PaymentSettings` type in lib/actions/payments.ts —
+  // PaymentSettingsForm reads `accepted_methods` unconditionally, so a row with
+  // legacy payout fields (provider/business_name/payout_method) crashed the page.
   const payment_settings = [
-    { id: "ps-1", account_id: "acc-afya", provider: "payme", business_name: "Afya Wholesale Ltd", account_number: "5511000001", payout_method: "bank", payout_phone: "+255 719 000 005", created_at: iso(270 * DAY), updated_at: iso(2 * DAY) },
-    { id: "ps-2", account_id: "acc-tibu", provider: "payme", business_name: "Tibu Distributors", account_number: "5511000002", payout_method: "mobile", payout_phone: "+255 762 000 006", created_at: iso(160 * DAY), updated_at: iso(3 * DAY) },
+    // Pharmacy demo account — POS counter methods, cash always enabled.
+    { id: "ps-1", account_id: "acc-uzuri", default_method: "cash", accepted_methods: ["cash", "mobile_money", "card"], mpesa_number: "0713000001", tigo_number: null, halopesa_number: null, airtel_number: "0685000001", bank_name: null, bank_account: null, bank_branch: null, payme_wallet_number: null, created_at: iso(320 * DAY), updated_at: iso(4 * DAY) },
+    { id: "ps-2", account_id: "acc-afya", default_method: "bank_transfer", accepted_methods: ["mobile_money", "bank_transfer", "invoice"], mpesa_number: "0719000005", tigo_number: null, halopesa_number: null, airtel_number: null, bank_name: "CRDB Bank", bank_account: "0150 5511 0001", bank_branch: "Dar es Salaam", payme_wallet_number: "+255719000005", created_at: iso(270 * DAY), updated_at: iso(2 * DAY) },
+    { id: "ps-3", account_id: "acc-tibu", default_method: "mobile_money", accepted_methods: ["mobile_money", "invoice"], mpesa_number: null, tigo_number: "0762000006", halopesa_number: null, airtel_number: null, bank_name: null, bank_account: null, bank_branch: null, payme_wallet_number: "+255762000006", created_at: iso(160 * DAY), updated_at: iso(3 * DAY) },
   ];
 
   // ── HQ admins (passwords are real scrypt hashes — see TEST_LOCAL.md) ───────

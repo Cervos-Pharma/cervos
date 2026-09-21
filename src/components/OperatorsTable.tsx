@@ -190,15 +190,15 @@ export default function OperatorsTable({ operators, branches }: OperatorsTablePr
     role === "admin" ? "bg-primary/10 text-primary" : "bg-surface-container text-on-surface-variant";
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+    <div className="p-4 sm:p-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3">
           <input
             type="text"
             placeholder={t("dash.operators.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-4 py-2.5 bg-surface-base border border-outline-variant rounded text-sm focus:outline-none focus:border-primary w-64"
+            className="px-4 py-2.5 bg-surface-base border border-outline-variant rounded text-sm focus:outline-none focus:border-primary w-full sm:w-64"
           />
           <select
             value={roleFilter}
@@ -223,7 +223,8 @@ export default function OperatorsTable({ operators, branches }: OperatorsTablePr
         <div className="mb-4 px-4 py-3 bg-error-container text-error rounded text-sm">{error}</div>
       )}
 
-      <div className="bg-surface-base border border-outline-variant rounded overflow-hidden">
+      {/* Desktop table (lg+) — phones get the card list below */}
+      <div className="hidden lg:block bg-surface-base border border-outline-variant rounded overflow-hidden">
         <table className="w-full">
           <thead className="bg-surface-container-low">
             <tr>
@@ -315,8 +316,68 @@ export default function OperatorsTable({ operators, branches }: OperatorsTablePr
         </table>
       </div>
 
+      {/* Mobile card list (< lg) */}
+      <div className="lg:hidden flex flex-col gap-3">
+        {filtered.length === 0 ? (
+          <div className="bg-surface-base border border-outline-variant rounded p-8 text-center text-on-surface-variant text-sm">
+            {t("dash.operators.noOperators")}
+          </div>
+        ) : (
+          filtered.map((op) => (
+            <div
+              key={op.id}
+              className="bg-surface-base border border-outline-variant rounded-lg p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[16px] text-primary">person</span>
+                  </div>
+                  <span className="font-body-md text-body-md text-ink-deep truncate">{op.name}</span>
+                </div>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-label-md shrink-0 ${statusColor(op.role)}`}>
+                  {op.role}
+                </span>
+              </div>
+
+              <p className="text-xs text-on-surface-variant mt-2">
+                {op.branch_name ?? "—"}
+                {op.web_enabled && op.email ? " · Web" : " · POS only"}
+              </p>
+              {op.web_enabled && op.email && (
+                <p className="text-xs text-on-surface-variant/70 truncate mt-0.5">{op.email}</p>
+              )}
+
+              <div className="mt-3 flex items-center justify-end gap-1">
+                <button
+                  onClick={() => openEdit(op)}
+                  className="p-2 hover:bg-surface-container rounded transition-colors"
+                  title={t("dash.operators.edit")}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-on-surface-variant">edit</span>
+                </button>
+                <button
+                  onClick={() => openReset(op)}
+                  className="p-2 hover:bg-surface-container rounded transition-colors"
+                  title={t("dash.operators.resetPin")}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-on-surface-variant">pin</span>
+                </button>
+                <button
+                  onClick={() => handleDelete(op.id)}
+                  className="p-2 hover:bg-error-container rounded transition-colors"
+                  title={t("dash.operators.delete")}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-error">delete</span>
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
       {modal.mode && (
-        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50" onClick={closeModal}>
+        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50 p-4" onClick={closeModal}>
           <div className="bg-surface-base rounded-lg border border-outline-variant w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-headline-md text-headline-md text-ink-deep mb-6">
               {modal.mode === "add" && t("dash.operators.addTitle")}

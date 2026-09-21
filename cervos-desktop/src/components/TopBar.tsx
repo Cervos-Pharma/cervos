@@ -4,11 +4,13 @@ import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
 import { queryDb } from '../lib/database'
 import Logo from './Logo'
+import { useShell } from './Shell'
 
 export default function TopBar() {
   const navigate = useNavigate()
   const { currentOperator, logout } = useAuthStore()
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>('trial')
+  const { setSidebarOpen, sidebarOpen } = useShell()
 
   useEffect(() => {
     async function loadSubscription() {
@@ -56,13 +58,23 @@ export default function TopBar() {
   const { locale, toggleLocale } = useI18nStore()
 
   return (
-    <header className="h-14 bg-surface-base border-b border-outline-variant/60 flex items-center justify-between px-6 shrink-0">
-      <div className="flex items-center gap-2">
+    <header className="h-14 bg-surface-base border-b border-outline-variant/60 flex items-center justify-between px-4 sm:px-6 shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Hamburger — opens the slide-in drawer on narrow screens (below lg) */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label="Toggle navigation"
+          className="lg:hidden p-2 -ml-2 rounded-lg text-on-surface-variant hover:bg-outline-variant/50 transition-colors"
+        >
+          <span className="material-symbols-outlined text-xl">
+            {sidebarOpen ? 'close' : 'menu'}
+          </span>
+        </button>
         <Logo size="sm" />
-        <span className="font-headline font-semibold text-on-surface">Cervos POS</span>
+        <span className="font-headline font-semibold text-on-surface hidden sm:block">Cervos POS</span>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full ${getStatusColor(subscriptionStatus)}`} />
           <span className="text-xs text-on-surface-variant">{getStatusLabel(subscriptionStatus)}</span>

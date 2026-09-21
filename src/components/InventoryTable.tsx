@@ -254,9 +254,9 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
   }, [branchList]);
 
   return (
-    <div className="flex-1 p-8 flex flex-col gap-6 max-w-[1280px] mx-auto w-full">
+    <div className="flex-1 min-w-0 p-4 sm:p-8 flex flex-col gap-6 max-w-[1280px] mx-auto w-full">
       {/* Branch Selector Bar */}
-      <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <span className="material-symbols-outlined text-on-surface-variant text-[22px]">storefront</span>
           <div>
@@ -267,7 +267,7 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
               id="branch-select"
               value={selectedBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
-              className="mt-0.5 border border-outline-variant bg-surface text-on-surface text-body-sm font-semibold px-3 py-1.5 focus:outline-none focus:border-primary-container min-w-[240px]"
+              className="mt-0.5 border border-outline-variant bg-surface text-on-surface text-body-sm font-semibold px-3 py-1.5 focus:outline-none focus:border-primary-container w-full sm:min-w-[240px]"
             >
               <option value="all">
                 {t("inv.allbranches", "All Branches")} ({branchList.length} locations)
@@ -282,11 +282,11 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
         </div>
 
         {/* View Mode Toggle: Batches vs Products */}
-        <div className="flex items-center bg-surface-container p-1 border border-outline-variant">
+        <div className="flex items-center bg-surface-container p-1 border border-outline-variant w-full sm:w-auto">
           <button
             type="button"
             onClick={() => setViewMode("batches")}
-            className={`flex items-center gap-2 px-4 py-2 font-mono text-label-md uppercase transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 font-mono text-label-md uppercase transition-all ${
               viewMode === "batches"
                 ? "bg-surface-container-lowest text-ink-deep font-bold shadow-sm"
                 : "text-on-surface-variant hover:text-on-surface"
@@ -298,7 +298,7 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
           <button
             type="button"
             onClick={() => setViewMode("products")}
-            className={`flex items-center gap-2 px-4 py-2 font-mono text-label-md uppercase transition-all ${
+            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 font-mono text-label-md uppercase transition-all ${
               viewMode === "products"
                 ? "bg-surface-container-lowest text-ink-deep font-bold shadow-sm"
                 : "text-on-surface-variant hover:text-on-surface"
@@ -443,7 +443,7 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
 
       {/* Filter Bar */}
       <div className="bg-surface-container-lowest border border-outline-variant p-4 flex flex-wrap gap-4 items-center">
-        <div className="relative flex items-center flex-1 min-w-[240px]">
+        <div className="relative flex items-center flex-1 min-w-[200px] w-full sm:w-auto">
           <span className="material-symbols-outlined absolute left-3 text-on-surface-variant text-[18px]">
             search
           </span>
@@ -493,8 +493,8 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
 
       {/* Table: Batches / Stock View */}
       {viewMode === "batches" && (
-        <div className="bg-surface-container-lowest border border-outline-variant overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+        <div className="hidden lg:block bg-surface-container-lowest border border-outline-variant overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-surface-container border-b border-outline-variant">
                 {([
@@ -580,10 +580,64 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
         </div>
       )}
 
-      {/* Table: Products View */}
+      {/* Batches card list (< lg) */}
+      {viewMode === "batches" && (
+        <div className="lg:hidden flex flex-col gap-3">
+          {filteredBatches.length === 0 ? (
+            <div className="bg-surface-container-lowest border border-outline-variant p-8 text-center text-on-surface-variant text-sm">
+              {t("inv.noresults", "No batches match the current filters.")}
+            </div>
+          ) : (
+            filteredBatches.map((row) => (
+              <div
+                key={row.id}
+                className={`bg-surface-container-lowest border border-outline-variant rounded-lg p-4 border-l-4 ${
+                  row.daysLeft <= 14
+                    ? "border-l-error"
+                    : row.daysLeft <= 30
+                    ? "border-l-[#b45309]"
+                    : "border-l-tertiary-container"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-body-sm text-ink-deep truncate">{row.productName}</p>
+                    <p className="font-mono text-[11px] text-on-surface-variant">{row.genericName}</p>
+                  </div>
+                  <ExpiryBadge daysLeft={row.daysLeft} t={t} />
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-surface-container rounded p-2">
+                    <p className="font-mono text-[10px] text-on-surface-variant uppercase">Batch</p>
+                    <p className="font-mono text-xs text-on-surface truncate">{row.batchNo}</p>
+                  </div>
+                  <div className="bg-surface-container rounded p-2">
+                    <p className="font-mono text-[10px] text-on-surface-variant uppercase">Stock</p>
+                    <p className="font-mono text-xs font-bold text-on-surface">{row.quantity.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-surface-container rounded p-2">
+                    <p className="font-mono text-[10px] text-on-surface-variant uppercase">Expiry</p>
+                    <p className="font-mono text-xs text-on-surface">{row.expiryDate}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-on-surface-variant">
+                  <span className="truncate">{row.branch}</span>
+                  <button
+                    type="button"
+                    className="font-mono text-label-md text-primary-container border border-primary-container px-2.5 py-1.5 hover:bg-surface-container-high transition-colors uppercase"
+                  >
+                    {t("inv.transfer", "Transfer")}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+      {/* Products — table on desktop, cards on phones */}
       {viewMode === "products" && (
-        <div className="bg-surface-container-lowest border border-outline-variant overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[800px]">
+        <div className="hidden lg:block bg-surface-container-lowest border border-outline-variant overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-surface-container border-b border-outline-variant">
                 <th className="px-4 py-3 font-mono text-label-md text-on-surface-variant uppercase">
@@ -678,6 +732,74 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Products card list (< lg) */}
+      {viewMode === "products" && (
+        <div className="lg:hidden flex flex-col gap-3">
+          {filteredProducts.length === 0 ? (
+            <div className="bg-surface-container-lowest border border-outline-variant p-8 text-center text-on-surface-variant text-sm">
+              {t("inv.noresults", "No products match the current filters.")}
+            </div>
+          ) : (
+            filteredProducts.map((prod) => (
+              <div
+                key={prod.key}
+                className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-body-sm text-ink-deep truncate">{prod.productName}</p>
+                    <p className="font-mono text-[11px] text-on-surface-variant">{prod.genericName}</p>
+                    <span className="inline-block mt-1 px-2 py-0.5 bg-surface-container rounded text-[10px] text-on-surface-variant">
+                      {prod.category}
+                    </span>
+                  </div>
+                  {prod.totalQuantity > 10 ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-secondary px-2 py-0.5 rounded bg-secondary/10 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
+                      In Stock
+                    </span>
+                  ) : prod.totalQuantity > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#b45309] px-2 py-0.5 rounded bg-[#fef3c7] shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#b45309]" />
+                      Low Stock
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-error px-2 py-0.5 rounded bg-error-container shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-error" />
+                      Out of Stock
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <p className="font-mono text-body-md font-bold text-ink-deep tabular-nums">
+                      {prod.totalQuantity.toLocaleString()}
+                    </p>
+                    <p className="font-mono text-xs text-on-surface-variant">
+                      {prod.batchCount} {prod.batchCount === 1 ? "batch" : "batches"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-on-surface-variant">{prod.earliestExpiry}</span>
+                    <ExpiryBadge daysLeft={prod.minDaysLeft} t={t} />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch(prod.genericName);
+                    setViewMode("batches");
+                  }}
+                  className="mt-3 w-full font-mono text-label-md text-primary border border-primary px-2.5 py-2 hover:bg-primary/10 transition-colors uppercase text-xs"
+                >
+                  View Batches
+                </button>
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

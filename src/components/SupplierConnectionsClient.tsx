@@ -137,8 +137,8 @@ export default function SupplierConnectionsClient() {
       ) : connections.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No connection requests sent yet.</p>
       ) : (
-        <div className="bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
-          <table className="w-full">
+        <div className="bg-surface-base border border-outline-variant rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[640px]">
             <thead className="bg-outline-variant/50">
               <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
                 <th className="px-4 py-3">Branch</th>

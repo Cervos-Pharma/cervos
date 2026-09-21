@@ -1,6 +1,12 @@
 /**
  * @file components/SupplierSidebar.tsx
- * @description Fixed left navigation sidebar for the supplier portal (/supplier/*).
+ * @description Left navigation sidebar for the supplier portal (/supplier/*).
+ *
+ * Responsive behaviour:
+ *  - lg+ (desktop): permanently fixed 16rem sidebar.
+ *  - < lg: slides in as an overlay drawer (opened via the hamburger in the
+ *    page header / SIDEBAR_OPEN_EVENT). Previously the sidebar was simply
+ *    `hidden md:flex`, leaving mobile users with no navigation at all.
  *
  * Features:
  *  - Active route highlighting via `usePathname()`
@@ -15,11 +21,14 @@
  */
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useI18n } from "@/lib/i18n/context";
+import MobileDrawer from "@/components/MobileDrawer";
+import { SIDEBAR_OPEN_EVENT } from "@/components/sidebar-events";
 
 interface SupplierSidebarProps {
   accountName?: string;
@@ -31,13 +40,27 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
   const pathname = usePathname();
   const router = useRouter();
   const { lang, setLang, t } = useI18n();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const open = () => setMobileOpen(true);
+    window.addEventListener(SIDEBAR_OPEN_EVENT, open);
+    return () => window.removeEventListener(SIDEBAR_OPEN_EVENT, open);
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
+    setMobileOpen(false);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/auth");
     router.refresh();
   }
+
+  const closeMobile = () => setMobileOpen(false);
 
   const NAV = [
     { labelKey: "portal.dashboard",   href: "/supplier",              icon: "dashboard" },
@@ -52,9 +75,8 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
     { labelKey: "portal.settings",    href: "/supplier/settings",      icon: "settings" },
   ];
 
-  return (
-    <nav className="hidden md:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface h-full overflow-hidden">
-
+  const content = (
+    <>
       {/* Brand / account logo */}
       <div className="p-6 border-b border-outline-variant">
         {logoUrl ? (
@@ -91,6 +113,7 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
       <div className="px-4 py-4 border-b border-outline-variant">
         <Link
           href="/supplier/quote"
+          onClick={closeMobile}
           className="w-full bg-ink-deep text-white font-label-md text-label-md py-3 flex justify-center items-center gap-2 hover:opacity-90 transition-opacity rounded"
         >
           <span className="material-symbols-outlined text-[16px]">add</span>
@@ -106,6 +129,7 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
             <li key={item.href}>
               <Link
                 href={item.href}
+                onClick={closeMobile}
                 className={`flex items-center gap-3 px-6 py-3 font-label-md text-label-md transition-all ${
                   active
                     ? "text-primary border-r-2 border-primary bg-surface-container-low font-bold"
@@ -149,6 +173,7 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
           <li>
             <Link
               href="/support"
+              onClick={closeMobile}
               className="flex items-center gap-3 px-6 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all font-label-md text-label-md"
             >
               <span className="material-symbols-outlined text-[18px]">contact_support</span>
@@ -166,6 +191,20 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
           </li>
         </ul>
       </div>
-    </nav>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile drawer — slide in/out below lg */}
+      <MobileDrawer open={mobileOpen} onClose={closeMobile}>
+        <nav className="h-full w-64 flex flex-col bg-surface overflow-hidden">{content}</nav>
+      </MobileDrawer>
+
+      {/* Fixed desktop sidebar — lg+ only */}
+      <nav className="hidden lg:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface h-full overflow-hidden">
+        {content}
+      </nav>
+    </>
   );
 }

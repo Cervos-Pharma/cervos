@@ -15,6 +15,7 @@ import SupplierSidebar from "@/components/SupplierSidebar";
 import Link from "next/link";
 import { getSupplierDashboardData } from "@/lib/actions/supplier";
 import { getT } from "@/lib/i18n/server";
+import MobileMenuButton from "@/components/MobileMenuButton";
 
 export default async function SupplierDashboard() {
   const t = await getT();
@@ -28,9 +29,10 @@ export default async function SupplierDashboard() {
     <div className="flex min-h-screen bg-surface">
       <SupplierSidebar accountName={account?.name} />
 
-      <div className="ml-64 flex-1 flex flex-col">
+      <div className="lg:ml-64 flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
-        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center px-8 w-[calc(100%-16rem)] z-10 justify-between">
+        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center px-8 lg:w-[calc(100%-16rem)] w-full z-10 justify-between">
+          <MobileMenuButton />
           <div>
             <h1 className="font-headline-md text-headline-md text-ink-deep">
               {t("sup.dashboard.title")}
@@ -45,9 +47,9 @@ export default async function SupplierDashboard() {
           </Link>
         </header>
 
-        <main className="flex-grow pt-24 pb-16 px-8">
+        <main className="flex-grow min-w-0 pt-24 pb-16 px-4 sm:px-8">
           {/* KPI strip */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-8">
             {[
               { labelKey: "sup.dashboard.kpi.open_quotes", value: pendingCount, icon: "request_quote", colour: "text-primary" },
               { labelKey: "sup.dashboard.kpi.total_requests", value: quotes.length, icon: "receipt_long", colour: "text-secondary" },

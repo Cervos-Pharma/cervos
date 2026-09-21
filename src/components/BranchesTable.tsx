@@ -190,7 +190,7 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
   };
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="flex items-center justify-between mb-6">
         <div />
         <button
@@ -206,7 +206,8 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
         <div className="mb-4 px-4 py-3 bg-error-container text-error rounded text-sm">{error}</div>
       )}
 
-      <div className="bg-surface-base border border-outline-variant rounded overflow-hidden">
+      {/* Desktop table (lg+) — phones get the card list below */}
+      <div className="hidden lg:block bg-surface-base border border-outline-variant rounded overflow-hidden">
         <table className="w-full">
           <thead className="bg-surface-container-low">
             <tr>
@@ -310,6 +311,83 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list (< lg) — tap a card for details; buttons stop propagation */}
+      <div className="lg:hidden flex flex-col gap-3">
+        {branches.length === 0 ? (
+          <div className="bg-surface-base border border-outline-variant rounded p-8 text-center text-on-surface-variant text-sm">
+            {t("dash.branches.noBranches")}
+          </div>
+        ) : (
+          branches.map((branch) => (
+            <div
+              key={branch.id}
+              onClick={() => handleBranchClick(branch)}
+              className="bg-surface-base border border-outline-variant rounded-lg p-4 hover:bg-surface-container-low/40 transition-colors cursor-pointer"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded bg-secondary/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[16px] text-secondary">storefront</span>
+                  </div>
+                  <span className="font-body-md text-body-md text-ink-deep truncate">{branch.name}</span>
+                </div>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-label-md shrink-0 ${STATUS_COLORS[branch.subscription_status ?? "inactive"] ?? "bg-surface-container text-on-surface-variant"}`}>
+                  {branch.subscription_status ?? "inactive"}
+                </span>
+              </div>
+
+              <div className="mt-2 text-xs text-on-surface-variant space-y-0.5">
+                <p className="truncate">{branch.address ?? "—"}</p>
+                {branch.lat && branch.lng && (
+                  <p className="font-mono">{branch.lat.toFixed(4)}, {branch.lng.toFixed(4)}</p>
+                )}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2">
+                {branch.pos_activated_at ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-label-md bg-secondary/10 text-secondary">
+                    <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                    POS linked
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-label-md bg-surface-container text-on-surface-variant">
+                    Unclaimed
+                  </span>
+                )}
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  {branch.pos_activated_at && (
+                    <button
+                      onClick={() => handleDeactivatePos(branch)}
+                      disabled={deactivatingId === branch.id}
+                      className="p-2 hover:bg-error-container rounded transition-colors disabled:opacity-60"
+                      title="Deactivate POS — only if the linked device is lost, broken, or being replaced"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-error">
+                        {deactivatingId === branch.id ? "hourglass_empty" : "phonelink_erase"}
+                      </span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => openEdit(branch)}
+                    className="p-2 hover:bg-surface-container rounded transition-colors"
+                    title={t("dash.branches.edit")}
+                  >
+                    <span className="material-symbols-outlined text-[16px] text-on-surface-variant">edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(branch.id)}
+                    className="p-2 hover:bg-error-container rounded transition-colors"
+                    title={t("dash.branches.delete")}
+                  >
+                    <span className="material-symbols-outlined text-[16px] text-error">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {modal.mode && (
@@ -423,7 +501,7 @@ export default function BranchesTable({ branches, accountId }: BranchesTableProp
       )}
 
       {selectedBranch && (
-        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50" onClick={closeDetail}>
+        <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50 p-4" onClick={closeDetail}>
           <div className="bg-surface-base rounded-lg border border-outline-variant w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-headline-md text-headline-md text-ink-deep">

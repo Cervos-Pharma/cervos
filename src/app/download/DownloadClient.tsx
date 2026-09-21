@@ -12,15 +12,16 @@ import "leaflet/dist/leaflet.css";
 /* ─── types / constants ─────────────────────────────────────────── */
 
 interface DownloadClientProps { releases: Record<string, AppRelease>; }
-const OS_TO_PLATFORM: Record<string, string> = { macos: "mac", windows: "windows", linux: "linux" };
+const OS_TO_PLATFORM: Record<string, string> = { macos: "mac", windows: "windows", linux: "linux", android: "android" };
 function formatBytes(b: number) { if (!b) return "0 B"; const k=1024,s=["B","KB","MB","GB"],i=Math.floor(Math.log(b)/Math.log(k)); return `${parseFloat((b/Math.pow(k,i)).toFixed(1))} ${s[i]}`; }
 
-type OS = "macos" | "windows" | "linux";
-const OS_ORDER: OS[] = ["windows", "macos", "linux"];
+type OS = "macos" | "windows" | "linux" | "android";
+const OS_ORDER: OS[] = ["windows", "macos", "linux", "android"];
 const OS_CONFIG: Record<OS, { labelKey: string; icon: string; reqKey: string; ext: string }> = {
   windows: { labelKey: "download.for.windows", icon: "window",     reqKey: "download.req.windows", ext: ".exe" },
   macos:   { labelKey: "download.for.macos",   icon: "laptop_mac", reqKey: "download.req.macos",   ext: ".dmg" },
   linux:   { labelKey: "download.for.linux",   icon: "terminal",   reqKey: "download.req.linux",   ext: ".deb / .AppImage" },
+  android: { labelKey: "download.for.android", icon: "smartphone",  reqKey: "download.req.android", ext: ".apk" },
 };
 
 const FEATURES = [
@@ -324,6 +325,7 @@ function MapScreen({ show }: { show: boolean }) {
 /* ─── detect OS ─────────────────────────────────────────────────── */
 function detectOS(): OS {
   if (typeof navigator === "undefined") return "windows";
+  if (/android/i.test(navigator.userAgent)) return "android";
   const p = navigator.platform.toLowerCase();
   if (p.includes("win")) return "windows";
   if (p.includes("linux")) return "linux";
@@ -561,8 +563,8 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
                       {/* OS sliding pill */}
                       <div className="relative mb-5 bg-surface-muted rounded-xl overflow-hidden">
                         <div
-                          className="absolute inset-y-0 w-1/3 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] pointer-events-none z-0"
-                          style={{ left: `${osIndex * 33.333}%` }}
+                          className="absolute inset-y-0 w-1/4 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] pointer-events-none z-0"
+                          style={{ left: `${osIndex * 25}%` }}
                         >
                           <div className="m-1 h-[calc(100%-8px)] bg-white rounded-lg shadow-md border border-outline-variant/40" />
                         </div>

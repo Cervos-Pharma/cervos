@@ -138,13 +138,13 @@ export default function HQTeamClient({ admins, error }: Props) {
         </div>
       )}
 
-      <div className="bg-surface-base border border-outline-variant rounded overflow-hidden">
+      <div className="bg-surface-base border border-outline-variant rounded overflow-x-auto">
         {(admins ?? []).length === 0 ? (
           <div className="p-12 text-center">
             <p className="font-body-md text-on-surface-variant">No HQ operators configured.</p>
           </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[720px]">
             <thead className="bg-surface-container-low">
               <tr>
                 {["Name", "Email", "Role", "Status", "Last login", "Actions"].map((h) => (

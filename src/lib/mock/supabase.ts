@@ -277,7 +277,18 @@ export class MockQueryBuilder {
     }
     if (this.mode === "insert") {
       const rows = Array.isArray(this.payload) ? this.payload : [this.payload];
-      const clean = rows.filter(Boolean).map((r) => ({ ...(r as MockRow) }));
+      const clean = rows.filter(Boolean).map((r) => {
+        const row = { ...(r as MockRow) };
+        // Stand in for Postgres column defaults that the mock schema lacks —
+        // keeps mock rows well-formed when callers omit server-generated fields.
+        if (this.table === "app_releases") {
+          if (!row.id) row.id = `rel-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+          const now = new Date().toISOString();
+          if (!row.created_at) row.created_at = now;
+          if (!row.uploaded_at) row.uploaded_at = now;
+        }
+        return row;
+      });
       this.db[this.table] = [...tableRows, ...clean];
       return { data: clean, error: null, count: clean.length };
     }
@@ -396,11 +407,16 @@ function pushColumnNode(nodes: ColumnNode[], token: string) {
  * action (e.g. HQ suspends an account) are visible to subsequent requests.
  * Restarting `next dev` resets the dataset.
  */
-let sharedDb: MockTable | null = null;
+// Backed by globalThis so every module instance in the process shares one
+// store. A module-scoped singleton is NOT enough: Next dev compiles route
+// handlers and pages/actions into separate module graphs, so each would get
+// its own `sharedDb` and a row inserted by a server action would be invisible
+// to /api/* route handlers (and vice versa).
+const globalStore = globalThis as unknown as { __cervosMockDb?: MockTable };
 
 function getSharedDb(): MockTable {
-  if (!sharedDb) sharedDb = createMockData();
-  return sharedDb;
+  if (!globalStore.__cervosMockDb) globalStore.__cervosMockDb = createMockData();
+  return globalStore.__cervosMockDb;
 }
 
 /** Builds the demo user object for a given account type (used by the role switcher). */
@@ -479,10 +495,16 @@ export function createMockSupabase(options: MockClientOptions = {}) {
     },
     rpc(name: string, args: Record<string, unknown> = {}) {
       if (name === "set_current_release") {
+        // Mirrors the real SQL function: demote everything on the target's
+        // platform, then promote the target — one current per platform.
         const releases = db.app_releases ?? [];
-        for (const r of releases) r.is_current = false;
         const target = releases.find((r) => r.id === args.p_release_id);
-        if (target) target.is_current = true;
+        if (target) {
+          for (const r of releases) {
+            if (r.platform === target.platform) r.is_current = false;
+          }
+          target.is_current = true;
+        }
       }
       return Promise.resolve({ data: null, error: null });
     },
@@ -491,6 +513,29 @@ export function createMockSupabase(options: MockClientOptions = {}) {
         return {
           getPublicUrl(path: string) {
             return { data: { publicUrl: `/mock/storage/app-releases/${path}` } };
+          },
+          createSignedUrl(path: string) {
+            // Mock "signed" read URLs are just the public mock route.
+            return Promise.resolve({
+              data: { signedUrl: `/mock/storage/app-releases/${path}` },
+              error: null,
+            });
+          },
+          createSignedUploadUrl(path: string) {
+            // The client PUTs to /api/mock/storage/upload, which stores the
+            // binary under .mock-releases and requires the HQ cookie.
+            return Promise.resolve({
+              data: { signedUrl: `/api/mock/storage/upload?path=${encodeURIComponent(path)}`, path },
+              error: null,
+            });
+          },
+          list() {
+            // Pretend the bucket always exists; contents live on disk.
+            return Promise.resolve({ data: [{}], error: null });
+          },
+          remove() {
+            // The .mock-releases file is left on disk — harmless in mock mode.
+            return Promise.resolve({ data: [], error: null });
           },
         };
       },

@@ -14,7 +14,7 @@ export default async function HQNewsPage() {
   return (
     <div className="flex min-h-screen bg-surface-container-lowest">
       <HQSidebarServer />
-      <main className="flex-1 ml-64 p-8 pt-12">
+      <main className="flex-1 min-w-0 lg:ml-64 p-8 pt-12">
         <div className="max-w-6xl">
           <div className="flex items-start justify-between mb-8">
             <div>

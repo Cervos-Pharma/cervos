@@ -1,8 +1,10 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
 import { signOut } from '../lib/sync'
 import { LogoMark } from './Logo'
+import { useShell } from './Shell'
 
 const baseNavItems = [
   { path: '/', icon: 'dashboard', key: 'nav.dashboard' },
@@ -26,19 +28,38 @@ export default function Sidebar() {
   const { currentOperator, isAdmin, logout } = useAuthStore()
   const locale = useI18nStore((s) => s.locale)
   const navigate = useNavigate()
+  const location = useLocation()
+  const { sidebarOpen, setSidebarOpen } = useShell()
+
+  // Close the drawer on any route change (tap a link → slide back out).
+  useEffect(() => {
+    setSidebarOpen(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname])
+
+  // Escape closes the drawer while it is open.
+  useEffect(() => {
+    if (!sidebarOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sidebarOpen, setSidebarOpen])
 
   async function handleLogout() {
     // Same real sign-out Settings already does (Supabase session + local
     // operator session) — just made reachable from one click instead of
     // being buried a page deep.
+    setSidebarOpen(false)
     await signOut()
     logout()
     navigate('/login')
   }
 
-  return (
-    <aside key={locale} className="w-56 bg-surface-base border-r border-outline-variant flex flex-col shrink-0 overflow-hidden">
-      <div className="h-14 flex items-center px-4 border-b border-outline-variant gap-2">
+  const nav = (
+    <>
+      <div className="h-14 flex items-center px-4 border-b border-outline-variant gap-2 shrink-0">
         <LogoMark className="shrink-0" />
         <span className="font-headline font-black text-lg text-on-surface">
           Cervos
@@ -51,8 +72,9 @@ export default function Sidebar() {
             key={item.path}
             to={item.path}
             end={item.path === '/'}
+            onClick={() => setSidebarOpen(false)}
             className={({ isActive }) =>
-              `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              `w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
                 isActive
                   ? 'bg-primary text-on-primary'
                   : 'text-on-surface-variant hover:bg-outline-variant/50'
@@ -73,8 +95,9 @@ export default function Sidebar() {
               <NavLink
                 key={item.path}
                 to={item.path}
+                onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  `w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? 'bg-primary text-on-primary'
                       : 'text-on-surface-variant hover:bg-outline-variant/50'
@@ -108,6 +131,34 @@ export default function Sidebar() {
           </div>
         </div>
       )}
-    </aside>
+    </>
+  )
+
+  return (
+    <>
+      {/* Backdrop — mobile only, sits below the drawer, click to close.
+          Must be a sibling of the aside: position:fixed inside a transformed
+          element would be positioned relative to the drawer, not the viewport. */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      <aside
+        key={locale}
+        className={[
+          // Mobile: slide-in overlay drawer, toggled by the TopBar hamburger.
+          'fixed lg:static inset-y-0 left-0 z-50 w-64 max-w-[80vw] shrink-0',
+          'transform transition-transform duration-200 ease-out',
+          sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0',
+          'bg-surface-base border-r border-outline-variant flex flex-col overflow-hidden',
+        ].join(' ')}
+      >
+        {nav}
+      </aside>
+    </>
   )
 }

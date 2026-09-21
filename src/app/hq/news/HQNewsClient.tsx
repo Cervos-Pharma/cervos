@@ -246,8 +246,8 @@ export default function HQNewsClient({ posts }: { posts: NewsPost[] }) {
           </p>
         </div>
       ) : (
-        <div className="bg-surface-base border border-outline-variant overflow-hidden">
-          <table className="w-full">
+        <div className="bg-surface-base border border-outline-variant overflow-x-auto">
+          <table className="w-full min-w-[720px]">
             <thead>
               <tr className="border-b border-outline-variant bg-surface-container-low">
                 <th className="text-left px-4 py-3 font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">

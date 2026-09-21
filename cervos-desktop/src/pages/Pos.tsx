@@ -350,10 +350,10 @@ export default function Pos() {
           </div>
         </div>
       )}
-      <div className="flex h-full">
-        <div className="flex-1 flex flex-col p-6">
-        <div className="flex gap-4 mb-4">
-          <div className="flex-1">
+      <div className="flex flex-col lg:flex-row h-full">
+        <div className="flex-1 flex flex-col p-4 sm:p-6 min-w-0">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
+          <div className="flex-1 min-w-0">
             <div className="flex gap-2">
               <input
                 ref={barcodeInputRef}
@@ -375,7 +375,7 @@ export default function Pos() {
               </button>
             </div>
           </div>
-          <div className="w-64 relative">
+          <div className="w-full sm:w-64 relative">
             <input
               type="text"
               value={searchQuery}
@@ -406,6 +406,7 @@ export default function Pos() {
           </div>
         </div>
 
+        {/* Cart — table on desktop, card list on phones */}
         <div className="flex-1 overflow-auto bg-surface-base border border-outline-variant rounded-xl">
           {cart.length === 0 ? (
             <div className="h-full overflow-y-auto p-5">
@@ -444,33 +445,87 @@ export default function Pos() {
               )}
             </div>
           ) : (
-            <table className="w-full">
-              <thead className="bg-outline-variant/50 sticky top-0">
-                <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3 text-right">Price</th>
-                  <th className="px-4 py-3 text-center">Qty</th>
-                  <th className="px-4 py-3 text-right">Subtotal</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              {/* Desktop cart table (lg+) */}
+              <table className="hidden lg:table w-full">
+                <thead className="bg-outline-variant/50 sticky top-0">
+                  <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
+                    <th className="px-4 py-3">Product</th>
+                    <th className="px-4 py-3 text-right">Price</th>
+                    <th className="px-4 py-3 text-center">Qty</th>
+                    <th className="px-4 py-3 text-right">Subtotal</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.map((item) => (
+                    <tr key={item.batch.id} className="border-t border-outline-variant">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-sm">{item.product.generic_name}</p>
+                        <p className="text-xs text-on-surface-variant">
+                          {item.product.brand_name || "Generic"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        TZS {item.unit_price.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => updateQuantity(item.batch.id, -1)}
+                            className="w-9 h-9 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                          >
+                            -
+                          </button>
+                          <span className="w-8 text-center font-medium">
+                            {item.quantity}
+                          </span>
+                          <button
+                            onClick={() => updateQuantity(item.batch.id, 1)}
+                            className="w-9 h-9 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold">
+                        TZS {(item.unit_price * item.quantity).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => removeFromCart(item.batch.id)}
+                          className="p-2 rounded hover:bg-error/10 text-error transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-xl">
+                            delete
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Mobile cart cards (< lg) — touch-friendly qty steppers */}
+              <ul className="lg:hidden divide-y divide-outline-variant">
                 {cart.map((item) => (
-                  <tr key={item.batch.id} className="border-t border-outline-variant">
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-sm">{item.product.generic_name}</p>
-                      <p className="text-xs text-on-surface-variant">
-                        {item.product.brand_name || "Generic"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      TZS {item.unit_price.toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-2">
+                  <li key={item.batch.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{item.product.generic_name}</p>
+                        <p className="text-xs text-on-surface-variant">
+                          {item.product.brand_name || "Generic"} · TZS {item.unit_price.toLocaleString()}
+                        </p>
+                      </div>
+                      <span className="font-semibold text-sm shrink-0">
+                        TZS {(item.unit_price * item.quantity).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
                         <button
                           onClick={() => updateQuantity(item.batch.id, -1)}
-                          className="w-8 h-8 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                          className="w-10 h-10 rounded-full bg-outline-variant active:bg-primary active:text-white transition-colors flex items-center justify-center text-lg"
                         >
                           -
                         </button>
@@ -479,34 +534,30 @@ export default function Pos() {
                         </span>
                         <button
                           onClick={() => updateQuantity(item.batch.id, 1)}
-                          className="w-8 h-8 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                          className="w-10 h-10 rounded-full bg-outline-variant active:bg-primary active:text-white transition-colors flex items-center justify-center text-lg"
                         >
                           +
                         </button>
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold">
-                      TZS {(item.unit_price * item.quantity).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">
                       <button
                         onClick={() => removeFromCart(item.batch.id)}
-                        className="p-1 rounded hover:bg-error/10 text-error transition-colors"
+                        className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors"
                       >
                         <span className="material-symbols-outlined text-xl">
                           delete
                         </span>
                       </button>
-                    </td>
-                  </tr>
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </table>
+              </ul>
+            </>
           )}
         </div>
       </div>
 
-      <div className="w-80 bg-surface-base border-l border-outline-variant p-6 flex flex-col">
+      {/* Payment panel — right rail on desktop, stacks below the cart on mobile */}
+      <div className="w-full lg:w-80 bg-surface-base lg:border-l border-t lg:border-t-0 border-outline-variant p-4 sm:p-6 flex flex-col">
         <h2 className="font-headline text-lg font-bold text-on-surface mb-4">
           Payment
         </h2>

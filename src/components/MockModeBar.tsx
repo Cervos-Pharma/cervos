@@ -15,6 +15,8 @@
 
 "use client";
 
+import { useEffect, useState } from "react";
+
 const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
 const ROLES = [
@@ -24,15 +26,22 @@ const ROLES = [
 ] as const;
 
 export default function MockModeBar() {
-  if (!IS_MOCK) return null;
+  // The active role comes from a cookie that only exists in the browser, so
+  // read it in an effect — reading it during render makes the server markup
+  // (which always renders "pharmacy" active) disagree with the client and
+  // triggers a React hydration mismatch.
+  const [current, setCurrent] = useState<string | null>(null);
 
-  const current =
-    typeof document !== "undefined"
-      ? document.cookie
-          .split("; ")
-          .find((c) => c.startsWith("mock_user="))
-          ?.split("=")[1] ?? "pharmacy"
-      : "pharmacy";
+  useEffect(() => {
+    setCurrent(
+      document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("mock_user="))
+        ?.split("=")[1] ?? "pharmacy",
+    );
+  }, []);
+
+  if (!IS_MOCK) return null;
 
   const switchRole = (role: string) => {
     if (role === "none") {

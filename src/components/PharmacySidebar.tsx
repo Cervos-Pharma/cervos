@@ -1,6 +1,13 @@
 /**
  * @file components/PharmacySidebar.tsx
- * @description Fixed left navigation sidebar for the pharmacy portal (/dashboard/*).
+ * @description Left navigation sidebar for the pharmacy portal (/dashboard/*).
+ *
+ * Responsive behaviour:
+ *  - lg+ (desktop): permanently fixed 16rem sidebar (unchanged behaviour).
+ *  - < lg (mobile/tablet): hidden by default; slides in as an overlay drawer
+ *    when the user taps the hamburger rendered by <MobileMenuButton /> in the
+ *    page header (the sidebar listens for the SIDEBAR_OPEN_EVENT). Closes on
+ *    backdrop tap, Escape, or after navigating via any nav link.
  *
  * Features:
  *  - Active route highlighting via `usePathname()`
@@ -17,11 +24,14 @@
  */
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useI18n } from "@/lib/i18n/context";
+import MobileDrawer from "@/components/MobileDrawer";
+import { SIDEBAR_OPEN_EVENT } from "@/components/sidebar-events";
 
 interface PharmacySidebarProps {
   branchName?: string;
@@ -34,13 +44,29 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
   const pathname = usePathname();
   const router = useRouter();
   const { lang, setLang, t } = useI18n();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Opened by the hamburger in page headers (<MobileMenuButton />).
+  useEffect(() => {
+    const open = () => setMobileOpen(true);
+    window.addEventListener(SIDEBAR_OPEN_EVENT, open);
+    return () => window.removeEventListener(SIDEBAR_OPEN_EVENT, open);
+  }, []);
+
+  // Close the drawer whenever the route changes (nav tap from inside drawer).
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
+    setMobileOpen(false);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/auth");
     router.refresh();
   }
+
+  const closeMobile = () => setMobileOpen(false);
 
   const NAV = [
     { labelKey: "portal.dashboard",   href: "/dashboard",             icon: "dashboard" },
@@ -56,8 +82,8 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
     { labelKey: "portal.settings",   href: "/dashboard/settings",    icon: "settings" },
   ];
 
-  return (
-    <aside className="bg-surface fixed left-0 top-0 h-full w-64 border-r border-outline-variant flex flex-col py-6 z-20 overflow-hidden">
+  const content = (
+    <>
       {/* Brand / account logo */}
       <div className="px-6 mb-8 flex items-center gap-2">
         {logoUrl ? (
@@ -118,6 +144,7 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
             <Link
               key={item.href}
               href={item.href}
+              onClick={closeMobile}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors border-l-2 ${
                 active
                   ? "text-primary font-bold bg-primary/8 border-primary"
@@ -132,6 +159,7 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
         {/* Download — no lock icon; any pharmacy user can access */}
         <Link
           href="/download"
+          onClick={closeMobile}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors border-l-2 mt-1 ${
             pathname === "/download"
               ? "text-primary font-bold bg-primary/8 border-primary"
@@ -175,6 +203,22 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
           <span className="font-body-md text-sm">{t("portal.logout")}</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile drawer — slide in/out below lg */}
+      <MobileDrawer open={mobileOpen} onClose={closeMobile}>
+        <aside className="bg-surface h-full w-64 flex flex-col py-6 overflow-hidden">
+          {content}
+        </aside>
+      </MobileDrawer>
+
+      {/* Fixed desktop sidebar — lg+ only */}
+      <aside className="hidden lg:flex bg-surface fixed left-0 top-0 h-full w-64 border-r border-outline-variant flex-col py-6 z-20 overflow-hidden">
+        {content}
+      </aside>
+    </>
   );
 }

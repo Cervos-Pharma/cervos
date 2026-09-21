@@ -11,6 +11,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 
+const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -50,6 +52,16 @@ export async function GET(
     return NextResponse.redirect(release.file_url);
   }
 
+  // Mock mode: no real Supabase to sign URLs. Seeded releases carry a local
+  // public path (/mock/storage/app-releases/...); freshly uploaded ones carry
+  // the bare storage path — prefix it and serve from the mock storage route.
+  if (IS_MOCK && release.file_url && !release.file_url.startsWith("http")) {
+    const mockPath = release.file_url.startsWith("/")
+      ? release.file_url
+      : `/mock/storage/app-releases/${release.file_url}`;
+    return NextResponse.redirect(new URL(mockPath, req.url));
+  }
+
   // Otherwise construct the Supabase Storage URL
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const storageUrl = `${supabaseUrl}/storage/v1/object/public/app-releases/${filePath}`;
@@ -61,8 +73,10 @@ export async function GET(
 
   if (signError || !signedData?.signedUrl) {
     // Fallback: redirect to public URL directly (bucket must be public)
-    return NextResponse.redirect(storageUrl);
+    return NextResponse.redirect(new URL(storageUrl, req.url));
   }
 
-  return NextResponse.redirect(signedData.signedUrl);
+  // new URL(...) keeps absolute URLs intact and resolves the mock shim's
+  // relative signed URLs against this request's origin.
+  return NextResponse.redirect(new URL(signedData.signedUrl, req.url));
 }

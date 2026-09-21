@@ -261,7 +261,7 @@ export async function getHQStats(): Promise<{
 
 export interface AppRelease {
   id: string;
-  platform: "windows" | "mac" | "linux";
+  platform: "windows" | "mac" | "linux" | "android";
   version: string;
   file_path: string;
   file_url: string;
@@ -350,7 +350,7 @@ export async function getSignedUploadUrl(
   const auth = await assertHQAuth();
   if (auth.error) return { signedUrl: null, path: null, error: auth.error };
 
-  if (!platform || !["windows", "mac", "linux"].includes(platform))
+  if (!platform || !["windows", "mac", "linux", "android"].includes(platform))
     return { signedUrl: null, path: null, error: "Invalid platform." };
   if (!version || version.trim() === "")
     return { signedUrl: null, path: null, error: "Version is required." };
@@ -408,7 +408,7 @@ export async function confirmUpload(
   const auth = await assertHQAuth();
   if (auth.error) return { error: auth.error };
 
-  if (!platform || !["windows", "mac", "linux"].includes(platform)) return { error: "Invalid platform." };
+  if (!platform || !["windows", "mac", "linux", "android"].includes(platform)) return { error: "Invalid platform." };
   if (!version || version.trim() === "") return { error: "Version is required." };
   if (!filePath || filePath.trim() === "") return { error: "File path is required." };
   if (typeof fileSizeBytes !== "number" || fileSizeBytes <= 0) return { error: "Invalid file size." };
