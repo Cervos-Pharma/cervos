@@ -64,19 +64,29 @@ export async function GET(
 
   // Otherwise construct the Supabase Storage URL
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const storageUrl = `${supabaseUrl}/storage/v1/object/public/app-releases/${filePath}`;
+  const filename = filePath.split("/").pop() || "download";
 
   // Generate a short-lived signed URL for private buckets
   const { data: signedData, error: signError } = await supabase.storage
     .from("app-releases")
     .createSignedUrl(filePath, 3600); // 1 hour
 
+  // The `download` query param makes Supabase Storage add
+  // `Content-Disposition: attachment; filename=...` to the response. Without
+  // it, Android Chrome can silently ignore the redirect (bare
+  // application/octet-stream + redirect chain) instead of saving the file.
   if (signError || !signedData?.signedUrl) {
     // Fallback: redirect to public URL directly (bucket must be public)
-    return NextResponse.redirect(new URL(storageUrl, req.url));
+    const publicUrl = new URL(
+      `${supabaseUrl}/storage/v1/object/public/app-releases/${filePath}`,
+    );
+    publicUrl.searchParams.set("download", filename);
+    return NextResponse.redirect(publicUrl);
   }
 
   // new URL(...) keeps absolute URLs intact and resolves the mock shim's
   // relative signed URLs against this request's origin.
-  return NextResponse.redirect(new URL(signedData.signedUrl, req.url));
+  const target = new URL(signedData.signedUrl, req.url);
+  target.searchParams.set("download", filename);
+  return NextResponse.redirect(target);
 }
