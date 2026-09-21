@@ -15,6 +15,29 @@ body {
   font-family: "Outfit", system-ui, sans-serif;
 }
 
+/* Material Symbols — bundled locally so icons (and the navigation
+   hamburger) render offline. Loading from Google's CDN left every icon
+   invisible in the packaged Android APK whenever the device had no or slow
+   internet. The .woff2 lives in public/fonts and ships inside the APK. */
+@font-face {
+  font-family: "Material Symbols Outlined";
+  font-style: normal;
+  font-weight: 100 700;
+  src: url("/fonts/material-symbols-outlined.woff2") format("woff2");
+}
+
 .material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }

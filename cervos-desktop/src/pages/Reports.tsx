@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { queryDb } from '../lib/database'
-import { runSyncCycle } from '../lib/sync'
+import { queryDb, executeDb, generateId, nowIso } from '../lib/database'
+import { runSyncCycle, queueForSync } from '../lib/sync'
 import {
   LineChart,
   Line,
@@ -30,6 +30,14 @@ export interface StockDetailItem {
   expiryDate: string | null
 }
 
+interface ExpenseRow {
+  id: string
+  category: string
+  description: string | null
+  amount: number
+  expense_date: string
+}
+
 interface ReportData {
   sales: {
     totalRevenue: number
@@ -39,6 +47,16 @@ interface ReportData {
     totalDiscount: number
     byPaymentMethod: { name: string; value: number }[]
     chartData: { label: string; revenue: number; sales: number }[]
+  }
+  finance: {
+    revenue: number
+    cogs: number
+    grossProfit: number
+    expenses: number
+    expensesByCategory: { name: string; value: number }[]
+    expenseRows: ExpenseRow[]
+    netProfit: number
+    margin: number
   }
   inventory: {
     totalProducts: number
@@ -72,7 +90,14 @@ export default function Reports() {
   })
   const [dateTo, setDateTo] = useState(new Date().toISOString().slice(0, 10))
   const [isLoading, setIsLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'sales' | 'inventory' | 'products' | 'expiry'>('sales')
+  const [activeTab, setActiveTab] = useState<'sales' | 'finance' | 'inventory' | 'products' | 'expiry'>('sales')
+  const [showExpenseForm, setShowExpenseForm] = useState(false)
+  const [expenseCategory, setExpenseCategory] = useState('rent')
+  const [expenseDesc, setExpenseDesc] = useState('')
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [expenseSaving, setExpenseSaving] = useState(false)
+  const [expenseFeedback, setExpenseFeedback] = useState<string | null>(null)
   const [stockSearch, setStockSearch] = useState('')
   const [branchInfo, setBranchInfo] = useState<{ branchName: string; centreName: string; lastSyncedAt: string | null }>({
     branchName: '',
@@ -89,9 +114,9 @@ export default function Reports() {
   async function loadData() {
     setIsLoading(true)
     try {
-      const [sales, batches, products, branchRes, centreRes, syncRes] = await Promise.all([
+      const [sales, batches, products, expenseRows, branchRes, centreRes, syncRes] = await Promise.all([
         queryDb(
-          `SELECT s.*, si.quantity, si.unit_price, p.generic_name FROM sales s
+          `SELECT s.*, si.quantity, si.unit_price, p.generic_name, b.cost_price AS item_cost_price FROM sales s
            LEFT JOIN sale_items si ON si.sale_id = s.id
            LEFT JOIN batches b ON b.id = si.batch_id
            LEFT JOIN products p ON p.id = b.product_id
@@ -101,6 +126,12 @@ export default function Reports() {
         ),
         queryDb('SELECT * FROM batches'),
         queryDb('SELECT * FROM products'),
+        queryDb(
+          `SELECT id, category, description, amount, expense_date FROM expenses
+           WHERE expense_date >= ? AND expense_date <= ?
+           ORDER BY expense_date DESC, created_at DESC`,
+          [dateFrom, dateTo]
+        ),
         queryDb("SELECT value FROM app_settings WHERE key = 'branch_name'"),
         queryDb("SELECT value FROM app_settings WHERE key = 'centre_name'"),
         queryDb("SELECT value FROM app_settings WHERE key = 'last_synced_at'"),
@@ -116,6 +147,31 @@ export default function Reports() {
       const avgTransaction = totalSales > 0 ? totalRevenue / totalSales : 0
       const totalTax = sales.reduce((sum: number, s: any) => sum + (s.tax || 0), 0)
       const totalDiscount = sales.reduce((sum: number, s: any) => sum + (s.discount || 0), 0)
+
+      // ── Finance (profit & loss) ─────────────────────────────────────
+      // COGS: what the sold units cost the branch, from each sold batch's
+      // cost price. Falls back to the product's default cost when a sold
+      // batch row is missing (e.g. legacy data).
+      const totalCogs = sales.reduce((sum: number, s: any) => {
+        if (s.item_cost_price != null) return sum + (s.item_cost_price || 0) * (s.quantity || 0)
+        // Batch row missing (legacy data): fall back to the product's default
+        // cost via batch_id -> batch -> product.
+        const batch = batches.find((b: any) => b.id === s.batch_id)
+        const product = batch ? products.find((p: any) => p.id === batch.product_id) : null
+        return sum + (product?.default_cost_price || 0) * (s.quantity || 0)
+      }, 0)
+      const totalExpenses = expenseRows.reduce((sum: number, e: any) => sum + (e.amount || 0), 0)
+      const expenseCategoryMap = new Map<string, number>()
+      for (const e of expenseRows) {
+        const cat = (e.category || 'other').toLowerCase()
+        expenseCategoryMap.set(cat, (expenseCategoryMap.get(cat) || 0) + (e.amount || 0))
+      }
+      const expensesByCategory = Array.from(expenseCategoryMap.entries())
+        .map(([name, value]) => ({ name: name.toUpperCase(), value }))
+        .sort((a, b) => b.value - a.value)
+      const grossProfit = totalRevenue - totalCogs
+      const netProfit = grossProfit - totalExpenses
+      const margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
 
       const paymentMap = new Map<string, number>()
       for (const s of sales) {
@@ -245,9 +301,76 @@ export default function Reports() {
         },
         products: { topByRevenue, topByQuantity },
         expiry: { expired, expiring7days, expiring30days, expiring90days, expiringList },
+        finance: {
+          revenue: totalRevenue,
+          cogs: totalCogs,
+          grossProfit,
+          expenses: totalExpenses,
+          expensesByCategory,
+          expenseRows: expenseRows as ExpenseRow[],
+          netProfit,
+          margin,
+        },
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function saveExpense() {
+    const amount = parseFloat(expenseAmount)
+    if (!amount || amount <= 0) {
+      setExpenseFeedback('Enter an amount greater than zero.')
+      return
+    }
+    setExpenseSaving(true)
+    setExpenseFeedback(null)
+    try {
+      const id = generateId()
+      const branchRes = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
+      const branchId = branchRes.length > 0 ? JSON.parse(branchRes[0].value) : null
+      await executeDb(
+        `INSERT INTO expenses (id, branch_id, category, description, amount, expense_date, created_at, synced) VALUES (?,?,?,?,?,?,?,0)`,
+        [id, branchId, expenseCategory, expenseDesc.trim() || null, amount, expenseDate, nowIso()]
+      )
+      // Queue for sync to the pharmacy portal — best effort; the row is
+      // already durable in the local DB.
+      try {
+        await queueForSync('expenses', id, 'INSERT', {
+          id,
+          branch_id: branchId,
+          category: expenseCategory,
+          description: expenseDesc.trim() || null,
+          amount,
+          expense_date: expenseDate,
+        })
+      } catch {
+        // sync queue unavailable (offline) — local row is authoritative
+      }
+      setExpenseDesc('')
+      setExpenseAmount('')
+      setExpenseFeedback('Expense saved.')
+      setShowExpenseForm(false)
+      loadData()
+    } catch (err) {
+      console.error('saveExpense failed:', err)
+      setExpenseFeedback('Could not save the expense. Try again.')
+    } finally {
+      setExpenseSaving(false)
+    }
+  }
+
+  async function deleteExpense(id: string) {
+    try {
+      await executeDb('DELETE FROM expenses WHERE id = ?', [id])
+      try {
+        await queueForSync('expenses', id, 'DELETE', { id })
+      } catch {
+        // offline — deletion is still durable locally
+      }
+      loadData()
+    } catch (err) {
+      console.error('deleteExpense failed:', err)
     }
   }
 
@@ -397,12 +520,12 @@ export default function Reports() {
         </div>
       </div>
 
-      <div className="flex gap-2 border-b border-outline-variant">
-        {(['sales', 'inventory', 'products', 'expiry'] as const).map((tab) => (
+      <div className="flex gap-2 border-b border-outline-variant overflow-x-auto">
+        {(['sales', 'finance', 'inventory', 'products', 'expiry'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 font-semibold capitalize transition-colors ${
+            className={`px-4 py-2 font-semibold capitalize whitespace-nowrap transition-colors ${
               activeTab === tab ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
@@ -481,6 +604,202 @@ export default function Reports() {
                 </ResponsiveContainer>
               </div>
             </div>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'finance' && data && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Revenue</p>
+              <p className="font-headline text-2xl font-black text-primary mt-1">
+                TZS {data.finance.revenue.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Cost of Goods Sold</p>
+              <p className="font-headline text-2xl font-black text-on-surface mt-1">
+                TZS {data.finance.cogs.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Gross Profit</p>
+              <p className={`font-headline text-2xl font-black mt-1 ${data.finance.grossProfit >= 0 ? 'text-secondary' : 'text-error'}`}>
+                TZS {data.finance.grossProfit.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Expenditure</p>
+              <p className="font-headline text-2xl font-black text-warning mt-1">
+                TZS {data.finance.expenses.toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                Net {data.finance.netProfit >= 0 ? 'Profit' : 'Loss'} · {data.finance.margin.toFixed(1)}% margin
+              </p>
+              <p className={`font-headline text-2xl font-black mt-1 ${data.finance.netProfit >= 0 ? 'text-secondary' : 'text-error'}`}>
+                TZS {data.finance.netProfit.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 bg-surface-base border border-outline-variant rounded-xl p-5">
+              <h3 className="font-headline font-bold text-on-surface mb-4">Profit &amp; Loss Breakdown</h3>
+              <div style={{ height: 260 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    layout="vertical"
+                    data={[
+                      { name: 'Revenue', amount: data.finance.revenue },
+                      { name: 'COGS', amount: data.finance.cogs },
+                      { name: 'Gross Profit', amount: data.finance.grossProfit },
+                      { name: 'Expenditure', amount: data.finance.expenses },
+                      { name: 'Net', amount: data.finance.netProfit },
+                    ]}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(value: number) => [`TZS ${value.toLocaleString()}`, 'Amount']} />
+                    <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
+                      {[0, 1, 2, 3, 4].map((i) => (
+                        <Cell
+                          key={`plc-${i}`}
+                          fill={i === 0 ? '#6366f1' : i === 1 || i === 3 ? '#f59e0b' : data.finance.netProfit >= 0 ? '#10b981' : '#ef4444'}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
+              <h3 className="font-headline font-bold text-on-surface mb-4">Expenditure by Category</h3>
+              {data.finance.expensesByCategory.length > 0 ? (
+                <div style={{ height: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={data.finance.expensesByCategory}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {data.finance.expensesByCategory.map((_, index) => (
+                          <Cell key={`exc-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => [`TZS ${value.toLocaleString()}`, 'Spent']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="text-sm text-on-surface-variant">No expenses recorded for this period.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Expense recording */}
+          <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-headline font-bold text-on-surface">Branch Expenditure</h3>
+              <button
+                onClick={() => setShowExpenseForm((v) => !v)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-lg">add</span>
+                Add Expense
+              </button>
+            </div>
+
+            {showExpenseForm && (
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5 p-4 rounded-lg bg-surface border border-outline-variant">
+                <select
+                  value={expenseCategory}
+                  onChange={(e) => setExpenseCategory(e.target.value)}
+                  className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-base text-sm text-on-surface"
+                >
+                  {['rent', 'utilities', 'salaries', 'transport', 'supplies', 'marketing', 'maintenance', 'other'].map((c) => (
+                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                  ))}
+                </select>
+                <input
+                  value={expenseDesc}
+                  onChange={(e) => setExpenseDesc(e.target.value)}
+                  placeholder="Description (optional)"
+                  className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-base text-sm text-on-surface col-span-2"
+                />
+                <input
+                  value={expenseAmount}
+                  onChange={(e) => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                  inputMode="decimal"
+                  placeholder="Amount (TZS)"
+                  className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-base text-sm text-on-surface"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={expenseDate}
+                    onChange={(e) => setExpenseDate(e.target.value)}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-outline-variant bg-surface-base text-sm text-on-surface"
+                  />
+                  <button
+                    onClick={saveExpense}
+                    disabled={expenseSaving || !expenseAmount}
+                    className="px-4 py-2 rounded-lg bg-secondary text-on-secondary text-sm font-semibold disabled:opacity-50 hover:opacity-90 transition-opacity whitespace-nowrap"
+                  >
+                    {expenseSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+                {expenseFeedback && (
+                  <p className="col-span-2 lg:col-span-5 text-xs text-on-surface-variant">{expenseFeedback}</p>
+                )}
+              </div>
+            )}
+
+            {data.finance.expenseRows.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-wide text-on-surface-variant border-b border-outline-variant">
+                      <th className="py-2 pr-4">Date</th>
+                      <th className="py-2 pr-4">Category</th>
+                      <th className="py-2 pr-4">Description</th>
+                      <th className="py-2 pr-4 text-right">Amount</th>
+                      <th className="py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.finance.expenseRows.map((e) => (
+                      <tr key={e.id} className="border-b border-outline-variant/50">
+                        <td className="py-2 pr-4 whitespace-nowrap">{e.expense_date}</td>
+                        <td className="py-2 pr-4 capitalize">{e.category}</td>
+                        <td className="py-2 pr-4 text-on-surface-variant">{e.description || '—'}</td>
+                        <td className="py-2 pr-4 text-right font-semibold">TZS {(e.amount || 0).toLocaleString()}</td>
+                        <td className="py-2 text-right">
+                          <button
+                            onClick={() => deleteExpense(e.id)}
+                            title="Delete expense"
+                            className="p-1.5 rounded-md text-error hover:bg-error/10 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-lg">delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-on-surface-variant">
+                No expenditure recorded in this period. Use “Add Expense” to log rent, salaries, utilities and other branch costs.
+              </p>
+            )}
           </div>
         </>
       )}
