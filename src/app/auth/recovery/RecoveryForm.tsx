@@ -153,9 +153,19 @@ export default function RecoveryForm() {
                 <p className="font-body-sm text-body-sm text-error mb-6">
                   {error || t("auth.confirm.expired")}
                 </p>
+                <p className="font-body-sm text-body-sm text-on-surface-variant mb-6">
+                  Reset links expire after a short time and can only be used once.
+                  Request a fresh one to try again.
+                </p>
+                <Link
+                  href="/auth?tab=reset"
+                  className="inline-flex items-center justify-center w-full h-12 bg-primary text-on-primary rounded-none font-label-md font-bold hover:bg-primary/90 transition-all"
+                >
+                  {t("auth.reset.send_link")}
+                </Link>
                 <Link
                   href="/auth"
-                  className="inline-flex items-center justify-center w-full h-12 bg-primary text-on-primary rounded-none font-label-md font-bold hover:bg-primary/90 transition-all"
+                  className="mt-3 inline-flex items-center justify-center w-full h-12 border border-ink-deep/20 rounded-none font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all"
                 >
                   {t("auth.back_to_signin")}
                 </Link>

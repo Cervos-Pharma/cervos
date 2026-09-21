@@ -2,9 +2,14 @@
  * @file components/HQSidebar.tsx
  * @description Fixed left navigation sidebar for the HQ Console (/hq/*).
  *
+ * Responsive behaviour:
+ *  - lg+ (desktop): permanently fixed 16rem sidebar.
+ *  - < lg: slides in as an overlay drawer. HQ pages render no top header bar,
+ *    so the sidebar itself renders a floating hamburger button (top-left,
+ *    below lg) to open the drawer. Closes on backdrop tap, Escape, or nav.
+ *
  * Highlights the active route using `usePathname()`. No props required —
  * nav items are statically defined (HQ has no per-user customisation).
- * Hidden on mobile (md:flex) — the HQ console is desktop-only.
  *
  * @prop openSupportCount - Optional live count of open support tickets (passed
  *   by HQSidebarServer, which fetches it server-side). Displays a badge on the
@@ -12,9 +17,11 @@
  */
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n/context";
+import MobileDrawer from "@/components/MobileDrawer";
 
 interface HQSidebarProps {
   openSupportCount?: number;
@@ -24,6 +31,12 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { lang, setLang, t } = useI18n();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close the drawer whenever the route changes (nav tap from inside drawer).
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   const NAV = [
     { label: t("hq.sidebar.overview"),       href: "/hq",                icon: "dashboard" },
@@ -43,12 +56,15 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
   ];
 
   async function handleLogout() {
+    setMobileOpen(false);
     document.cookie = `hq_sess=; Max-Age=0; path=/`;
     router.push("/hq");
   }
 
-  return (
-    <aside className="hidden md:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface-container-low h-full py-4 overflow-hidden">
+  const closeMobile = () => setMobileOpen(false);
+
+  const content = (
+    <>
       <div className="px-6 mb-3">
         <h2 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">
           {t("hq.sidebar.title")}
@@ -70,6 +86,7 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              onClick={closeMobile}
               className={`flex items-center gap-3 px-3 py-2.5 transition-all duration-75 ${
                 active
                   ? "bg-primary text-on-primary font-bold"
@@ -117,6 +134,33 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
           <span className="font-label-md text-label-md">{t("hq.sidebar.logout")}</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile drawer — slide in/out below lg */}
+      <MobileDrawer open={mobileOpen} onClose={closeMobile}>
+        <aside className="bg-surface-container-low h-full w-64 flex flex-col py-4 overflow-hidden">
+          {content}
+        </aside>
+      </MobileDrawer>
+
+      {/* Floating hamburger (below lg) — HQ pages have no top header bar, so
+          the sidebar provides its own trigger for the drawer. */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open navigation menu"
+        className="lg:hidden fixed top-3 left-3 z-30 p-2.5 rounded-md bg-surface-base border border-outline-variant shadow-sm text-on-surface-variant hover:text-on-surface transition-colors"
+      >
+        <span className="material-symbols-outlined text-[22px]">menu</span>
+      </button>
+
+      {/* Fixed desktop sidebar — lg+ only */}
+      <aside className="hidden lg:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface-container-low h-full py-4 overflow-hidden">
+        {content}
+      </aside>
+    </>
   );
 }

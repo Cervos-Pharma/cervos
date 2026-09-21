@@ -68,7 +68,7 @@ export default function StockClient({ stock, products }: StockClientProps) {
   }
 
   return (
-    <div className="p-8 max-w-container-max mx-auto w-full">
+    <div className="p-4 sm:p-8 max-w-container-max mx-auto w-full">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-1">Inventory</h2>
@@ -174,8 +174,8 @@ export default function StockClient({ stock, products }: StockClientProps) {
         </form>
       )}
 
-      <div className="bg-surface-base border border-outline-variant rounded overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-surface-base border border-outline-variant rounded overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="text-left font-label-md text-label-md text-on-surface-variant border-b border-outline-variant uppercase text-xs">
               <th className="px-4 py-3">Product</th>

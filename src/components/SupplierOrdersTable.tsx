@@ -127,7 +127,7 @@ export default function SupplierOrdersTable({ orders }: SupplierOrdersTableProps
   const STATUSES: SupplierOrder["status"][] = ["pending", "confirmed", "shipped", "delivered", "cancelled"];
 
   return (
-    <div className="flex-1 p-8 flex flex-col gap-6 max-w-[1200px] mx-auto w-full">
+    <div className="flex-1 min-w-0 p-4 sm:p-8 flex flex-col gap-6 max-w-[1200px] mx-auto w-full">
       {approveError && (
         <div className="p-3 bg-error-container border border-error text-error text-sm">{approveError}</div>
       )}
@@ -194,8 +194,8 @@ export default function SupplierOrdersTable({ orders }: SupplierOrdersTableProps
         </div>
       </div>
 
-      {/* Orders table */}
-      <div className="bg-surface-container-lowest border border-outline-variant overflow-hidden">
+      {/* Orders — table on desktop (lg+), cards on phones */}
+      <div className="hidden lg:block bg-surface-container-lowest border border-outline-variant overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-surface-container border-b border-outline-variant">
@@ -316,6 +316,114 @@ export default function SupplierOrdersTable({ orders }: SupplierOrdersTableProps
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile card list (< lg) — tap to expand order lines */}
+      <div className="lg:hidden flex flex-col gap-3">
+        {filtered.length === 0 && (
+          <div className="bg-surface-container-lowest border border-outline-variant p-8 text-center text-on-surface-variant text-sm">
+            No orders match your filters.
+          </div>
+        )}
+        {filtered.map((order) => (
+          <div
+            key={order.id}
+            className="bg-surface-container-lowest border border-outline-variant rounded-lg p-4"
+          >
+            <div
+              className="cursor-pointer"
+              onClick={() => setExpanded(expanded === order.id ? null : order.id)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="font-mono text-sm text-ink-deep">{order.orderRef}</span>
+                  <p className="font-semibold text-sm text-ink-deep mt-1 truncate">{order.pharmacyName}</p>
+                  <p className="font-mono text-[10px] text-on-surface-variant">{order.branchName}</p>
+                </div>
+                <StatusBadge status={order.status} />
+              </div>
+              <div className="mt-3 flex items-center justify-between text-sm">
+                <span className="text-on-surface-variant">
+                  {order.products.length} line{order.products.length !== 1 ? "s" : ""} ·{" "}
+                  {new Date(order.placedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                </span>
+                <span className="font-mono font-semibold text-on-surface">
+                  {order.currency} {orderTotal(order).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Order lines — always visible on mobile, no hidden expand needed for actions */}
+            {expanded === order.id && (
+              <div className="mt-3 pt-3 border-t border-outline-variant">
+                <div className="font-mono text-label-md text-on-surface-variant uppercase mb-2">Order Lines</div>
+                <ul className="divide-y divide-outline-variant/40">
+                  {order.products.map((line, i) => (
+                    <li key={i} className="py-2 flex items-center justify-between text-sm">
+                      <div className="min-w-0 pr-3">
+                        <p className="text-ink-deep truncate">{line.name}</p>
+                        <p className="text-xs text-on-surface-variant">
+                          {line.qty} × {order.currency} {line.unitPrice.toLocaleString()}
+                        </p>
+                      </div>
+                      <span className="font-mono text-on-surface shrink-0">
+                        {order.currency} {(line.qty * line.unitPrice).toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Actions — full-width touch-friendly buttons */}
+            <div className="mt-3 pt-3 border-t border-outline-variant flex flex-wrap gap-2">
+              {order.status === "pending" && !order.supplierApprovedAt && (
+                <button
+                  onClick={() => approveOrder(order.id)}
+                  disabled={approving === order.id}
+                  className="flex-1 min-w-[110px] font-mono text-label-md text-primary-container border border-primary-container px-3 py-2 hover:bg-surface-container-high transition-colors uppercase disabled:opacity-60"
+                >
+                  {approving === order.id ? "Approving…" : "Approve"}
+                </button>
+              )}
+              {order.status === "pending" && order.supplierApprovedAt && (
+                <span className="flex-1 min-w-[110px] text-center font-mono text-label-md text-on-surface-variant px-3 py-2 uppercase">
+                  Awaiting payment
+                </span>
+              )}
+              {order.status === "pending" && (
+                <button
+                  onClick={() => updateStatus(order.id, "cancelled")}
+                  className="flex-1 min-w-[110px] font-mono text-label-md text-error border border-error px-3 py-2 hover:bg-error-container transition-colors uppercase"
+                >
+                  Reject
+                </button>
+              )}
+              {order.status === "confirmed" && (
+                <button
+                  onClick={() => updateStatus(order.id, "shipped")}
+                  className="flex-1 min-w-[110px] font-mono text-label-md text-[#0891b2] border border-[#0891b2] px-3 py-2 hover:bg-[#ecfeff] transition-colors uppercase"
+                >
+                  Ship
+                </button>
+              )}
+              {order.status === "shipped" && (
+                <button
+                  onClick={() => updateStatus(order.id, "delivered")}
+                  className="flex-1 min-w-[110px] font-mono text-label-md text-tertiary border border-tertiary-container px-3 py-2 hover:bg-[#dcfce7] transition-colors uppercase"
+                >
+                  Delivered
+                </button>
+              )}
+              <button
+                onClick={() => setExpanded(expanded === order.id ? null : order.id)}
+                className="font-mono text-label-md text-on-surface-variant border border-outline-variant px-3 py-2 uppercase"
+              >
+                {expanded === order.id ? "Hide lines" : "View lines"}
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

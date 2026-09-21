@@ -11,6 +11,7 @@ import PaymentSettingsForm from "@/components/PaymentSettingsForm";
 import ChangePasswordForm from "@/components/ChangePasswordForm";
 import { getPaymentSettings } from "@/lib/actions/payments";
 import { getT } from "@/lib/i18n/server";
+import MobileMenuButton from "@/components/MobileMenuButton";
 
 export default async function SettingsPage() {
   const t = await getT();
@@ -42,8 +43,9 @@ export default async function SettingsPage() {
         branchName={branches?.[0]?.name}
         accountName={account?.name}
       />
-      <div className="ml-64 flex-1 flex flex-col">
-        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center px-8 w-[calc(100%-16rem)] z-10">
+      <div className="lg:ml-64 flex-1 min-w-0 flex flex-col">
+        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center px-8 lg:w-[calc(100%-16rem)] w-full z-10">
+          <MobileMenuButton />
           <h1 className="font-headline-md text-headline-md text-ink-deep">{t("dash.settings.title")}</h1>
         </header>
 

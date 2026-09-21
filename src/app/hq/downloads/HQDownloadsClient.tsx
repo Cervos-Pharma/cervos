@@ -25,6 +25,7 @@ const PLATFORMS = [
   { value: "windows", label: "Windows", icon: "window", ext: [".exe"] },
   { value: "mac", label: "macOS", icon: "laptop_mac", ext: [".dmg"] },
   { value: "linux", label: "Linux", icon: "terminal", ext: [".deb", ".AppImage"] },
+  { value: "android", label: "Android", icon: "smartphone", ext: [".apk"] },
 ] as const;
 
 const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
@@ -194,7 +195,7 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
     setDeletingId(release.id);
     setConfirmDeleteId(null);
     try {
-      const result = await deleteRelease(release.id, release.file_path);
+      const result = await deleteRelease(release.id, release.file_path || release.file_url);
       if (result.error) {
         setToast({ message: result.error, type: "error" });
       } else {
@@ -206,7 +207,7 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
     }
   }
 
-  const grouped: Record<string, AppRelease[]> = { windows: [], mac: [], linux: [] };
+  const grouped: Record<string, AppRelease[]> = { windows: [], mac: [], linux: [], android: [] };
   for (const r of releases) {
     if (grouped[r.platform]) grouped[r.platform].push(r);
   }
@@ -309,14 +310,14 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
                     Click to select installer file
                   </p>
                   <p className="font-body-sm text-body-sm text-on-surface-variant/60 mt-0.5">
-                    .exe, .dmg, .deb, .AppImage accepted
+                    .exe, .dmg, .deb, .AppImage, .apk accepted
                   </p>
                 </div>
               )}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".exe,.dmg,.deb,.AppImage"
+                accept=".exe,.dmg,.deb,.AppImage,.apk"
                 className="hidden"
                 onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
                 disabled={uploading}

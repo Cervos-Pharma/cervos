@@ -1103,7 +1103,7 @@ export default function HQIntelligenceClient({
 
         <div className="bg-surface-base border border-outline-variant p-6 mb-8">
           <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Engagement Funnel</p>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {m.engagementFunnel.map((f) => (
               <div key={f.stage} className="text-center">
                 <p className="font-headline-md text-headline-md text-ink-deep">{f.count}</p>
@@ -1333,7 +1333,7 @@ export default function HQIntelligenceClient({
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           {[
             { label: "Windows", value: u.installStats.windowsInstalls, color: "#0061A4" },
             { label: "macOS", value: u.installStats.macInstalls, color: "#6750A4" },

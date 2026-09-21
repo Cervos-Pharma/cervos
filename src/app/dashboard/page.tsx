@@ -16,6 +16,7 @@ import PharmacySidebar from "@/components/PharmacySidebar";
 import Link from "next/link";
 import CervosMap from "@/components/MapClientWrapper";
 import { getT } from "@/lib/i18n/server";
+import MobileMenuButton from "@/components/MobileMenuButton";
 
 export default async function DashboardPage() {
   const t = await getT();
@@ -48,9 +49,10 @@ export default async function DashboardPage() {
         accountName={account?.name}
       />
 
-      <div className="ml-64 flex-1 flex flex-col">
+      <div className="lg:ml-64 flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
-        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center px-8 w-[calc(100%-16rem)] z-10 gap-4">
+        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center px-8 lg:w-[calc(100%-16rem)] w-full z-10 gap-4">
+          <MobileMenuButton />
           <div className="ml-auto flex items-center gap-4">
             <div className="flex items-center gap-2 font-body-sm text-body-sm text-on-surface-variant">
               <span className="w-2 h-2 rounded-full bg-secondary block animate-pulse" />
@@ -66,7 +68,7 @@ export default async function DashboardPage() {
           </div>
         </header>
 
-        <main className="flex-grow pt-24 pb-24 px-8 max-w-container-max mx-auto w-full">
+        <main className="flex-grow pt-24 pb-24 px-4 sm:px-8 max-w-container-max mx-auto w-full">
           {/* Greeting */}
           <div className="mb-8">
             <h1 className="font-headline-lg text-headline-lg text-ink-deep mb-1">
@@ -234,7 +236,7 @@ export default async function DashboardPage() {
                   <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
                 </Link>
               </div>
-              <div className="overflow-x-auto">
+              <div>
                 {expiringBatches.length === 0 ? (
                   <div className="p-8 text-center">
                     <span className="material-symbols-outlined text-[40px] text-secondary/40 mb-2 block">
@@ -245,7 +247,9 @@ export default async function DashboardPage() {
                     </p>
                   </div>
                 ) : (
-                  <table className="w-full">
+                  <>
+                  {/* Desktop table (lg+) — card list below for phones */}
+                  <table className="hidden lg:table w-full">
                     <thead className="bg-surface-container-low">
                       <tr>
                         {["dash.col.product", "dash.col.branch", "dash.col.qty", "dash.col.expiry", "dash.col.daysleft"].map(
@@ -316,6 +320,46 @@ export default async function DashboardPage() {
                       })}
                     </tbody>
                   </table>
+
+                  {/* Mobile card list (< lg) */}
+                  <ul className="lg:hidden divide-y divide-outline-variant/40">
+                    {expiringBatches.map((batch) => {
+                      const expiry = new Date(batch.expiry_date);
+                      const daysLeft = Math.ceil(
+                        (expiry.getTime() - Date.now()) / 86400000
+                      );
+                      const product = Array.isArray(batch.products)
+                        ? batch.products[0]
+                        : batch.products;
+                      const branch = Array.isArray(batch.branches)
+                        ? batch.branches[0]
+                        : batch.branches;
+                      return (
+                        <li key={batch.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-body-md text-sm text-ink-deep truncate">
+                              {product?.generic_name ?? "—"}
+                            </p>
+                            <p className="text-xs text-on-surface-variant truncate">
+                              {branch?.name ?? "—"} · {batch.quantity} · {expiry.toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-label-md shrink-0 ${
+                              daysLeft <= 7
+                                ? "bg-error-container text-error"
+                                : daysLeft <= 14
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-surface-container text-on-surface-variant"
+                            }`}
+                          >
+                            {t("dash.days").replace("{n}", String(daysLeft))}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  </>
                 )}
               </div>
             </div>

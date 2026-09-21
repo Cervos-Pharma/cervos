@@ -104,7 +104,7 @@ export default function MarketplaceBrowser({ products, branches }: MarketplaceBr
   const totalValue = quote.reduce((sum, i) => sum + i.product.unitPrice * i.qty, 0);
 
   return (
-    <div className="flex-1 p-8 flex flex-col gap-6 max-w-[1200px] mx-auto w-full relative">
+    <div className="flex-1 min-w-0 p-4 sm:p-8 flex flex-col gap-6 max-w-[1200px] mx-auto w-full relative">
       {/* Filters bar */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative flex items-center flex-1 min-w-[220px]">

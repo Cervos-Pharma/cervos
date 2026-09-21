@@ -57,7 +57,9 @@ function AuthForm() {
   const searchParams = useSearchParams();
   const { lang, setLang, t } = useI18n();
 
-  const [tab, setTab] = useState<Tab>(searchParams.get("tab") === "signup" ? "signup" : "signin");
+  const [tab, setTab] = useState<Tab>(
+    searchParams.get("tab") === "signup" ? "signup" : searchParams.get("tab") === "reset" ? "reset" : "signin"
+  );
   const [accountType, setAccountType] = useState<AccountType>(
     searchParams.get("type") === "supplier" ? "supplier" : "pharmacy"
   );
@@ -165,7 +167,14 @@ function AuthForm() {
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/auth/recovery?next=/auth/recovery`,
+        // Route the email link through /auth/callback (PKCE code exchange →
+        // redirect to /auth/recovery). This works with BOTH the default
+        // Supabase email template ({{ .ConfirmationURL }}) and custom templates,
+        // as long as `${origin}/auth/callback?next=/auth/recovery` is added to
+        // Supabase Auth → URL Configuration → Redirect URLs. If /auth/recovery
+        // is missing from that allow-list, Supabase silently falls back to the
+        // Site URL (the landing page) — the "reset link goes nowhere" bug.
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/recovery`,
       });
       if (error) { setToast({ message: error.message, type: "error" }); return; }
       setToast({ message: t("auth.reset.sent"), type: "success" });

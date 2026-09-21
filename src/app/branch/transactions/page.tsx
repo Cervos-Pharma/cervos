@@ -8,7 +8,7 @@ export default async function BranchTransactionsPage() {
   const transactions = await getBranchTransactions();
 
   return (
-    <div className="p-8 max-w-container-max mx-auto w-full">
+    <div className="p-4 sm:p-8 max-w-container-max mx-auto w-full">
       <div className="mb-6">
         <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-1">Transactions</h2>
         <p className="font-body-sm text-body-sm text-on-surface-variant">
@@ -16,8 +16,8 @@ export default async function BranchTransactionsPage() {
         </p>
       </div>
 
-      <div className="bg-surface-base border border-outline-variant rounded overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="bg-surface-base border border-outline-variant rounded overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="text-left font-label-md text-label-md text-on-surface-variant border-b border-outline-variant uppercase text-xs">
               <th className="px-4 py-3">Type</th>

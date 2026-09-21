@@ -11,6 +11,7 @@ import SupplierSidebar from "@/components/SupplierSidebar";
 import SupplierCatalogManager, { type CatalogProduct } from "@/components/SupplierCatalogManager";
 import { getSupplierCatalog } from "@/lib/actions/supplier";
 import { getT } from "@/lib/i18n/server";
+import MobileMenuButton from "@/components/MobileMenuButton";
 
 export default async function SupplierCatalogPage() {
   const t = await getT();
@@ -38,8 +39,9 @@ export default async function SupplierCatalogPage() {
   return (
     <div className="flex min-h-screen bg-surface">
       <SupplierSidebar accountName={account?.name} />
-      <div className="ml-64 flex-1 flex flex-col">
-        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center justify-between px-8 w-[calc(100%-16rem)] z-10">
+      <div className="lg:ml-64 flex-1 min-w-0 flex flex-col">
+        <header className="bg-surface fixed top-0 right-0 h-16 border-b border-outline-variant flex items-center justify-between px-8 lg:w-[calc(100%-16rem)] w-full z-10">
+          <MobileMenuButton />
           <div>
             <p className="font-mono text-label-md text-on-surface-variant uppercase tracking-widest mb-0.5">
               {t("sup.catalog.product_listings")}

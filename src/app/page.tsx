@@ -169,16 +169,16 @@ export default function LandingPage() {
                   <span className="font-headline-md text-lg text-ink-deep">Amoxicillin 500mg</span>
                   <span className="font-label-md text-label-md text-primary uppercase tracking-wider">{t("landing.fefo.grid")}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-4 text-sm font-label-md text-label-md text-on-surface-variant uppercase pb-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-sm font-label-md text-label-md text-on-surface-variant uppercase pb-2">
                   <span>{t("inv.col.batch")}</span><span>{t("inv.col.qty")}</span><span>{t("inv.col.expiry")}</span><span>{t("inv.col.status")}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-4 bg-error-container/30 border border-error/20 p-3 rounded items-center">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 bg-error-container/30 border border-error/20 p-3 rounded items-center">
                   <span className="font-mono text-sm text-ink-deep">BX-992A</span>
                   <span>45</span>
                   <span className="text-error font-bold">2 Days</span>
                   <span className="bg-error text-on-error px-2 py-1 rounded text-xs text-center">{t("landing.fefo.status.first")}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-4 bg-surface-base p-3 rounded items-center border border-outline-variant/20">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 bg-surface-base p-3 rounded items-center border border-outline-variant/20">
                   <span className="font-mono text-sm text-ink-deep">BX-104C</span>
                   <span>120</span>
                   <span>14 Mo</span>

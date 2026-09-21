@@ -58,7 +58,7 @@ export default function SupplierAnalyticsChart({
   const BAR_WIDTH = Math.max(24, Math.floor(600 / Math.max(data.length, 1)) - 8);
 
   return (
-    <div className="flex-1 p-8 flex flex-col gap-6 max-w-[1200px] mx-auto w-full">
+    <div className="flex-1 min-w-0 p-4 sm:p-8 flex flex-col gap-6 max-w-[1200px] mx-auto w-full">
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <div className="bg-surface-container-lowest border border-outline-variant p-4 relative">
@@ -82,7 +82,7 @@ export default function SupplierAnalyticsChart({
         {/* Bar chart */}
         <div className="lg:col-span-2 bg-surface-container-lowest border border-outline-variant p-6 relative">
           <div className="absolute top-0 right-0 w-5 h-5 border-l border-b border-outline-variant" />
-          <div className="flex justify-between items-start mb-6">
+          <div className="flex flex-wrap justify-between items-start gap-3 mb-6">
             <div>
               <p className="font-mono text-label-md text-on-surface-variant uppercase mb-1">Quote Request Volume</p>
               <p className="text-headline-md font-headline-md text-ink-deep">{metricLabels[metric]}</p>
@@ -122,7 +122,7 @@ export default function SupplierAnalyticsChart({
             ))}
 
             {/* Bars */}
-            <div className="absolute bottom-8 left-8 right-0 flex items-end gap-2 h-full" style={{ height: BAR_HEIGHT }}>
+            <div className="absolute bottom-8 left-6 sm:left-8 right-0 flex items-end gap-1 sm:gap-2 h-full" style={{ height: BAR_HEIGHT }}>
               {data.map((d, i) => {
                 const val = d[metric];
                 const barH = maxVal > 0 ? (val / maxVal) * BAR_HEIGHT : 0;
@@ -130,7 +130,7 @@ export default function SupplierAnalyticsChart({
                 return (
                   <div
                     key={d.month}
-                    className="flex flex-col items-center flex-1"
+                    className="flex flex-col items-center flex-1 min-w-0"
                     onMouseEnter={() => setHoveredIdx(i)}
                     onMouseLeave={() => setHoveredIdx(null)}
                     style={{ height: BAR_HEIGHT }}
@@ -215,8 +215,8 @@ export default function SupplierAnalyticsChart({
         </div>
       </div>
 
-      {/* Monthly breakdown table */}
-      <div className="bg-surface-container-lowest border border-outline-variant overflow-hidden">
+      {/* Monthly breakdown table — scrolls sideways on phones instead of being clipped */}
+      <div className="bg-surface-container-lowest border border-outline-variant overflow-x-auto">
         <div className="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container">
           <span className="font-mono text-label-md text-on-surface-variant uppercase">Monthly Breakdown</span>
           <a
