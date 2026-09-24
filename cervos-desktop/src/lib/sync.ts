@@ -474,10 +474,14 @@ export async function hashString(n: string): Promise<string> {
 }
 
 export async function queueForSync(tableName: string, rowId: string, operation: string, payload: any): Promise<void> {
+  // Normalize: bulkPush matches lowercase operations ('insert'/'update'/...),
+  // and a mixed-case caller (e.g. 'INSERT') would otherwise queue a job that
+  // silently fails as 'unknown operation' on every sync cycle, forever.
+  const op = operation.toLowerCase()
   const id = generateId()
   await executeDb(
     `INSERT INTO sync_queue (id, table_name, row_id, operation, payload, created_at, attempts) VALUES (?,?,?,?,?,?,?)`,
-    [id, tableName, rowId, operation, JSON.stringify(payload), nowIso(), 0]
+    [id, tableName, rowId, op, JSON.stringify(payload), nowIso(), 0]
   )
 }
 
@@ -578,7 +582,11 @@ async function bulkPush(): Promise<{ uploaded: number; failed: number }> {
   let uploaded = 0
   let failed = 0
   for (const key of Object.keys(groups)) {
-    const [table_name, operation] = key.split(':')
+    const [table_name, operationRaw] = key.split(':')
+    // Some call sites pass 'INSERT'/'DELETE' (uppercase); normalize so a
+    // casing mismatch never silently drops queued rows forever (they'd
+    // otherwise hit "unknown operation" below and stay stuck retry-failing).
+    const operation = operationRaw.toLowerCase()
     const entries = groups[key]
     try {
       if (operation === 'insert' || operation === 'update' || operation === 'upsert') {
