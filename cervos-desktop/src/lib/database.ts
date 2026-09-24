@@ -269,6 +269,21 @@ async function runMigrations(): Promise<void> {
     )
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id TEXT PRIMARY KEY,
+      branch_id TEXT,
+      category TEXT NOT NULL,
+      description TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      expense_date TEXT NOT NULL,
+      operator_id TEXT,
+      created_at TEXT,
+      synced INTEGER DEFAULT 0,
+      sync_error TEXT
+    )
+  `)
+
   const operatorCheck = db.exec('SELECT COUNT(*) as count FROM operators')
   const operatorCount = operatorCheck.length > 0 && operatorCheck[0].values.length > 0 ? operatorCheck[0].values[0][0] : 0
   if (operatorCount === 0) {
