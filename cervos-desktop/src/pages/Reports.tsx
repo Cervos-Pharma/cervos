@@ -336,7 +336,7 @@ export default function Reports() {
       // Queue for sync to the pharmacy portal — best effort; the row is
       // already durable in the local DB.
       try {
-        await queueForSync('expenses', id, 'INSERT', {
+        await queueForSync('expenses', id, 'insert', {
           id,
           branch_id: branchId,
           category: expenseCategory,
@@ -364,7 +364,7 @@ export default function Reports() {
     try {
       await executeDb('DELETE FROM expenses WHERE id = ?', [id])
       try {
-        await queueForSync('expenses', id, 'DELETE', { id })
+        await queueForSync('expenses', id, 'delete', { id })
       } catch {
         // offline — deletion is still durable locally
       }
