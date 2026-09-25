@@ -47,9 +47,21 @@ export async function GET(
     (err) => console.error("Failed to record download count:", err)
   );
 
-  // If file_url is already a full public URL (starts with http), redirect directly
+  const filename = filePath.split("/").pop() || "download";
+
+  // If file_url is already a full public URL (starts with http), stream it
+  // through instead of redirecting — see the signed-URL comment below for why
+  // a redirect alone can silently do nothing on Android Chrome.
   if (release.file_url && release.file_url.startsWith("http")) {
-    return NextResponse.redirect(release.file_url);
+    const upstream = await fetch(release.file_url);
+    return new NextResponse(upstream.body, {
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
+        "Content-Length": upstream.headers.get("content-length") ?? "",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
   }
 
   // Mock mode: no real Supabase to sign URLs. Seeded releases carry a local
@@ -64,9 +76,14 @@ export async function GET(
 
   // Otherwise construct the Supabase Storage URL
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const filename = filePath.split("/").pop() || "download";
 
-  // Generate a short-lived signed URL for private buckets
+  // Generate a short-lived signed URL for private buckets, then STREAM the
+  // bytes through this route rather than 307-redirecting to storage. A
+  // redirect chain that ends in application/octet-stream can be silently
+  // dropped by Android Chrome's download heuristics (tapping the button
+  // appears to do nothing); proxying the response lets us set
+  // Content-Disposition: attachment on a single, same-origin 200 response,
+  // which every browser treats as a download.
   const { data: signedData, error: signError } = await supabase.storage
     .from("app-releases")
     .createSignedUrl(filePath, 3600); // 1 hour
@@ -76,17 +93,39 @@ export async function GET(
   // it, Android Chrome can silently ignore the redirect (bare
   // application/octet-stream + redirect chain) instead of saving the file.
   if (signError || !signedData?.signedUrl) {
-    // Fallback: redirect to public URL directly (bucket must be public)
-    const publicUrl = new URL(
-      `${supabaseUrl}/storage/v1/object/public/app-releases/${filePath}`,
-    );
-    publicUrl.searchParams.set("download", filename);
-    return NextResponse.redirect(publicUrl);
+    // Fallback: stream from the public URL directly (bucket must be public)
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/app-releases/${filePath}`;
+    const upstream = await fetch(publicUrl);
+    return new NextResponse(upstream.body, {
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
+        "Content-Length": upstream.headers.get("content-length") ?? "",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
   }
 
   // new URL(...) keeps absolute URLs intact and resolves the mock shim's
   // relative signed URLs against this request's origin.
   const target = new URL(signedData.signedUrl, req.url);
   target.searchParams.set("download", filename);
-  return NextResponse.redirect(target);
+
+  // Proxy the storage response through this route (single same-origin 200
+  // with Content-Disposition: attachment). Streaming keeps server memory
+  // flat regardless of file size.
+  const upstream = await fetch(target.toString());
+  if (!upstream.ok || !upstream.body) {
+    // Storage failed — fall back to the redirect, which still works on
+    // desktop browsers.
+    return NextResponse.redirect(target);
+  }
+  return new NextResponse(upstream.body, {
+    headers: {
+      "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
+      "Content-Length": upstream.headers.get("content-length") ?? "",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
 }
