@@ -789,10 +789,10 @@ const FIRST_DELAY = 8000
 
 export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pushed?: number; message?: string }> {
   if (typeof window === 'undefined') return { ok: false, message: 'no window' }
-  if (_syncing) return { ok: false, message: 'already syncing' }
+  if (_syncing) return { ok: true, message: 'already syncing' } // not an error — a sync is already in flight
   const linked = await ensureLinked()
   if (!linked || !Ie) return { ok: false, message: 'not linked' }
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: false, message: 'offline' }
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return { ok: true, message: 'offline — data is saved on this device and will sync when back online' }
 
   _syncing = true
   useSyncStore.getState().setSyncing(true)

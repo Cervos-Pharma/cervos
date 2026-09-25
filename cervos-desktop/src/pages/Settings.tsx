@@ -151,6 +151,10 @@ export default function Settings() {
       const result = await runSyncCycle()
       if (!result.ok) {
         setSyncMessage(`Sync failed: ${result.message || 'unknown error'}`)
+      } else if (result.message?.startsWith('already syncing')) {
+        setSyncMessage('A sync is already running — hang tight.')
+      } else if (result.message?.startsWith('offline')) {
+        setSyncMessage(result.message)
       } else {
         setSyncMessage(
           `Synced at ${new Date().toLocaleTimeString()} â€” pulled ${result.pulled ?? 0}, pushed ${result.pushed ?? 0}`
@@ -557,8 +561,7 @@ export default function Settings() {
         </div>
 
         <div className="text-center text-xs text-on-surface-variant">
-          <p>Cervos Pharmacy OS v0.1.0</p>
-          <p className="mt-1">Built with Tauri 2 + React</p>
+          <p>Cervos Pharmacy OS v0.2.3</p>
         </div>
       </div>
     </div>

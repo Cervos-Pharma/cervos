@@ -59,9 +59,10 @@ export default function Dashboard() {
   }, [])
 
   async function loadData() {
-    // Refresh the linked branch before reading the local cache. This keeps the
-    // POS useful offline while ensuring a connected dashboard uses real data.
-    const sync = await runSyncCycle()
+    // Read the local SQLite cache FIRST so the dashboard renders instantly,
+    // even fully offline. Sync runs in the background afterwards and refreshes
+    // the numbers when it finishes (previously we awaited the sync cycle up
+    // front, which blocked the dashboard on network timeouts when offline).
     const overview = await getLinkedBranchOverview()
     const branchId = overview.branchId
     const today = new Date().toDateString()
@@ -128,10 +129,49 @@ export default function Dashboard() {
       subscriptionStatus: overview.subscriptionStatus,
       graceEndsAt: overview.graceEndsAt,
       branchName: overview.branchName,
-      dataWarning: overview.error ?? (sync.ok ? null : sync.message ?? 'Could not refresh branch data.'),
+      dataWarning: overview.error,
       chartData,
     })
     setIsLoading(false)
+
+    // Background refresh: sync (if online) then re-read the local cache so
+    // any newly pulled data shows up without the user re-navigating.
+    runSyncCycle().then(async (sync) => {
+      if (!sync.ok) return
+      const refreshed = await getLinkedBranchOverview()
+      const bid = refreshed.branchId
+      if (!bid) return
+      const [freshSales, freshBatches] = await Promise.all([
+        queryDb(`SELECT * FROM sales WHERE branch_id = ? ORDER BY created_at DESC LIMIT 50`, [bid]),
+        queryDb('SELECT * FROM batches WHERE branch_id = ?', [bid]),
+      ])
+      const t = new Date().toDateString()
+      const tSales = freshSales.filter((s: any) => s.created_at && new Date(s.created_at).toDateString() === t)
+      const stock = new Map<string, number>()
+      for (const b of freshBatches) stock.set(b.product_id, (stock.get(b.product_id) || 0) + (b.quantity || 0))
+      const last7 = new Map<string, number>()
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(); d.setDate(d.getDate() - i)
+        last7.set(d.toISOString().slice(0, 10), 0)
+      }
+      for (const s of freshSales) {
+        const k = s.created_at?.slice(0, 10)
+        if (k && last7.has(k)) last7.set(k, (last7.get(k) || 0) + (s.total || 0))
+      }
+      setData((prev) => ({
+        ...prev,
+        todayRevenue: tSales.reduce((sum: number, s: any) => sum + (s.total || 0), 0),
+        todaySales: tSales.length,
+        pendingSync: freshSales.filter((s: any) => !s.synced).length,
+        lowStock: Array.from(stock.values()).filter((q) => q <= LOW_STOCK_THRESHOLD).length,
+        branchCount: refreshed.branchCount,
+        subscriptionStatus: refreshed.subscriptionStatus,
+        graceEndsAt: refreshed.graceEndsAt,
+        branchName: refreshed.branchName,
+        dataWarning: refreshed.error,
+        chartData: Array.from(last7.entries()).map(([date, value]) => ({ label: date.slice(5), value })),
+      }))
+    })
   }
 
   if (isLoading) {
