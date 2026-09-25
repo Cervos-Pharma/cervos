@@ -53,7 +53,7 @@ export default function Inventory() {
     // rather than only an old local cache. Offline use still falls back safely
     // to the last successful local pull.
     const sync = await runSyncCycle();
-    setSyncError(sync.ok ? null : (sync.message ?? "Could not refresh branch inventory."));
+    setSyncError(sync.ok ? null : (sync.message?.startsWith('offline') ? null : sync.message ?? "Could not refresh branch inventory."));
 
     const prods = await queryDb(
       `SELECT DISTINCT p.* FROM products p
