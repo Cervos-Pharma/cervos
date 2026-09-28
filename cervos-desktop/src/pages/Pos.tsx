@@ -274,6 +274,16 @@ export default function Pos() {
             updated_at: batchUpdateIso,
           });
         }
+        // sale_items.id is a uuid column in Supabase — reuse the same generated
+        // id as the local row (a composite "saleId-batchId" string is not a valid
+        // uuid and the cloud upsert would reject it, stranding the row forever).
+        await queueForSync("sale_items", saleItemId, "insert", {
+          id: saleItemId,
+          sale_id: saleId,
+          batch_id: item.batch.id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        });
       }
 
       await executeDb(
@@ -293,16 +303,6 @@ export default function Pos() {
         payment_method: paymentMethod,
         created_at: now,
       });
-
-      for (const item of cart) {
-        await queueForSync("sale_items", `${saleId}-${item.batch.id}`, "insert", {
-          id: `${saleId}-${item.batch.id}`,
-          sale_id: saleId,
-          batch_id: item.batch.id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        });
-      }
 
       setCart([]);
       setTenderAmount("");
