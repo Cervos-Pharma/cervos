@@ -587,23 +587,43 @@ async function bulkPush(): Promise<{ uploaded: number; failed: number }> {
     // casing mismatch never silently drops queued rows forever (they'd
     // otherwise hit "unknown operation" below and stay stuck retry-failing).
     const operation = operationRaw.toLowerCase()
-    const entries = groups[key]
-    try {
-      if (operation === 'insert' || operation === 'update' || operation === 'upsert') {
-        const rows = entries.map((e) => e.payload)
-        const { error } = await Ie.from(table_name).upsert(rows, { onConflict: 'id' })
-        if (error) throw error
-      } else if (operation === 'delete') {
+    let entries = groups[key]
+    // The same row can be queued multiple times (e.g. two sales from the same
+    // batch → two "batches" upserts). Postgres rejects a single ON CONFLICT
+    // command that touches the same row twice, so keep only the last payload
+    // per row_id — it reflects the newest state.
+    const latest = new Map<string, (typeof entries)[number]>()
+    for (const e of entries) latest.set(e.item.row_id, e)
+    entries = [...latest.values()]
+    if (operation === 'delete') {
+      try {
         const ids = entries.map((e) => e.item.row_id)
         const { error } = await Ie.from(table_name).delete().in('id', ids)
         if (error) throw error
-      } else {
-        throw new Error('unknown operation')
+        for (const e of entries) await queryDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
+        uploaded += entries.length
+      } catch {
+        failed += entries.length
       }
-      for (const e of entries) await queryDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
-      uploaded += entries.length
-    } catch {
+      continue
+    }
+    if (operation !== 'insert' && operation !== 'update' && operation !== 'upsert') {
       failed += entries.length
+      continue
+    }
+    // Push rows ONE at a time. A single multi-row upsert fails under RLS when
+    // it mixes rows that don't exist yet (INSERT path) with rows that do
+    // (UPDATE path): the UPDATE-part USING check rejects the not-yet-inserted
+    // rows and the whole batch 403s — even though every row succeeds alone.
+    for (const e of entries) {
+      try {
+        const { error } = await Ie.from(table_name).upsert([e.payload], { onConflict: 'id' })
+        if (error) throw error
+        await queryDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
+        uploaded += 1
+      } catch {
+        failed += 1
+      }
     }
   }
 
