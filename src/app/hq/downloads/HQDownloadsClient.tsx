@@ -122,11 +122,37 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
       // Phase 2 — PUT the binary directly to Supabase Storage.
       // Note: Supabase signed URLs expect application/octet-stream for binary uploads.
       // The actual Content-Type is stored in metadata by Supabase automatically.
-      const putRes = await fetch(signedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: selectedFile,
-      });
+      // Retried up to 3× with backoff: large installers over a flaky connection
+      // often fail mid-transfer with "Failed to fetch", and a retry on the same
+      // signed URL succeeds.
+      let putRes: Response | null = null;
+      let lastPutError: unknown = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          putRes = await fetch(signedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: selectedFile,
+          });
+          // 403/expired URLs won't fix themselves — don't burn retries on them
+          if (putRes.status !== 403 || attempt === 3) break;
+        } catch (putErr) {
+          lastPutError = putErr;
+          putRes = null;
+        }
+        if (attempt < 3) {
+          setToast({ message: `Upload attempt ${attempt} failed — retrying…`, type: "info" });
+          await new Promise((r) => setTimeout(r, 1500 * attempt));
+        }
+      }
+      if (!putRes) {
+        const msg = lastPutError instanceof Error ? lastPutError.message : "network error";
+        setToast({
+          message: `Upload failed: ${msg}. Check your internet connection and try again — the file was not saved.`,
+          type: "error",
+        });
+        return;
+      }
       if (!putRes.ok) {
         let errorDetail = `Storage upload failed (HTTP ${putRes.status}).`;
         if (putRes.status === 403) {
