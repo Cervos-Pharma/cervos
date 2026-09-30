@@ -335,7 +335,9 @@ function detectOS(): OS {
 /* ─── main component ────────────────────────────────────────────── */
 export default function DownloadClient({ releases }: DownloadClientProps) {
   const [os, setOs] = useState<OS>("windows");
-  const [toast, setToast] = useState(false);
+  // Discriminated toast state so one toast slot carries either the "coming
+  // soon" info or the "download started" success confirmation.
+  const [toast, setToast] = useState<{ message: string; type: "info" | "success" } | null>(null);
   const { t } = useI18n();
   const osIndex = OS_ORDER.indexOf(os);
   const currentRelease = releases[OS_TO_PLATFORM[os]] ?? null;
@@ -587,6 +589,7 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
                         <a
                           href={`/api/downloads/${currentRelease.id}/redirect`}
                           download
+                          onClick={() => setToast({ message: t("download.toast.started"), type: "success" })}
                           className="btn-shimmer w-full bg-primary text-on-primary py-4 px-6 rounded-xl flex justify-center items-center gap-3 font-label-md text-label-md shadow-md text-base hover:scale-[1.02] hover:shadow-[0_6px_32px_rgba(16,57,185,0.35)] active:scale-[0.98] transition-all duration-200"
                         >
                           <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
@@ -594,7 +597,7 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
                           <span className="ml-auto font-body-sm text-sm opacity-70">{OS_CONFIG[os].ext}</span>
                         </a>
                       ) : (
-                        <button onClick={() => setToast(true)}
+                        <button onClick={() => setToast({ message: t("download.toast.coming"), type: "info" })}
                           className="btn-shimmer w-full bg-primary text-on-primary py-4 px-6 rounded-xl flex justify-center items-center gap-3 font-label-md text-label-md shadow-md text-base animate-glow-pulse hover:scale-[1.02] hover:shadow-[0_6px_32px_rgba(16,57,185,0.35)] active:scale-[0.98] transition-all duration-200"
                         >
                           <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
@@ -782,13 +785,18 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
             <a
               href={`/api/downloads/${currentRelease.id}/redirect`}
               download
+              // Fire-and-forget confirmation alongside the real download. No
+              // preventDefault: the native <a download> navigation is what
+              // actually works (pre-hydration, long-press friendly), so it
+              // must stay untouched. This only shows the toast in parallel.
+              onClick={() => setToast({ message: t("download.toast.started"), type: "success" })}
               className="inline-flex items-center gap-3 bg-on-primary text-primary font-label-md text-label-md py-4 px-8 rounded-xl shadow-lg text-base hover:scale-[1.03] hover:shadow-[0_12px_48px_rgba(0,0,0,0.25)] active:scale-[0.98] transition-all duration-200"
             >
               <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
               {t(OS_CONFIG[os].labelKey)}
             </a>
           ) : (
-            <button onClick={() => setToast(true)} className="inline-flex items-center gap-3 bg-on-primary text-primary font-label-md text-label-md py-4 px-8 rounded-xl shadow-lg text-base hover:scale-[1.03] hover:shadow-[0_12px_48px_rgba(0,0,0,0.25)] active:scale-[0.98] transition-all duration-200">
+            <button onClick={() => setToast({ message: t("download.toast.coming"), type: "info" })} className="inline-flex items-center gap-3 bg-on-primary text-primary font-label-md text-label-md py-4 px-8 rounded-xl shadow-lg text-base hover:scale-[1.03] hover:shadow-[0_12px_48px_rgba(0,0,0,0.25)] active:scale-[0.98] transition-all duration-200">
               <span className="material-symbols-outlined">{OS_CONFIG[os].icon}</span>
               {t(OS_CONFIG[os].labelKey)}
             </button>
@@ -811,7 +819,7 @@ export default function DownloadClient({ releases }: DownloadClientProps) {
       </footer>
 
       {toast && (
-        <Toast message={t("download.toast.coming")} type="info" onClose={() => setToast(false)} />
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
     </div>
   );

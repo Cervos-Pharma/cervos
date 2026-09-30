@@ -457,6 +457,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "download.cta.signin":{ EN: "Already have an account?", SW: "Tayari una akaunti?" },
   "download.cta.signin.link": { EN: "Sign in", SW: "Ingia" },
   "download.toast.coming": { EN: "Installer coming soon — download links will be live once HQ publishes a release.", SW: "Kisakinishi kinakuja hivi karibuni — viungo vya kupakua vitafanya kazi HQ inapochapisha toleo." },
+  "download.toast.started": { EN: "Download started — check your notifications or downloads folder.", SW: "Upakuaji umeanza — angalia arifa zako au folda ya vipakuliwa." },
   "download.downloading":   { EN: "Preparing download…", SW: "Inatayarisha upakuzi…" },
 
   // Footer
