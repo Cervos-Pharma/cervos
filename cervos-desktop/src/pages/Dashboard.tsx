@@ -1,7 +1,7 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { queryDb } from '../lib/database'
-import { getLinkedBranchOverview, runSyncCycle } from '../lib/sync'
+import { getLinkedBranchOverview, getLinkedBranchId, runSyncCycle } from '../lib/sync'
 import {
   LineChart,
   Line,
@@ -65,8 +65,10 @@ export default function Dashboard() {
     // even fully offline. Sync runs in the background afterwards and refreshes
     // the numbers when it finishes (previously we awaited the sync cycle up
     // front, which blocked the dashboard on network timeouts when offline).
-    const overview = await getLinkedBranchOverview()
-    const branchId = overview.branchId
+    const branchId = await getLinkedBranchId()
+    const nameRows = await queryDb("SELECT value FROM app_settings WHERE key = 'centre_name'")
+    const branchName = nameRows.length > 0 ? JSON.parse(nameRows[0].value) : null
+    
     const today = new Date().toDateString()
     const sales = branchId
       ? await queryDb(`SELECT * FROM sales WHERE branch_id = ? ORDER BY created_at DESC LIMIT 50`, [branchId])
@@ -127,25 +129,34 @@ export default function Dashboard() {
       pendingSync,
       lowStock: lowStockCount,
       expiringSoon: expiringSoonCount,
-      branchCount: overview.branchCount,
-      subscriptionStatus: overview.subscriptionStatus,
-      graceEndsAt: overview.graceEndsAt,
-      branchName: overview.branchName,
-      dataWarning: overview.error,
+      branchCount: null,
+      subscriptionStatus: null,
+      graceEndsAt: null,
+      branchName: branchName,
+      dataWarning: null,
       chartData,
     })
     setIsLoading(false)
 
-    // Background refresh: sync (if online) then re-read the local cache so
-    // any newly pulled data shows up without the user re-navigating.
+    // Background refresh: pull live subscription status, then run sync cycle,
+    // then re-read the local cache so any newly pulled data shows up instantly.
+    getLinkedBranchOverview().then((refreshed) => {
+      setData((prev) => ({
+        ...prev,
+        branchCount: refreshed.branchCount,
+        subscriptionStatus: refreshed.subscriptionStatus,
+        graceEndsAt: refreshed.graceEndsAt,
+        branchName: refreshed.branchName,
+        dataWarning: refreshed.error,
+      }))
+    })
+
     runSyncCycle().then(async (sync) => {
       if (!sync.ok) return
-      const refreshed = await getLinkedBranchOverview()
-      const bid = refreshed.branchId
-      if (!bid) return
+      if (!branchId) return
       const [freshSales, freshBatches] = await Promise.all([
-        queryDb(`SELECT * FROM sales WHERE branch_id = ? ORDER BY created_at DESC LIMIT 50`, [bid]),
-        queryDb('SELECT * FROM batches WHERE branch_id = ?', [bid]),
+        queryDb(`SELECT * FROM sales WHERE branch_id = ? ORDER BY created_at DESC LIMIT 50`, [branchId]),
+        queryDb('SELECT * FROM batches WHERE branch_id = ?', [branchId]),
       ])
       const t = new Date().toDateString()
       const tSales = freshSales.filter((s: any) => s.created_at && new Date(s.created_at).toDateString() === t)
@@ -166,11 +177,6 @@ export default function Dashboard() {
         todaySales: tSales.length,
         pendingSync: freshSales.filter((s: any) => !s.synced).length,
         lowStock: Array.from(stock.values()).filter((q) => q <= LOW_STOCK_THRESHOLD).length,
-        branchCount: refreshed.branchCount,
-        subscriptionStatus: refreshed.subscriptionStatus,
-        graceEndsAt: refreshed.graceEndsAt,
-        branchName: refreshed.branchName,
-        dataWarning: refreshed.error,
         chartData: Array.from(last7.entries()).map(([date, value]) => ({ label: date.slice(5), value })),
       }))
     })
