@@ -141,17 +141,20 @@ function AppRoutes() {
     if (!dbReady) return
     let disposed = false
 
-    const initializeSync = async () => {
+    const initializeSync = () => {
       // Marketplace, Orders, and Subscription read the Supabase SDK directly
-      // when they mount, so restore its session before rendering any routes.
-      await ensureLinked().catch(() => {})
-      if (disposed) return
-
+      // when they mount, so we restore the session in the background.
+      // We no longer block the UI here because if the device is offline,
+      // refreshSession() can block for 60s+ waiting for network timeout.
       setSessionRestored(true)
-      startAutoSync()
-      checkSubscriptionBlocked()
-        .then((b) => useSyncStore.getState().setBlocked(b.blocked, b.reason ?? null))
-        .catch(() => {})
+      
+      ensureLinked().then(() => {
+        if (disposed) return
+        startAutoSync()
+        checkSubscriptionBlocked()
+          .then((b) => useSyncStore.getState().setBlocked(b.blocked, b.reason ?? null))
+          .catch(() => {})
+      }).catch(() => {})
     }
 
     initializeSync()

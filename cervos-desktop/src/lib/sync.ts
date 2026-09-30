@@ -261,6 +261,51 @@ export async function getLinkStatus(): Promise<LinkStatus> {
 }
 
 /**
+ * Executes the "Standalone Initialization" flow for new users directly from the APK.
+ * Creates a branch and an admin operator entirely through the Supabase client.
+ */
+export async function scaffoldAccount(branchName: string, managerPin: string): Promise<string> {
+  if (!Ie) throw new Error('Not linked to Supabase — please sign in again.')
+  const { data: user } = await Ie.auth.getUser()
+  if (!user.user) throw new Error('No authenticated user found. Please sign in again.')
+
+  const { data: account } = await Ie
+    .from('accounts')
+    .select('id')
+    .eq('auth_user_id', user.user.id)
+    .maybeSingle()
+
+  if (!account) throw new Error('No pharmacy account found for this login.')
+
+  // 1. Create Branch
+  const { data: branch, error: branchErr } = await Ie
+    .from('branches')
+    .insert({
+      account_id: account.id,
+      name: branchName,
+      is_active: true
+    })
+    .select('id')
+    .single()
+
+  if (branchErr || !branch) throw new Error(`Failed to create branch: ${branchErr?.message}`)
+
+  // 2. Create Admin Operator
+  const { error: opErr } = await Ie
+    .from('operators')
+    .insert({
+      branch_id: branch.id,
+      name: 'Manager',
+      role: 'admin',
+      pin: managerPin
+    })
+
+  if (opErr) throw new Error(`Failed to create operator: ${opErr.message}`)
+
+  return branch.id
+}
+
+/**
  * Links this device to a specific EXISTING branch the operator picked —
  * pulls that branch's real name/address down for local display. Never
  * writes a new row to `branches`; the pharmacy portal is the only place a

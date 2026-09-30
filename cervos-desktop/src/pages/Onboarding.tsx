@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn, getLinkStatus, linkToExistingBranch, forceClaimBranch, runSyncCycle, type RemoteBranch } from '../lib/sync'
+import { signIn, getLinkStatus, linkToExistingBranch, forceClaimBranch, runSyncCycle, scaffoldAccount, type RemoteBranch } from '../lib/sync'
 import { queryDb } from '../lib/database'
 import { open } from '@tauri-apps/plugin-shell'
 import { useTranslation } from '../lib/i18n'
 import { WEB_URL } from '../lib/web'
 
-type OnboardingStep = 'welcome' | 'link' | 'select-branch' | 'done'
+type OnboardingStep = 'welcome' | 'link' | 'select-branch' | 'create-branch' | 'create-operator' | 'done'
 
 interface OnboardingProps {
   onComplete?: () => void
@@ -24,6 +24,10 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
   const [branches, setBranches] = useState<RemoteBranch[]>([])
   const [linkedBranch, setLinkedBranch] = useState<{ name: string; address: string } | null>(null)
   const [forceClaimBranchId, setForceClaimBranchId] = useState<string | null>(null)
+  
+  // Standalone Init State
+  const [newBranchName, setNewBranchName] = useState('')
+  const [newOperatorPin, setNewOperatorPin] = useState('')
 
   const inputClass = 'w-full h-12 px-4 bg-surface-base border border-ink-deep/20 rounded-none text-body-md text-ink-deep focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all placeholder:text-text-muted'
   const btnClass = 'w-full h-12 bg-primary text-white rounded-none font-label-md font-bold flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-60'
@@ -35,7 +39,8 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
       ? await queryDb('SELECT id FROM operators WHERE branch_id = ?', [branchId])
       : []
     if (operators.length === 0) {
-      throw new Error('No branch operators are available yet. Add an operator and their login PIN in the pharmacy portal, then link this POS again.')
+      setStep('create-operator')
+      return
     }
     setStep('done')
   }
@@ -64,7 +69,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
         return
       }
       if (status.branches.length === 0) {
-        setError('This account has no branches yet. Create one at cervos.online/dashboard/branches first, then sign in here again.')
+        setStep('create-branch')
         return
       }
       if (status.branches.length === 1) {
@@ -156,6 +161,29 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
     }
   }
 
+  async function handleCreateBranch(e: React.FormEvent) {
+    e.preventDefault()
+    setStep('create-operator')
+  }
+
+  async function handleCreateOperator(e: React.FormEvent) {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+    try {
+      const newBranchId = await scaffoldAccount(newBranchName, newOperatorPin)
+      await linkToExistingBranch(newBranchId)
+      const sync = await runSyncCycle()
+      if (!sync.ok) throw new Error(sync.message ?? 'Terminal initialized, but data could not be downloaded yet.')
+      await finishLink()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to configure terminal.')
+      setStep('create-branch') // Go back on fail
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden">
       <div className="fixed inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: "url('/pharmacist-1.png')", filter: "blur(10px)", transform: "scale(1.1)" }} />
@@ -228,6 +256,56 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   <span className="material-symbols-outlined text-[18px]">domain_add</span>
                   {t('onboarding.createAccount')}
                 </button>
+              </div>
+            )}
+
+            {step === 'create-branch' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="font-headline-md text-headline-md text-ink-deep">Setup Pharmacy</h2>
+                </div>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                  We noticed your account is new. What is the name of your pharmacy?
+                </p>
+                <form onSubmit={handleCreateBranch} className="space-y-4">
+                  <input
+                    type="text"
+                    required
+                    value={newBranchName}
+                    onChange={(e) => setNewBranchName(e.target.value)}
+                    placeholder="e.g., Ahadi City Pharmacy"
+                    className={inputClass}
+                  />
+                  <button type="submit" disabled={isLoading} className={btnClass}>
+                    {isLoading ? 'Creating...' : 'Continue'}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {step === 'create-operator' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="font-headline-md text-headline-md text-ink-deep">Manager PIN</h2>
+                </div>
+                <p className="font-body-sm text-body-sm text-on-surface-variant">
+                  Create a 4-digit PIN for the local administrator to log into the POS terminal offline.
+                </p>
+                <form onSubmit={handleCreateOperator} className="space-y-4">
+                  <input
+                    type="password"
+                    required
+                    maxLength={4}
+                    value={newOperatorPin}
+                    onChange={(e) => setNewOperatorPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="0000"
+                    className={inputClass}
+                    style={{ letterSpacing: '8px', textAlign: 'center', fontSize: '24px' }}
+                  />
+                  <button type="submit" disabled={isLoading || newOperatorPin.length < 4} className={btnClass}>
+                    {isLoading ? 'Configuring Terminal...' : 'Finish Setup'}
+                  </button>
+                </form>
               </div>
             )}
 
