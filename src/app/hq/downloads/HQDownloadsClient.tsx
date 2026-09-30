@@ -16,6 +16,7 @@ import { useState, useRef, useEffect } from "react";
 import { getSignedUploadUrl, confirmUpload, setCurrentRelease, deleteRelease, checkStorageBucket } from "@/lib/actions/hq";
 import { AppRelease } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface HQDownloadsClientProps {
   releases: AppRelease[];
@@ -48,6 +49,7 @@ function PlatformIcon({ platform }: { platform: string }) {
 }
 
 export default function HQDownloadsClient({ releases: initialReleases }: HQDownloadsClientProps) {
+  const { t } = useI18n();
   const [releases, setReleases] = useState<AppRelease[]>(initialReleases);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [bucketWarning, setBucketWarning] = useState<string | null>(null);
@@ -245,7 +247,7 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
         <div className="bg-error/10 border border-error/30 rounded p-4 mb-6 flex items-start gap-3">
           <span className="material-symbols-outlined text-error text-[20px] mt-0.5">warning</span>
           <div>
-            <p className="font-label-md text-label-md text-error">Storage bucket not configured</p>
+            <p className="font-label-md text-label-md text-error">{t("dl.bucket_missing")}</p>
             <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">{bucketWarning}</p>
           </div>
         </div>

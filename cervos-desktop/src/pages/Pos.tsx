@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { queryDb, executeDb, generateId, nowIso } from "../lib/database";
 import { queueForSync, processSyncQueue, checkSubscriptionBlocked } from "../lib/sync";
 import { useAuthStore } from "../lib/store";
+import { useTranslation } from "../lib/i18n";
 import type { Product, Batch } from "../types";
 import BarcodeScanner from "../components/BarcodeScanner";
 
@@ -32,6 +33,7 @@ interface CompletedSale {
 const PAYMENT_METHODS = ["cash", "card", "mobile_money", "insurance"];
 
 export default function Pos() {
+  const { t } = useTranslation();
   const { currentOperator } = useAuthStore()
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -336,17 +338,17 @@ export default function Pos() {
           <div className="w-full max-w-md rounded-2xl bg-surface-base p-6 shadow-xl">
             <div className="text-center">
               <span className="material-symbols-outlined text-5xl text-secondary">check_circle</span>
-              <h2 className="mt-2 font-headline text-2xl font-bold">Sale completed</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">Transaction receipt</p>
+              <h2 className="mt-2 font-headline text-2xl font-bold">{t('pos.saleCompleted')}</h2>
+              <p className="mt-1 text-sm text-on-surface-variant">{t('pos.transactionReceipt')}</p>
             </div>
             <div className="mt-6 space-y-3 rounded-xl bg-surface p-4 text-sm">
-              <div className="flex justify-between"><span className="text-on-surface-variant">Receipt</span><span className="font-mono font-semibold">{completedSale.receiptNumber}</span></div>
-              <div className="flex justify-between"><span className="text-on-surface-variant">Date</span><span>{new Date(completedSale.createdAt).toLocaleString()}</span></div>
-              <div className="flex justify-between"><span className="text-on-surface-variant">Payment</span><span>{completedSale.paymentMethod.replace('_', ' ').toUpperCase()}</span></div>
-              <div className="flex justify-between border-t border-outline-variant pt-3 text-lg font-bold"><span>Total</span><span>TZS {completedSale.total.toLocaleString()}</span></div>
-              {completedSale.tender > 0 && <div className="flex justify-between"><span className="text-on-surface-variant">Change</span><span>TZS {completedSale.change.toLocaleString()}</span></div>}
+              <div className="flex justify-between"><span className="text-on-surface-variant">{t('receipt.receipt')}</span><span className="font-mono font-semibold">{completedSale.receiptNumber}</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">{t('receipt.date')}</span><span>{new Date(completedSale.createdAt).toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">{t('receipt.payment')}</span><span>{completedSale.paymentMethod.replace('_', ' ').toUpperCase()}</span></div>
+              <div className="flex justify-between border-t border-outline-variant pt-3 text-lg font-bold"><span>{t('receipt.total')}</span><span>TZS {completedSale.total.toLocaleString()}</span></div>
+              {completedSale.tender > 0 && <div className="flex justify-between"><span className="text-on-surface-variant">{t('receipt.change')}</span><span>TZS {completedSale.change.toLocaleString()}</span></div>}
             </div>
-            <button type="button" onClick={() => setCompletedSale(null)} className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white">Done</button>
+            <button type="button" onClick={() => setCompletedSale(null)} className="mt-6 w-full rounded-lg bg-primary py-3 font-semibold text-white">{t('pos.done')}</button>
           </div>
         </div>
       )}
@@ -361,14 +363,14 @@ export default function Pos() {
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
                 onKeyDown={handleBarcodeScan}
-                placeholder="Scan barcode or type manually..."
+                placeholder={t('pos.scanBarcode')}
                 className="flex-1 px-4 py-3 rounded-lg border border-outline-variant bg-surface-base text-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 autoFocus
               />
               <button
                 onClick={() => setShowScanner(true)}
                 className="px-4 py-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                title="Scan barcode"
+                title={t('pos.scanBarcode')}
                 type="button"
               >
                 <span className="material-symbols-outlined">qr_code_scanner</span>
@@ -381,7 +383,7 @@ export default function Pos() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearchBarcode()}
-              placeholder="Search products..."
+              placeholder={t('pos.searchPlaceholder')}
               className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
             />
             {normalizedSearch && (
@@ -412,8 +414,8 @@ export default function Pos() {
             <div className="h-full overflow-y-auto p-5">
               <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
                 <span className="material-symbols-outlined text-5xl">point_of_sale</span>
-                <p className="mt-2 text-lg font-medium">Choose products to start a sale</p>
-                <p className="text-sm">Search by name or barcode, scan an item, or select from available inventory.</p>
+                <p className="mt-2 text-lg font-medium">{t('pos.chooseProducts')}</p>
+                <p className="text-sm">{t('pos.chooseProductsHint')}</p>
               </div>
               {matchingItems.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -428,19 +430,19 @@ export default function Pos() {
                       <p className="text-sm text-on-surface-variant">{item.product.brand_name || 'Generic'}</p>
                       <div className="mt-3 flex items-center justify-between text-sm">
                         <span className="font-semibold text-primary">TZS {item.batch.sale_price.toLocaleString()}</span>
-                        <span className="text-on-surface-variant">{item.batch.quantity} in stock</span>
+                        <span className="text-on-surface-variant">{item.batch.quantity} {t('pos.inStock')}</span>
                       </div>
                       <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">
                         <span className="material-symbols-outlined text-base">add_shopping_cart</span>
-                        Add to cart
+                        {t('pos.addToCart')}
                       </span>
                     </button>
                   ))}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-outline-variant p-6 text-center text-on-surface-variant">
-                  <p className="font-medium">No saleable stock is available.</p>
-                  <p className="mt-1 text-sm">Add a product with a stock quantity greater than zero in Inventory before making a sale.</p>
+                  <p className="font-medium">{t('pos.noSaleableStock')}</p>
+                  <p className="mt-1 text-sm">{t('pos.noSaleableStockHint')}</p>
                 </div>
               )}
             </div>
@@ -450,10 +452,10 @@ export default function Pos() {
               <table className="hidden lg:table w-full">
                 <thead className="bg-outline-variant/50 sticky top-0">
                   <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-                    <th className="px-4 py-3">Product</th>
-                    <th className="px-4 py-3 text-right">Price</th>
-                    <th className="px-4 py-3 text-center">Qty</th>
-                    <th className="px-4 py-3 text-right">Subtotal</th>
+                    <th className="px-4 py-3">{t('pos.cart')}</th>
+                    <th className="px-4 py-3 text-right">{t('common.price')}</th>
+                    <th className="px-4 py-3 text-center">{t('common.quantity')}</th>
+                    <th className="px-4 py-3 text-right">{t('pos.subtotal')}</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -559,14 +561,14 @@ export default function Pos() {
       {/* Payment panel — right rail on desktop, stacks below the cart on mobile */}
       <div className="w-full lg:w-80 bg-surface-base lg:border-l border-t lg:border-t-0 border-outline-variant p-4 sm:p-6 flex flex-col">
         <h2 className="font-headline text-lg font-bold text-on-surface mb-4">
-          Payment
+          {t('pos.payment')}
         </h2>
         {saleError && <div className="mb-4 rounded-lg border border-error/20 bg-error/10 p-3 text-sm text-error">{saleError}</div>}
 
         <div className="space-y-3 mb-4">
           <div>
             <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-              Payment Method
+              {t('pos.paymentMethod')}
             </label>
             <select
               value={paymentMethod}
@@ -583,7 +585,7 @@ export default function Pos() {
 
           <div>
             <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-              Discount (TZS)
+              {t('pos.discount')} (TZS)
             </label>
             <input
               type="number"
@@ -597,7 +599,7 @@ export default function Pos() {
 
           <div>
             <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-              Amount Tendered (TZS)
+              {t('pos.amountTendered')} (TZS)
             </label>
             <input
               type="number"
@@ -613,26 +615,26 @@ export default function Pos() {
 
         <div className="border-t border-outline-variant pt-4 space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-on-surface-variant">Subtotal</span>
+            <span className="text-on-surface-variant">{t('pos.subtotal')}</span>
             <span>TZS {getSubtotal().toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-on-surface-variant">Tax ({taxRate}%)</span>
+            <span className="text-on-surface-variant">{t('pos.tax')} ({taxRate}%)</span>
             <span>TZS {getTax().toLocaleString()}</span>
           </div>
           {parseFloat(discount || "0") > 0 && (
             <div className="flex justify-between text-sm text-secondary">
-              <span>Discount</span>
+              <span>{t('pos.discount')}</span>
               <span>-TZS {parseFloat(discount || "0").toLocaleString()}</span>
             </div>
           )}
           <div className="flex justify-between font-headline text-xl font-black">
-            <span>Total</span>
+            <span>{t('receipt.total')}</span>
             <span>TZS {getTotal().toLocaleString()}</span>
           </div>
           {parseFloat(tenderAmount || "0") > 0 && (
             <div className="flex justify-between text-sm">
-              <span className="text-on-surface-variant">Change</span>
+              <span className="text-on-surface-variant">{t('pos.changeDue')}</span>
               <span className="text-secondary font-semibold">
                 TZS {getChange().toLocaleString()}
               </span>
@@ -651,12 +653,12 @@ export default function Pos() {
                 <span className="material-symbols-outlined animate-spin">
                   progress_activity
                 </span>
-                Processing...
+                {t('pos.processing')}
               </>
             ) : (
               <>
                 <span className="material-symbols-outlined">check_circle</span>
-                Complete Sale
+                {t('pos.completeSale')}
               </>
             )}
           </button>

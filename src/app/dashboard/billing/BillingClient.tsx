@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Plan {
   id: string;
@@ -60,6 +61,7 @@ export default function BillingClient({
   connectedSuppliers = 0,
   selectPlanAction,
 }: BillingClientProps) {
+  const { t } = useI18n();
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [loading, setLoading] = useState(false);
   const [confirmPlanId, setConfirmPlanId] = useState<string | null>(null);
@@ -78,7 +80,7 @@ export default function BillingClient({
             type: "info",
           });
         } else {
-          setToast({ message: "Plan updated successfully.", type: "success" });
+          setToast({ message: t("bill.plan_updated"), type: "success" });
         }
         setConfirmPlanId(null);
         window.location.reload();
@@ -98,7 +100,7 @@ export default function BillingClient({
         <div className="bg-surface-base border border-outline-variant rounded p-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-[20px] text-primary">account_circle</span>
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Account</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{t("bill.account")}</p>
           </div>
           <p className="font-headline-md text-headline-md text-ink-deep">{account.name}</p>
         </div>
@@ -106,15 +108,15 @@ export default function BillingClient({
         <div className="bg-surface-base border border-outline-variant rounded p-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-[20px] text-primary">workspace_premium</span>
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Current Plan</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{t("bill.current_plan")}</p>
           </div>
-          <p className="font-headline-md text-headline-md text-ink-deep">{currentPlanName ?? "No plan selected"}</p>
+          <p className="font-headline-md text-headline-md text-ink-deep">{currentPlanName ?? t("bill.no_plan")}</p>
         </div>
 
         <div className="bg-surface-base border border-outline-variant rounded p-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-[20px] text-primary">store</span>
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Branches</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{t("bill.branches")}</p>
           </div>
           <p className="font-headline-md text-headline-md text-ink-deep">{branchCount}</p>
         </div>
@@ -122,7 +124,7 @@ export default function BillingClient({
         <div className="bg-surface-base border border-outline-variant rounded p-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-[20px] text-primary">hub</span>
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Suppliers</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{t("bill.suppliers")}</p>
           </div>
           <p className="font-headline-md text-headline-md text-ink-deep">{connectedSuppliers}</p>
         </div>
@@ -131,8 +133,8 @@ export default function BillingClient({
       <div className="bg-surface-base border border-outline-variant rounded p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-headline-md text-headline-md text-ink-deep">Subscription Status</h2>
-            <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">Your current subscription state</p>
+            <h2 className="font-headline-md text-headline-md text-ink-deep">{t("bill.status")}</h2>
+            <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">{t("bill.status_sub")}</p>
           </div>
           <StatusBadge status={account.subscription_status} />
         </div>
@@ -142,7 +144,7 @@ export default function BillingClient({
         </div>
       </div>
 
-      <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">Available Plans</h2>
+      <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">{t("bill.available")}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {plans.map((plan) => {
           const isCurrentPlan = plan.id === account.subscription_plan;
@@ -161,7 +163,7 @@ export default function BillingClient({
               {isCurrentPlan && (
                 <div className="flex items-center gap-2 mb-3">
                   <span className="material-symbols-outlined text-[16px] text-primary">check_circle</span>
-                  <span className="font-label-md text-label-md text-primary uppercase tracking-wider">Current Plan</span>
+                  <span className="font-label-md text-label-md text-primary uppercase tracking-wider">{t("bill.current_plan")}</span>
                 </div>
               )}
 
@@ -171,29 +173,29 @@ export default function BillingClient({
 
               <div className="mb-4 space-y-1">
                 <div className="flex justify-between font-body-sm">
-                  <span className="text-on-surface-variant">Monthly</span>
+                  <span className="text-on-surface-variant">{t("bill.monthly")}</span>
                   <span className="font-mono text-ink-deep">{formatTzs(plan.price_monthly_tzs)}</span>
                 </div>
                 <div className="flex justify-between font-body-sm">
-                  <span className="text-on-surface-variant">Annual</span>
+                  <span className="text-on-surface-variant">{t("bill.annual")}</span>
                   <span className="font-mono text-ink-deep">{formatTzs(plan.price_annual_tzs)}</span>
                 </div>
                 <div className="flex justify-between font-body-sm">
-                  <span className="text-on-surface-variant">Max Branches</span>
+                  <span className="text-on-surface-variant">{t("bill.max_branches")}</span>
                   <span className="font-mono text-ink-deep">{plan.max_branches}</span>
                 </div>
                 <div className="flex justify-between font-body-sm">
-                  <span className="text-on-surface-variant">Max Operators</span>
+                  <span className="text-on-surface-variant">{t("bill.max_operators")}</span>
                   <span className="font-mono text-ink-deep">{plan.max_operators}</span>
                 </div>
                 <div className="flex justify-between font-body-sm">
-                  <span className="text-on-surface-variant">Max Suppliers</span>
+                  <span className="text-on-surface-variant">{t("bill.max_suppliers")}</span>
                   <span className="font-mono text-ink-deep">{plan.max_suppliers >= 999999 ? "∞" : plan.max_suppliers}</span>
                 </div>
               </div>
 
               <div className="flex-1 mb-4">
-                <p className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider mb-2">Features</p>
+                <p className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider mb-2">{t("bill.features")}</p>
                 <ul className="space-y-1">
                   {plan.features.map((f, i) => (
                     <li key={i} className="flex items-start gap-2 text-sm text-on-surface">
@@ -222,7 +224,7 @@ export default function BillingClient({
                   className="w-full px-4 py-2 bg-primary text-on-primary font-label-md text-label-md flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
                 >
                   <span className="material-symbols-outlined text-[16px]">check</span>
-                  {isDowngrade ? "Downgrade" : "Subscribe"}
+                  {isDowngrade ? t("bill.downgrade") : t("bill.subscribe")}
                 </button>
               )}
             </div>
@@ -234,29 +236,29 @@ export default function BillingClient({
           <div>
             <div className="flex items-center gap-2 mb-3">
               <span className="material-symbols-outlined text-[16px] text-on-surface-variant">schedule</span>
-              <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Future Expansion</span>
+              <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{t("bill.future")}</span>
             </div>
-            <h3 className="font-headline-md text-headline-md text-ink-deep mb-2">Growth & Enterprise Tiers</h3>
+            <h3 className="font-headline-md text-headline-md text-ink-deep mb-2">{t("bill.growth_tiers")}</h3>
             <p className="font-body-sm text-body-sm text-on-surface-variant mb-4">
               Multi-branch enterprise plans and custom supply tiers are deferred to future updates. The Basic plan covers all essential POS and marketplace operations today.
             </p>
             <ul className="space-y-1.5 text-xs text-on-surface-variant">
               <li className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[14px] text-on-surface-variant">arrow_forward</span>
-                Multi-branch volume scaling
+                {t("bill.f1")}
               </li>
               <li className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[14px] text-on-surface-variant">arrow_forward</span>
-                Expanded supplier quotas
+                {t("bill.f2")}
               </li>
               <li className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[14px] text-on-surface-variant">arrow_forward</span>
-                Custom ERP integrations
+                {t("bill.f3")}
               </li>
             </ul>
           </div>
           <div className="mt-6 pt-4 border-t border-outline-variant/40 text-xs text-on-surface-variant">
-            Available in future releases
+            {t("bill.future_note")}
           </div>
         </div>
       </div>
@@ -273,7 +275,7 @@ export default function BillingClient({
               return (
                 <>
                   <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">
-                    Confirm Plan Change
+                    {t("bill.confirm_title")}
                   </h3>
                   <p className="font-body-sm text-body-sm text-on-surface-variant mb-6">
                     You are switching to <strong>{plan.name}</strong>.
@@ -304,13 +306,13 @@ export default function BillingClient({
                       ) : (
                         <span className="material-symbols-outlined text-[16px]">check</span>
                       )}
-                      Confirm Change
+                      {t("bill.confirm_change")}
                     </button>
                     <button
                       onClick={() => setConfirmPlanId(null)}
                       className="px-4 py-2 border border-outline-variant text-on-surface-variant font-label-md text-label-md"
                     >
-                      Cancel
+                      {t("bill.cancel")}
                     </button>
                   </div>
                 </>

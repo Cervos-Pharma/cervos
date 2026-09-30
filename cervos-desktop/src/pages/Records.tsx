@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import { queryDb } from '../lib/database'
+import { useTranslation } from '../lib/i18n'
 
 interface ReceiptData {
   id: string
@@ -17,6 +18,7 @@ interface ReceiptData {
 }
 
 export default function Records() {
+  const { t } = useTranslation()
   const [receipts, setReceipts] = useState<ReceiptData[]>([])
   const [filteredReceipts, setFilteredReceipts] = useState<ReceiptData[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -123,7 +125,7 @@ export default function Records() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by receipt number, operator, or product..."
+            placeholder={t('records.search')}
             className="w-full px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
@@ -139,12 +141,12 @@ export default function Records() {
         <table className="w-full">
           <thead className="bg-outline-variant/50">
             <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-              <th className="px-4 py-3">Receipt #</th>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Operator</th>
-              <th className="px-4 py-3">Items</th>
-              <th className="px-4 py-3 text-right">Total</th>
-              <th className="px-4 py-3">Payment</th>
+              <th className="px-4 py-3">{t('records.receiptNo')}</th>
+              <th className="px-4 py-3">{t('records.dateCol')}</th>
+              <th className="px-4 py-3">{t('records.operator')}</th>
+              <th className="px-4 py-3">{t('records.itemsCol')}</th>
+              <th className="px-4 py-3 text-right">{t('records.totalCol')}</th>
+              <th className="px-4 py-3">{t('records.paymentCol')}</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -153,7 +155,7 @@ export default function Records() {
               <tr>
                 <td colSpan={7} className="px-4 py-12 text-center text-on-surface-variant">
                   <span className="material-symbols-outlined text-5xl">receipt_long</span>
-                  <p className="mt-2 font-medium">No receipts found</p>
+                  <p className="mt-2 font-medium">{t('records.noReceipts')}</p>
                 </td>
               </tr>
             ) : (
@@ -202,6 +204,7 @@ interface ReceiptModalProps {
 }
 
 function ReceiptModal({ receipt, onClose }: ReceiptModalProps) {
+  const { t } = useTranslation()
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md p-6">
@@ -219,20 +222,20 @@ function ReceiptModal({ receipt, onClose }: ReceiptModalProps) {
 
         <div className="space-y-4">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-on-surface-variant">Date</span>
+            <span className="text-on-surface-variant">{t('records.dateCol')}</span>
             <span className="font-medium">{new Date(receipt.created_at).toLocaleString()}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-on-surface-variant">Operator</span>
+            <span className="text-on-surface-variant">{t('records.operator')}</span>
             <span className="font-medium">{receipt.operator_name || 'Unknown'}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-on-surface-variant">Payment Method</span>
+            <span className="text-on-surface-variant">{t('records.paymentMethod')}</span>
             <span className="font-medium">{receipt.payment_method?.replace('_', ' ').toUpperCase() || 'N/A'}</span>
           </div>
 
           <div className="border-t border-outline-variant pt-4">
-            <h3 className="font-semibold text-sm mb-2">Items</h3>
+            <h3 className="font-semibold text-sm mb-2">{t('records.itemsCol')}</h3>
             <div className="space-y-2">
               {receipt.items.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between text-sm">
@@ -245,33 +248,33 @@ function ReceiptModal({ receipt, onClose }: ReceiptModalProps) {
 
           <div className="border-t border-outline-variant pt-4 space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-on-surface-variant">Subtotal</span>
+              <span className="text-on-surface-variant">{t('records.subtotal')}</span>
               <span>TZS {(receipt.total - receipt.tax).toLocaleString()}</span>
             </div>
             {receipt.tax > 0 && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-on-surface-variant">Tax</span>
+                <span className="text-on-surface-variant">{t('records.tax')}</span>
                 <span>TZS {receipt.tax.toLocaleString()}</span>
               </div>
             )}
             {receipt.discount > 0 && (
               <div className="flex items-center justify-between text-sm text-secondary">
-                <span>Discount</span>
+                <span>{t('records.discount')}</span>
                 <span>-TZS {receipt.discount.toLocaleString()}</span>
               </div>
             )}
             <div className="flex items-center justify-between font-bold text-lg pt-2 border-t border-outline-variant">
-              <span>Total</span>
+              <span>{t('receipt.total')}</span>
               <span>TZS {receipt.total.toLocaleString()}</span>
             </div>
             {receipt.tender > 0 && (
               <>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-on-surface-variant">Tendered</span>
+                  <span className="text-on-surface-variant">{t('records.tendered')}</span>
                   <span>TZS {receipt.tender.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-on-surface-variant">Change</span>
+                  <span className="text-on-surface-variant">{t('receipt.change')}</span>
                   <span className="text-secondary font-semibold">TZS {receipt.change_due.toLocaleString()}</span>
                 </div>
               </>

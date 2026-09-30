@@ -2,9 +2,11 @@
 import { queryDb } from '../lib/database'
 import { fetchOperators, createOperator, updateOperator, deleteOperator } from '../lib/queries'
 import { runSyncCycle } from '../lib/sync'
+import { useTranslation } from '../lib/i18n'
 import type { Operator } from '../types'
 
 export default function Users() {
+  const { t } = useTranslation()
   const [operators, setOperators] = useState<Operator[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -27,7 +29,7 @@ export default function Users() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this operator?')) return
+    if (!confirm(t('settings.deleteOperatorConfirm'))) return
     await deleteOperator(id)
     runSyncCycle().catch(() => {})
     loadOperators()
@@ -45,15 +47,15 @@ export default function Users() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-headline text-2xl font-black text-on-surface">Operators</h1>
-          <p className="text-sm text-on-surface-variant mt-1">{operators.length} operators</p>
+          <h1 className="font-headline text-2xl font-black text-on-surface">{t('users.title')}</h1>
+          <p className="text-sm text-on-surface-variant mt-1">{operators.length} {t('users.count')}</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-semibold hover:opacity-90"
         >
           <span className="material-symbols-outlined">person_add</span>
-          Add Operator
+          {t('users.add')}
         </button>
       </div>
 
@@ -61,9 +63,9 @@ export default function Users() {
         <table className="w-full">
           <thead className="bg-outline-variant/50">
             <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Created</th>
+              <th className="px-4 py-3">{t('users.nameCol')}</th>
+              <th className="px-4 py-3">{t('users.roleCol')}</th>
+              <th className="px-4 py-3">{t('users.created')}</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -104,7 +106,7 @@ export default function Users() {
         {operators.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
             <span className="material-symbols-outlined text-5xl">group</span>
-            <p className="mt-2 font-medium">No operators yet</p>
+            <p className="mt-2 font-medium">{t('users.noOperators')}</p>
           </div>
         )}
       </div>
@@ -139,6 +141,7 @@ interface OperatorModalProps {
 }
 
 function OperatorModal({ operator, onClose, onSave }: OperatorModalProps) {
+  const { t } = useTranslation()
   const [name, setName] = useState(operator?.name || '')
   const [pin, setPin] = useState('')
   const [role, setRole] = useState<'admin' | 'operator'>(operator?.role || 'operator')
@@ -157,7 +160,7 @@ function OperatorModal({ operator, onClose, onSave }: OperatorModalProps) {
       <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-headline text-xl font-bold text-on-surface">
-            {operator ? 'Edit Operator' : 'Add Operator'}
+            {operator ? t('users.edit') : t('users.add')}
           </h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-outline-variant transition-colors">
             <span className="material-symbols-outlined">close</span>
@@ -165,19 +168,19 @@ function OperatorModal({ operator, onClose, onSave }: OperatorModalProps) {
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-on-surface-variant mb-1">Name</label>
+            <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t('users.name')}</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
-              placeholder="Operator name"
+              placeholder={t('users.operatorName')}
             />
           </div>
           {!operator && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">PIN (min 4 digits)</label>
+                <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t('users.pinMin4')}</label>
                 <input
                   type="password"
                   value={pin}
@@ -188,21 +191,21 @@ function OperatorModal({ operator, onClose, onSave }: OperatorModalProps) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-on-surface-variant mb-1">Role</label>
+                <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t('users.role')}</label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as 'admin' | 'operator')}
                   className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
                 >
-                  <option value="operator">Operator</option>
-                  <option value="admin">Admin</option>
+                  <option value="operator">{t('users.operator')}</option>
+                  <option value="admin">{t('users.admin')}</option>
                 </select>
               </div>
             </>
           )}
           {operator && (
             <div>
-              <label className="block text-xs font-semibold text-on-surface-variant mb-1">New PIN (leave blank to keep current)</label>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t('users.newPin')}</label>
               <input
                 type="password"
                 value={pin}
@@ -215,10 +218,10 @@ function OperatorModal({ operator, onClose, onSave }: OperatorModalProps) {
           )}
           <div className="flex gap-3 pt-4">
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-md border border-outline-variant text-on-surface font-medium hover:bg-outline-variant/30">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button type="submit" className="flex-1 py-2.5 rounded-md bg-primary text-white font-semibold hover:opacity-90">
-              {operator ? 'Update' : 'Add'}
+              {operator ? t('inventory.update') : t('common.confirm')}
             </button>
           </div>
         </form>

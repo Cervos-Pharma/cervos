@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * @file components/SubscriptionGate.tsx
  * @description Gates dashboard access based on account subscription_status.
@@ -5,10 +7,12 @@
  *   see a dismissible warning banner; trial/active accounts pass through.
  */
 import Link from "next/link";
+import { useI18n } from "@/lib/i18n/context";
 
 type SubscriptionStatus = "trial" | "active" | "grace" | "locked" | "suspended";
 
 function LockScreen({ status }: { status: SubscriptionStatus }) {
+  const { t } = useI18n();
   const isSuspended = status === "suspended";
 
   return (
@@ -18,12 +22,10 @@ function LockScreen({ status }: { status: SubscriptionStatus }) {
           {isSuspended ? "block" : "lock"}
         </span>
         <h1 className="font-headline-md text-headline-md text-ink-deep mb-2">
-          {isSuspended ? "Account Suspended" : "Account Locked"}
+          {isSuspended ? t("gate.suspended_title") : t("gate.locked_title")}
         </h1>
         <p className="font-body-md text-body-md text-on-surface-variant mb-6">
-          {isSuspended
-            ? "This account has been suspended. Please contact support or update your billing information to regain access."
-            : "This account is locked due to subscription issues. Please update your billing information to regain access."}
+          {isSuspended ? t("gate.suspended_body") : t("gate.locked_body")}
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link
@@ -31,14 +33,14 @@ function LockScreen({ status }: { status: SubscriptionStatus }) {
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-on-primary font-label-md text-label-md"
           >
             <span className="material-symbols-outlined text-[16px]">credit_card</span>
-            View Billing
+            {t("gate.view_billing")}
           </Link>
           <Link
             href="/support"
             className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-surface-base border border-outline-variant text-on-surface font-label-md text-label-md"
           >
             <span className="material-symbols-outlined text-[16px]">support_agent</span>
-            Contact Support
+            {t("gate.contact_support")}
           </Link>
         </div>
       </div>
@@ -47,6 +49,8 @@ function LockScreen({ status }: { status: SubscriptionStatus }) {
 }
 
 function GraceBanner() {
+  const { t } = useI18n();
+
   return (
     <div className="bg-secondary-container border-b border-secondary px-4 py-3 flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
@@ -54,7 +58,7 @@ function GraceBanner() {
           warning
         </span>
         <p className="font-body-sm text-body-sm text-on-secondary-container">
-          <strong>Subscription notice:</strong> Your payment is overdue. Update billing to avoid service interruption.
+          <strong>{t("gate.notice")}</strong> {t("gate.grace_body")}
         </p>
       </div>
       <Link
@@ -62,7 +66,7 @@ function GraceBanner() {
         className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-secondary text-on-secondary font-label-sm text-label-sm rounded-full"
       >
         <span className="material-symbols-outlined text-[14px]">credit_card</span>
-        Update Billing
+        {t("gate.update_billing")}
       </Link>
     </div>
   );

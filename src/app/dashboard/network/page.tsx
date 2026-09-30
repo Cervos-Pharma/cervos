@@ -7,6 +7,7 @@
  * reject them without needing the desktop app.
  */
 import { redirect } from "next/navigation";
+import { getT } from "@/lib/i18n/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { isSubscribedActive } from "@/lib/subscription";
 import PharmacySidebar from "@/components/PharmacySidebar";
@@ -16,7 +17,8 @@ import CervosMap from "@/components/MapClientWrapper";
 import MobileMenuButton from "@/components/MobileMenuButton";
 
 export default async function NetworkPage() {
-  const authClient = await createClient();
+
+  const t = await getT();  const authClient = await createClient();
   const {
     data: { user },
   } = await authClient.auth.getUser();
@@ -109,9 +111,9 @@ export default async function NetworkPage() {
           <MobileMenuButton />
           <div>
             <p className="font-mono text-label-md text-on-surface-variant uppercase tracking-widest mb-0.5">
-              Branch network
+              {t("hqnet.branch_network")}
             </p>
-            <h1 className="font-headline-md text-headline-md text-ink-deep leading-none">Network Map</h1>
+            <h1 className="font-headline-md text-headline-md text-ink-deep leading-none">{t("hqnet.map")}</h1>
           </div>
           {pendingConnections.length > 0 && (
             <div className="ml-auto flex items-center gap-2">

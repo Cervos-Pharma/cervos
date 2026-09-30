@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { updateTicketStatus, addTicketNote, TicketStatus, SupportTicket } from "@/lib/actions/support";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 type FilterTab = "all" | "open" | "in_progress" | "resolved";
 
@@ -47,6 +48,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function HQSupportClient({ tickets }: { tickets: SupportTicket[] }) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<FilterTab>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -236,7 +238,7 @@ export default function HQSupportClient({ tickets }: { tickets: SupportTicket[] 
                       </div>
                       {ticket.updated_at !== ticket.created_at && (
                         <div>
-                          <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider mb-1">Last Updated</p>
+                          <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider mb-1">{t("hqsup.last_updated")}</p>
                           <p className="font-body-md text-body-md text-ink-deep">
                             {new Date(ticket.updated_at).toLocaleString()}
                           </p>
@@ -258,7 +260,7 @@ export default function HQSupportClient({ tickets }: { tickets: SupportTicket[] 
 
                     {/* Status changer */}
                     <div>
-                      <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider mb-2">Change Status</p>
+                      <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider mb-2">{t("hqsup.change_status")}</p>
                       <div className="flex gap-2 flex-wrap">
                         {(["open", "in_progress", "resolved"] as TicketStatus[]).map((s) => (
                           <button

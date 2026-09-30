@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { sendHQMessage, deleteHQMessage, type HQMessage } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 const KIND_COLORS: Record<string, string> = {
   info: "bg-blue-50 border-blue-200 text-blue-900",
@@ -46,6 +47,7 @@ export default function HQMessagesClient({
   accounts: Account[];
   branches: Branch[];
 }) {
+  const { t } = useI18n();
   const [list, setList] = useState(messages);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
@@ -112,7 +114,7 @@ export default function HQMessagesClient({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-1">
         <div className="bg-surface-base border border-outline-variant rounded-xl p-6 sticky top-12">
-          <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">Compose Message</h2>
+          <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">{t("hqmsg.compose")}</h2>
 
           <div className="space-y-4">
             <div>
@@ -139,11 +141,11 @@ export default function HQMessagesClient({
                 onChange={(e) => setScope(e.target.value as typeof scope)}
                 className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
               >
-                <option value="all">Entire Network</option>
-                <option value="all_pharmacies">All Pharmacies</option>
-                <option value="all_suppliers">All Suppliers</option>
-                <option value="account">Specific Account</option>
-                <option value="branch">Specific Branch</option>
+                <option value="all">{t("hqmsg.entire_network")}</option>
+                <option value="all_pharmacies">{t("hqmsg.all_pharmacies")}</option>
+                <option value="all_suppliers">{t("hqmsg.all_suppliers")}</option>
+                <option value="account">{t("hqmsg.specific_account")}</option>
+                <option value="branch">{t("hqmsg.specific_branch")}</option>
               </select>
             </div>
 

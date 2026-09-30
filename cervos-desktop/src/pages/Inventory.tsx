@@ -4,6 +4,7 @@ import { queryDb, executeDb, generateId, nowIso } from "../lib/database";
 import { getLinkedBranchId, queueForSync, runSyncCycle } from "../lib/sync";
 import { PHARMACY_CATEGORIES } from "../lib/branding";
 import { useAuthStore } from "../lib/store";
+import { useTranslation } from "../lib/i18n";
 import type { Product, Batch } from "../types";
 import BarcodeScanner from "../components/BarcodeScanner";
 
@@ -17,6 +18,7 @@ declare global {
 
 export default function Inventory() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { isAdmin, permissions } = useAuthStore()
   const [products, setProducts] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -53,7 +55,7 @@ export default function Inventory() {
     // rather than only an old local cache. Offline use still falls back safely
     // to the last successful local pull.
     const sync = await runSyncCycle();
-    setSyncError(sync.ok ? null : (sync.message?.startsWith('offline') ? null : sync.message ?? "Could not refresh branch inventory."));
+    setSyncError(sync.ok ? null : (sync.message?.startsWith('offline') ? null : sync.message ?? t('inventory.errRefresh')));
 
     const prods = await queryDb(
       `SELECT DISTINCT p.* FROM products p
@@ -149,7 +151,7 @@ export default function Inventory() {
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary text-primary font-semibold hover:bg-primary/10 transition-colors"
           >
             <span className="material-symbols-outlined">point_of_sale</span>
-            Make Sale
+            {t('inventory.makeSale')}
           </button>
           {isAdmin && (
             <>
@@ -158,14 +160,14 @@ export default function Inventory() {
                 className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary text-primary font-semibold hover:bg-primary/10 transition-colors"
               >
                 <span className="material-symbols-outlined">inventory</span>
-                Add Stock
+                {t('inventory.addStock')}
               </button>
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:opacity-90 transition-opacity"
               >
                 <span className="material-symbols-outlined">add</span>
-                Add Product
+                {t('inventory.addProduct')}
               </button>
             </>
           )}
@@ -205,7 +207,7 @@ export default function Inventory() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name or barcode..."
+            placeholder={t('inventory.search')}
             className="w-full px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
@@ -214,7 +216,7 @@ export default function Inventory() {
           onChange={(e) => setSelectedCategory(e.target.value)}
           className="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary"
         >
-          <option value="">All Categories</option>
+          <option value="">{t('inventory.allCategories')}</option>
           {PHARMACY_CATEGORIES.map((cat) => (
             <option key={cat} value={cat}>
               {cat}
@@ -227,13 +229,13 @@ export default function Inventory() {
         <table className="w-full">
           <thead className="bg-outline-variant/50">
             <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-              <th className="px-4 py-3">Product</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Formulation</th>
-              <th className="px-4 py-3">Barcode</th>
-              <th className="px-4 py-3 text-right">Stock</th>
-              <th className="px-4 py-3 text-right">Cost</th>
-              <th className="px-4 py-3 text-right">Price</th>
+              <th className="px-4 py-3">{t('inventory.productCol')}</th>
+              <th className="px-4 py-3">{t('inventory.categoryCol')}</th>
+              <th className="px-4 py-3">{t('inventory.formulationCol')}</th>
+              <th className="px-4 py-3">{t('inventory.barcode')}</th>
+              <th className="px-4 py-3 text-right">{t('inventory.stock')}</th>
+              <th className="px-4 py-3 text-right">{t('inventory.costCol')}</th>
+              <th className="px-4 py-3 text-right">{t('inventory.priceCol')}</th>
               {isAdmin && <th className="px-4 py-3"></th>}
             </tr>
           </thead>
@@ -309,7 +311,7 @@ export default function Inventory() {
         {filteredProducts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
             <span className="material-symbols-outlined text-5xl">inventory_2</span>
-            <p className="mt-2 font-medium">No products found</p>
+            <p className="mt-2 font-medium">{t('inventory.noProducts')}</p>
           </div>
         )}
       </div>
@@ -561,6 +563,7 @@ interface ProductModalProps {
 const FORMULATIONS = ["Tablet", "Capsule", "Syrup", "Injection", "Cream", "Ointment", "Drops", "Inhaler", "Suppository", "Powder", "Solution", "Suspension", "Gel", "Patch", "Other"]
 
 function ProductModal({ product, onClose, onSave }: ProductModalProps) {
+  const { t } = useTranslation();
   const [genericName, setGenericName] = useState(product?.generic_name || "");
   const [brandName, setBrandName] = useState(product?.brand_name || "");
   const [category, setCategory] = useState(product?.category || "");
@@ -613,7 +616,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
         <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
           <div className="flex items-center justify-between p-6 pb-4 shrink-0">
             <h2 className="font-headline text-xl font-bold text-on-surface">
-              {product ? "Edit Product" : "Add Product"}
+              {product ? t('inventory.editProduct') : t('inventory.addProduct')}
             </h2>
             <button
               onClick={onClose}
@@ -626,7 +629,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="flex-1 overflow-y-auto px-6 space-y-4">
             <div>
-              <label className={labelClass}>Generic Name *</label>
+              <label className={labelClass}>{t('inventory.genericName')} *</label>
               <input
                 type="text"
                 value={genericName}
@@ -638,7 +641,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
             </div>
 
             <div>
-              <label className={labelClass}>Brand Name</label>
+              <label className={labelClass}>{t('inventory.brandName')}</label>
               <input
                 type="text"
                 value={brandName}
@@ -649,13 +652,13 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
             </div>
 
             <div>
-              <label className={labelClass}>Category</label>
+              <label className={labelClass}>{t('inventory.category')}</label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className={inputClass}
               >
-                <option value="">Select category</option>
+                <option value="">{t('inventory.selectCategory')}</option>
                 {PHARMACY_CATEGORIES.map((cat) => (
                   <option key={cat} value={cat}>
                     {cat}
@@ -665,13 +668,13 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
             </div>
 
             <div>
-              <label className={labelClass}>Formulation</label>
+              <label className={labelClass}>{t('inventory.formulation')}</label>
               <select
                 value={formulation}
                 onChange={(e) => setFormulation(e.target.value)}
                 className={inputClass}
               >
-                <option value="">Select formulation</option>
+                <option value="">{t('inventory.selectFormulation')}</option>
                 {FORMULATIONS.map((f) => (
                   <option key={f} value={f}>{f}</option>
                 ))}
@@ -679,7 +682,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
             </div>
 
             <div>
-              <label className={labelClass}>Barcode</label>
+              <label className={labelClass}>{t('inventory.barcode')}</label>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -692,7 +695,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
                   type="button"
                   onClick={() => setShowScanner(true)}
                   className="px-3 py-2.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                  title="Scan barcode"
+                  title={t('inventory.scanBarcode')}
                 >
                   <span className="material-symbols-outlined">qr_code_scanner</span>
                 </button>
@@ -701,7 +704,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
 
             <div className="grid grid-cols-4 gap-3">
               <div>
-                <label className={labelClass}>Default Expiry</label>
+                <label className={labelClass}>{t('inventory.defaultExpiry')}</label>
                 <input
                   type="date"
                   value={defaultExpiry}
@@ -710,7 +713,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
                 />
               </div>
               <div>
-                <label className={labelClass}>Cost/Unit</label>
+                <label className={labelClass}>{t('inventory.costPerUnit')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -722,7 +725,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
                 />
               </div>
               <div>
-              <label className={labelClass}>Sell/Unit</label>
+              <label className={labelClass}>{t('inventory.sellPerUnit')}</label>
               <input
                 type="number"
                 step="0.01"
@@ -734,7 +737,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
               />
             </div>
             <div>
-              <label className={labelClass}>Stock Qty</label>
+              <label className={labelClass}>{t('inventory.stockQty')}</label>
               <input
                 type="number"
                 min="0"
@@ -748,7 +751,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Low Stock Threshold</label>
+              <label className={labelClass}>{t('inventory.lowStockThreshold')}</label>
               <input
                 type="number"
                 min="0"
@@ -757,10 +760,10 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
                 className={inputClass}
                 placeholder="10"
               />
-              <p className="text-xs text-on-surface-variant mt-1">Alert when stock falls below this</p>
+              <p className="text-xs text-on-surface-variant mt-1">{t('inventory.alertBelow')}</p>
             </div>
             <div>
-              <label className={labelClass}>Notify Threshold</label>
+              <label className={labelClass}>{t('inventory.notifyThreshold')}</label>
               <input
                 type="number"
                 min="0"
@@ -769,7 +772,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
                 className={inputClass}
                 placeholder="5"
               />
-              <p className="text-xs text-on-surface-variant mt-1">Urgent alert when stock falls below this</p>
+              <p className="text-xs text-on-surface-variant mt-1">{t('inventory.urgentBelow')}</p>
             </div>
           </div>
 
@@ -802,7 +805,7 @@ function ProductModal({ product, onClose, onSave }: ProductModalProps) {
               type="submit"
               className="flex-1 py-2.5 rounded-md bg-primary text-on-primary font-semibold hover:opacity-90 transition-opacity"
             >
-              {product ? "Update" : "Add Product"}
+              {product ? t('inventory.update') : t('inventory.addProduct')}
             </button>
           </div>
         </form>
@@ -829,6 +832,7 @@ interface AddStockModalProps {
 }
 
 function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [productSearch, setProductSearch] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -860,20 +864,20 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
     e.preventDefault();
     setError("");
     if (mode === "existing" && !selectedProduct) {
-      setError("Select a product from the catalog, or switch to 'New product'.");
+      setError(t('inventory.errSelectProduct'));
       return;
     }
     if (mode === "new" && !newGenericName.trim()) {
-      setError("Enter a generic name for the new product.");
+      setError(t('inventory.errGenericName'));
       return;
     }
     const qty = parseInt(quantity, 10);
     if (!qty || qty <= 0) {
-      setError("Enter a valid quantity.");
+      setError(t('inventory.errQuantity'));
       return;
     }
     if (!expiryDate) {
-      setError("Expiry date is required.");
+      setError(t('inventory.errExpiry'));
       return;
     }
     onSave({
@@ -893,7 +897,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-6 pb-4 shrink-0">
-          <h2 className="font-headline text-xl font-bold text-on-surface">Add Stock</h2>
+          <h2 className="font-headline text-xl font-bold text-on-surface">{t('inventory.addStock')}</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-outline-variant transition-colors">
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -930,7 +934,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
 
             {mode === "existing" ? (
               <div>
-                <label className={labelClass}>Product *</label>
+                <label className={labelClass}>{t('inventory.productRequired')}</label>
                 <input
                   type="text"
                   value={selectedProduct ? `${selectedProduct.generic_name}${selectedProduct.brand_name ? " — " + selectedProduct.brand_name : ""}` : productSearch}
@@ -938,14 +942,14 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
                     setSelectedProduct(null);
                     setProductSearch(e.target.value);
                   }}
-                  placeholder="Search the catalog (generic or brand name)"
+                  placeholder={t('inventory.searchCatalog')}
                   className={inputClass}
                   autoFocus
                 />
                 {!selectedProduct && productSearch.trim() && (
                   <div className="mt-1 max-h-40 overflow-y-auto border border-outline-variant rounded-md divide-y divide-outline-variant/60">
                     {filteredCatalog.length === 0 ? (
-                      <p className="p-3 text-sm text-on-surface-variant">No matches in the catalog. Try 'New product' instead.</p>
+                      <p className="p-3 text-sm text-on-surface-variant">{t('inventory.noCatalogMatch')}</p>
                     ) : (
                       filteredCatalog.slice(0, 20).map((p) => (
                         <button
@@ -970,7 +974,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
             ) : (
               <>
                 <div>
-                  <label className={labelClass}>Generic Name *</label>
+                  <label className={labelClass}>{t('inventory.genericName')} *</label>
                   <input
                     type="text"
                     value={newGenericName}
@@ -980,7 +984,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Brand Name</label>
+                  <label className={labelClass}>{t('inventory.brandName')}</label>
                   <input
                     type="text"
                     value={newBrandName}
@@ -990,9 +994,9 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Category</label>
+                  <label className={labelClass}>{t('inventory.category')}</label>
                   <select value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className={inputClass}>
-                    <option value="">Select category</option>
+                    <option value="">{t('inventory.selectCategory')}</option>
                     {PHARMACY_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
@@ -1002,19 +1006,19 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
             )}
 
             <div>
-              <label className={labelClass}>Batch Number</label>
+              <label className={labelClass}>{t('inventory.batchNumber')}</label>
               <input
                 type="text"
                 value={batchNumber}
                 onChange={(e) => setBatchNumber(e.target.value)}
                 className={inputClass}
-                placeholder="Optional"
+                placeholder={t('inventory.optional')}
               />
             </div>
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className={labelClass}>Quantity *</label>
+                <label className={labelClass}>{t('inventory.quantityRequired')}</label>
                 <input
                   type="number"
                   min="1"
@@ -1025,7 +1029,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
                 />
               </div>
               <div>
-                <label className={labelClass}>Cost/Unit</label>
+                <label className={labelClass}>{t('inventory.costPerUnit')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1037,7 +1041,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
                 />
               </div>
               <div>
-                <label className={labelClass}>Sell/Unit</label>
+                <label className={labelClass}>{t('inventory.sellPerUnit')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -1051,7 +1055,7 @@ function AddStockModal({ catalog, onClose, onSave }: AddStockModalProps) {
             </div>
 
             <div>
-              <label className={labelClass}>Expiry Date *</label>
+              <label className={labelClass}>{t('inventory.expiryRequired')}</label>
               <input
                 type="date"
                 value={expiryDate}
@@ -1090,6 +1094,7 @@ interface ProductDetailModalProps {
 }
 
 function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailModalProps) {
+  const { t } = useTranslation();
   const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
   const totalSales = sales.reduce((sum, s) => sum + (s.quantity || 0), 0);
 
@@ -1115,8 +1120,8 @@ function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailM
               <p className="text-sm text-on-surface-variant">{product.brand_name}</p>
             )}
             <div className="flex gap-4 mt-3 text-sm">
-              <span className="text-on-surface-variant">Category: <span className="text-on-surface">{product.category || 'N/A'}</span></span>
-              <span className="text-on-surface-variant">Barcode: <span className="text-on-surface font-mono">{product.barcode || 'N/A'}</span></span>
+              <span className="text-on-surface-variant">{t('inventory.category')}: <span className="text-on-surface">{product.category || 'N/A'}</span></span>
+              <span className="text-on-surface-variant">{t('inventory.barcode')}: <span className="text-on-surface font-mono">{product.barcode || 'N/A'}</span></span>
             </div>
             {product.requires_prescription ? (
               <span className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded mt-2">
@@ -1128,38 +1133,38 @@ function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailM
 
           <div className="grid grid-cols-3 gap-4">
             <div className="bg-surface p-4 rounded-xl border border-outline-variant text-center">
-              <p className="text-xs font-semibold text-on-surface-variant uppercase">Total Stock</p>
+              <p className="text-xs font-semibold text-on-surface-variant uppercase">{t('inventory.totalStock')}</p>
               <p className={`font-headline text-2xl font-black mt-1 ${totalStock <= 10 ? 'text-error' : 'text-on-surface'}`}>
                 {totalStock}
               </p>
             </div>
             <div className="bg-surface p-4 rounded-xl border border-outline-variant text-center">
-              <p className="text-xs font-semibold text-on-surface-variant uppercase">Units Sold</p>
+              <p className="text-xs font-semibold text-on-surface-variant uppercase">{t('inventory.unitsSold')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">{totalSales}</p>
             </div>
             <div className="bg-surface p-4 rounded-xl border border-outline-variant text-center">
-              <p className="text-xs font-semibold text-on-surface-variant uppercase">Batch Count</p>
+              <p className="text-xs font-semibold text-on-surface-variant uppercase">{t('inventory.batchCount')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">{batches.length}</p>
             </div>
           </div>
 
           <div>
-            <h3 className="font-headline font-bold text-on-surface mb-3">Batch History</h3>
+            <h3 className="font-headline font-bold text-on-surface mb-3">{t('inventory.batchHistory')}</h3>
             <div className="bg-surface rounded-xl border border-outline-variant overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-outline-variant/50">
                   <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-                    <th className="px-4 py-2">Batch ID</th>
-                    <th className="px-4 py-2 text-right">Expiry</th>
-                    <th className="px-4 py-2 text-right">Qty</th>
-                    <th className="px-4 py-2 text-right">Cost</th>
-                    <th className="px-4 py-2 text-right">Price</th>
+                    <th className="px-4 py-2">{t('inventory.batchId')}</th>
+                    <th className="px-4 py-2 text-right">{t('inventory.expiryCol')}</th>
+                    <th className="px-4 py-2 text-right">{t('inventory.qtyCol')}</th>
+                    <th className="px-4 py-2 text-right">{t('inventory.costCol')}</th>
+                    <th className="px-4 py-2 text-right">{t('inventory.priceCol')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {batches.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-on-surface-variant">No batches found</td>
+                      <td colSpan={5} className="px-4 py-6 text-center text-on-surface-variant">{t('inventory.batches')}: 0</td>
                     </tr>
                   ) : (
                     batches.map((batch) => (
@@ -1179,15 +1184,15 @@ function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailM
 
           {sales.length > 0 && (
             <div>
-              <h3 className="font-headline font-bold text-on-surface mb-3">Recent Sales</h3>
+              <h3 className="font-headline font-bold text-on-surface mb-3">{t('inventory.recentSales')}</h3>
               <div className="bg-surface rounded-xl border border-outline-variant overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-outline-variant/50">
                     <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-                      <th className="px-4 py-2">Date</th>
-                      <th className="px-4 py-2 text-right">Qty</th>
-                      <th className="px-4 py-2 text-right">Unit Price</th>
-                      <th className="px-4 py-2 text-right">Payment</th>
+                      <th className="px-4 py-2">{t('inventory.dateCol')}</th>
+                      <th className="px-4 py-2 text-right">{t('inventory.qtyCol')}</th>
+                      <th className="px-4 py-2 text-right">{t('inventory.unitPriceCol')}</th>
+                      <th className="px-4 py-2 text-right">{t('inventory.paymentCol')}</th>
                     </tr>
                   </thead>
                   <tbody>

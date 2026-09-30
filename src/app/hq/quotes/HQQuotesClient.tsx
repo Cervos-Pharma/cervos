@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { markQuoteContacted, createSupplierInvite } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Quote {
   id: string;
@@ -31,6 +32,7 @@ interface Quote {
 }
 
 export default function HQQuotesClient({ quotes }: { quotes: Quote[] }) {
+  const { t } = useI18n();
   const [filter, setFilter] = useState<"all" | "pending" | "contacted">("all");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<Record<string, string>>({});
@@ -253,12 +255,12 @@ export default function HQQuotesClient({ quotes }: { quotes: Quote[] }) {
           <div className="bg-surface-base border border-outline-variant w-full max-w-md mx-4 p-6 shadow-2xl">
             {!generatedLink ? (
               <>
-                <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">Invite Supplier</h3>
+                <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">{t("hqquote.invite")}</h3>
                 <p className="font-body-sm text-body-sm text-on-surface-variant mb-6">
                   Generate a one-time invite link for <strong>{inviteModal.quote.company_name}</strong>.
                 </p>
                 <div className="bg-surface-container-low p-4 rounded mb-6">
-                  <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider mb-2">Sending to</p>
+                  <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider mb-2">{t("hqquote.sending_to")}</p>
                   <p className="font-body-md text-body-md text-ink-deep">{inviteModal.quote.contact_name}</p>
                   <p className="font-body-sm text-body-sm text-on-surface-variant">{inviteModal.quote.email}</p>
                 </div>
@@ -289,8 +291,8 @@ export default function HQQuotesClient({ quotes }: { quotes: Quote[] }) {
                     <span className="material-symbols-outlined text-[20px] text-secondary">check_circle</span>
                   </div>
                   <div>
-                    <h3 className="font-headline-md text-headline-md text-ink-deep">Invite Link Generated</h3>
-                    <p className="font-body-sm text-body-sm text-on-surface-variant">Share this link with the supplier</p>
+                    <h3 className="font-headline-md text-headline-md text-ink-deep">{t("hqquote.link_generated")}</h3>
+                    <p className="font-body-sm text-body-sm text-on-surface-variant">{t("hqquote.share_link")}</p>
                   </div>
                 </div>
                 <div className="bg-surface-container-low p-3 rounded mb-4 break-all">

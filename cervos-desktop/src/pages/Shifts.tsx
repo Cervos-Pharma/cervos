@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { queryDb, executeDb, generateId } from '../lib/database'
 import { queueForSync } from '../lib/sync'
 import { useAuthStore } from '../lib/store'
+import { useTranslation } from '../lib/i18n'
 import type { Shift } from '../types'
 
 export default function Shifts() {
+  const { t } = useTranslation()
   const { currentOperator } = useAuthStore()
   const [activeShift, setActiveShift] = useState<Shift | null>(null)
   const [history, setHistory] = useState<Shift[]>([])
@@ -82,19 +84,19 @@ export default function Shifts() {
 
   return (
     <div className="p-6 max-w-2xl">
-      <h1 className="font-headline text-2xl font-black text-on-surface mb-6">Shifts</h1>
+      <h1 className="font-headline text-2xl font-black text-on-surface mb-6">{t('shifts.title')}</h1>
 
       <div className="space-y-6">
         {activeShift ? (
           <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-            <h2 className="font-headline text-lg font-bold text-on-surface mb-4">Active Shift</h2>
+            <h2 className="font-headline text-lg font-bold text-on-surface mb-4">{t('shifts.activeShift')}</h2>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <p className="text-xs font-semibold text-on-surface-variant">Opened At</p>
+                <p className="text-xs font-semibold text-on-surface-variant">{t('shifts.openedAt')}</p>
                 <p className="text-sm mt-0.5">{fmtDate(activeShift.opened_at)}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-on-surface-variant">Expected Cash</p>
+                <p className="text-xs font-semibold text-on-surface-variant">{t('shifts.expectedCash')}</p>
                 <p className="text-sm mt-0.5">{activeShift.expected_cash.toFixed(2)}</p>
               </div>
             </div>
@@ -104,13 +106,13 @@ export default function Shifts() {
                 onClick={() => setShowCloseForm(true)}
                 className="w-full py-2.5 rounded-md bg-error text-white font-semibold hover:opacity-90 transition-opacity"
               >
-                Close Shift
+                {t('shifts.closeShift')}
               </button>
             ) : (
               <div className="space-y-3 pt-2 border-t border-outline-variant">
                 <div>
                   <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-                    Counted Cash
+                    {t('shifts.countedCash')}
                   </label>
                   <input
                     type="number"
@@ -124,7 +126,7 @@ export default function Shifts() {
                 </div>
                 {countedCash && (
                   <div className="text-sm">
-                    <span className="text-on-surface-variant">Difference: </span>
+                    <span className="text-on-surface-variant">{t('shifts.difference')}: </span>
                     <span className={`font-semibold ${(parseFloat(countedCash) || 0) - activeShift.expected_cash >= 0 ? 'text-secondary' : 'text-error'}`}>
                       {((parseFloat(countedCash) || 0) - activeShift.expected_cash).toFixed(2)}
                     </span>
@@ -135,13 +137,13 @@ export default function Shifts() {
                     onClick={handleCloseShift}
                     className="px-4 py-2 rounded-md bg-error text-white text-sm font-semibold hover:opacity-90"
                   >
-                    Confirm Close
+                    {t('shifts.confirmClose')}
                   </button>
                   <button
                     onClick={() => { setShowCloseForm(false); setCountedCash('') }}
                     className="px-4 py-2 rounded-md border border-outline-variant text-sm hover:bg-outline-variant/30"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </button>
                 </div>
               </div>
@@ -149,23 +151,23 @@ export default function Shifts() {
           </div>
         ) : (
           <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-            <h2 className="font-headline text-lg font-bold text-on-surface mb-2">No Active Shift</h2>
-            <p className="text-sm text-on-surface-variant mb-4">Open a new shift to start recording sales.</p>
+            <h2 className="font-headline text-lg font-bold text-on-surface mb-2">{t('shifts.noActiveShift')}</h2>
+            <p className="text-sm text-on-surface-variant mb-4">{t('shifts.noActiveHint')}</p>
             <button
               onClick={handleOpenShift}
               className="w-full flex items-center justify-center gap-2 py-2.5 rounded-md bg-primary text-white font-semibold hover:opacity-90 transition-opacity"
             >
               <span className="material-symbols-outlined text-xl">schedule</span>
-              Open Shift
+              {t('shifts.openShift')}
             </button>
           </div>
         )}
 
         <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-          <h2 className="font-headline text-lg font-bold text-on-surface mb-4">Shift History</h2>
+          <h2 className="font-headline text-lg font-bold text-on-surface mb-4">{t('shifts.history')}</h2>
 
           {history.length === 0 ? (
-            <p className="text-sm text-on-surface-variant">No completed shifts yet.</p>
+            <p className="text-sm text-on-surface-variant">{t('shifts.noHistory')}</p>
           ) : (
             <div className="space-y-2">
               {history.map((shift) => {
@@ -185,21 +187,21 @@ export default function Shifts() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-xs text-on-surface-variant">
                       <div>
-                        <span className="block text-[10px] uppercase tracking-wide">Operator</span>
+                        <span className="block text-[10px] uppercase tracking-wide">{t('shifts.operator')}</span>
                         <span className="text-sm text-on-surface">{operatorNames[shift.operator_id] || 'Unknown'}</span>
                       </div>
                       <div>
-                        <span className="block text-[10px] uppercase tracking-wide">Expected</span>
+                        <span className="block text-[10px] uppercase tracking-wide">{t('shifts.expected')}</span>
                         <span className="text-sm text-on-surface">{shift.expected_cash.toFixed(2)}</span>
                       </div>
                       <div>
-                        <span className="block text-[10px] uppercase tracking-wide">Counted</span>
+                        <span className="block text-[10px] uppercase tracking-wide">{t('shifts.counted')}</span>
                         <span className="text-sm text-on-surface">{shift.counted_cash?.toFixed(2) ?? '—'}</span>
                       </div>
                     </div>
                     {shift.counted_cash != null && (
                       <div className="mt-2 pt-2 border-t border-outline-variant flex items-center justify-between">
-                        <span className="text-xs text-on-surface-variant">Difference</span>
+                        <span className="text-xs text-on-surface-variant">{t('shifts.difference')}</span>
                         <span className={`text-sm font-semibold ${diff >= 0 ? 'text-secondary' : 'text-error'}`}>
                           {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
                         </span>

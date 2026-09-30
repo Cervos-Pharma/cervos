@@ -21,6 +21,7 @@ import {
   type AccountDetail,
 } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   detail: AccountDetail | null;
@@ -49,6 +50,7 @@ function formatDate(iso: string | null): string {
 }
 
 export default function HQAccountDetailClient({ detail, error }: Props) {
+  const { t } = useI18n();
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [suspendReason, setSuspendReason] = useState("");
@@ -249,7 +251,7 @@ export default function HQAccountDetailClient({ detail, error }: Props) {
               </>
             ) : (
               <>
-                <p className="font-label-md text-label-md text-on-surface mb-1">Suspend account</p>
+                <p className="font-label-md text-label-md text-on-surface mb-1">{t("hqacc.suspend")}</p>
                 <textarea
                   value={suspendReason}
                   onChange={(e) => setSuspendReason(e.target.value)}
@@ -272,10 +274,10 @@ export default function HQAccountDetailClient({ detail, error }: Props) {
           {/* Supplier Controls — subscription, download, verified */}
           {acct.type === "supplier" && (
             <div className="w-full md:w-72 border border-outline-variant/40 rounded p-4">
-              <p className="font-label-md text-label-md text-on-surface mb-3">Supplier Controls</p>
+              <p className="font-label-md text-label-md text-on-surface mb-3">{t("hqacc.supplier_controls")}</p>
               <div className="flex flex-col gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Subscription Status</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("bill.status")}</span>
                   <select
                     value={acct.subscription_status ?? "trial"}
                     onChange={async (e) => {
@@ -290,7 +292,7 @@ export default function HQAccountDetailClient({ detail, error }: Props) {
                   </select>
                 </label>
                 <label className="flex items-center justify-between gap-2">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Desktop Download</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("hqacc.desktop_dl")}</span>
                   <button
                     onClick={async () => {
                       await run("dl-toggle", () => updateAccountProfile(acct.id, { download_enabled: !acct.download_enabled }), acct.download_enabled ? "Download disabled" : "Download enabled");
@@ -303,7 +305,7 @@ export default function HQAccountDetailClient({ detail, error }: Props) {
                   </button>
                 </label>
                 <label className="flex items-center justify-between gap-2">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Verified Badge</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("hqacc.verified_badge")}</span>
                   <button
                     onClick={async () => {
                       await run("verified-toggle", () => updateAccountProfile(acct.id, { verified: !acct.verified }), acct.verified ? "Verified removed" : "Verified granted");
@@ -419,7 +421,7 @@ export default function HQAccountDetailClient({ detail, error }: Props) {
         <div className="lg:col-span-2 flex flex-col gap-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-surface-base border border-outline-variant rounded p-5">
-              <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider">Total sales</p>
+              <p className="font-label-md text-label-md text-on-surface-variant text-xs uppercase tracking-wider">{t("hqacc.total_sales")}</p>
               <p className="font-headline-md text-headline-md text-ink-deep mt-1">{detail.sales.count.toLocaleString()}</p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded p-5">
@@ -681,7 +683,7 @@ export default function HQAccountDetailClient({ detail, error }: Props) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-surface-base border border-outline-variant p-6 w-full max-w-sm">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-headline-sm text-headline-sm text-ink-deep">Add operator</h3>
+              <h3 className="font-headline-sm text-headline-sm text-ink-deep">{t("hqacc.add_operator")}</h3>
               <button onClick={() => setOpModal(null)} className="text-on-surface-variant hover:text-on-surface">
                 <span className="material-symbols-outlined">close</span>
               </button>

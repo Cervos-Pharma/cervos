@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface QuoteAnswers {
   expectedBranches?: number;
@@ -11,6 +12,7 @@ interface QuoteAnswers {
 }
 
 export default function SupplierQuoteAnswersClient() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const quoteRequestId = searchParams.get("quoteRequestId");
   const [loading, setLoading] = useState(false);
@@ -98,7 +100,7 @@ export default function SupplierQuoteAnswersClient() {
         <div className="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center mx-auto mb-4">
           <span className="material-symbols-outlined text-[32px] text-secondary">check_circle</span>
         </div>
-        <h2 className="font-headline-md text-headline-md text-ink-deep mb-2">Answers Submitted</h2>
+        <h2 className="font-headline-md text-headline-md text-ink-deep mb-2">{t("supq.answers_submitted")}</h2>
         <p className="font-body-md text-on-surface-variant mb-6">
           Thank you for providing this information. The Cervos HQ team will review your answers and be in touch soon.
         </p>

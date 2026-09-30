@@ -10,8 +10,10 @@ import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
 import HQSidebarServer from "@/components/HQSidebarServer";
 import { listHQAdmins } from "@/lib/actions/hq";
 import HQTeamClient from "./HQTeamClient";
+import { getT } from "@/lib/i18n/server";
 
 export default async function HQTeamPage() {
+  const t = await getT();
   const cookieStore = await cookies();
   if (!isValidHQToken(cookieStore.get(HQ_COOKIE_NAME)?.value)) redirect("/hq");
 
@@ -24,9 +26,9 @@ export default async function HQTeamPage() {
         <div className="max-w-5xl">
           <div className="mb-8">
             <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">
-              HQ Console
+              {t("hqnet.console")}
             </p>
-            <h1 className="font-headline-lg text-headline-lg text-ink-deep">HQ Team</h1>
+            <h1 className="font-headline-lg text-headline-lg text-ink-deep">{t("hq.team")}</h1>
           </div>
 
           <HQTeamClient

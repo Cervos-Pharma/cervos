@@ -11,6 +11,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { useTranslation } from '../lib/i18n'
 
 interface DashboardData {
   currency: string
@@ -30,14 +31,15 @@ interface DashboardData {
 const LOW_STOCK_THRESHOLD = 10
 const EXPIRY_DAYS_THRESHOLD = 30
 
-function subscriptionDetail(graceEndsAt: string | null): string {
-  if (!graceEndsAt) return 'No grace deadline'
+function subscriptionDetail(graceEndsAt: string | null, t: (k: string) => string): string {
+  if (!graceEndsAt) return t('dashboard.noGraceDeadline')
   const days = Math.ceil((new Date(graceEndsAt).getTime() - Date.now()) / 86_400_000)
-  if (days < 0) return 'Grace period expired'
-  return `${days} day${days === 1 ? '' : 's'} of grace left`
+  if (days < 0) return t('dashboard.graceExpired')
+  return `${days} ${t('dashboard.graceDaysLeft')}`
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const [data, setData] = useState<DashboardData>({
     currency: 'TZS',
     todayRevenue: 0,
@@ -186,37 +188,37 @@ export default function Dashboard() {
 
   const stats = [
     {
-      label: 'Account branches',
+      label: t('dashboard.accountBranches'),
       value: data.branchCount === null ? '—' : String(data.branchCount),
-      sub: data.branchName ? `This POS: ${data.branchName}` : 'linked branches',
+      sub: data.branchName ? `${t('dashboard.thisPos')}: ${data.branchName}` : t('dashboard.linkedBranches'),
     },
     {
-      label: "Today's revenue",
+      label: t('dashboard.todayRevenue'),
       value: `TZS ${data.todayRevenue.toLocaleString()}`,
-      sub: `${data.todaySales} sales`,
+      sub: `${data.todaySales} ${t('dashboard.salesCount')}`,
     },
     {
-      label: 'Pending sync',
+      label: t('dashboard.pendingSync'),
       value: String(data.pendingSync),
-      sub: 'offline changes',
+      sub: t('dashboard.offlineChanges'),
       alert: data.pendingSync > 0,
     },
     {
-      label: 'Low stock',
+      label: t('dashboard.lowStock'),
       value: String(data.lowStock),
-      sub: `< ${LOW_STOCK_THRESHOLD} units`,
+      sub: `< ${LOW_STOCK_THRESHOLD} ${t('dashboard.unitsBelow')}`,
       alert: data.lowStock > 0,
     },
     {
-      label: 'Expiring soon',
+      label: t('dashboard.expiringSoon'),
       value: String(data.expiringSoon),
-      sub: `< ${EXPIRY_DAYS_THRESHOLD} days`,
+      sub: `< ${EXPIRY_DAYS_THRESHOLD} ${t('dashboard.days')}`,
       alert: data.expiringSoon > 0,
     },
     {
-      label: 'Subscription',
+      label: t('dashboard.subscription'),
       value: data.subscriptionStatus ? data.subscriptionStatus.replace(/_/g, ' ') : '—',
-      sub: subscriptionDetail(data.graceEndsAt),
+      sub: subscriptionDetail(data.graceEndsAt, t),
       alert: data.subscriptionStatus === 'grace' || data.subscriptionStatus === 'locked',
     },
   ]
@@ -225,7 +227,7 @@ export default function Dashboard() {
     <div className="p-6 flex flex-col gap-4">
       {data.dataWarning && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm">
-          {data.dataWarning} Showing the latest locally stored branch data.
+          {data.dataWarning} {t('dashboard.dataWarningSuffix')}
         </div>
       )}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -252,7 +254,7 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-surface-base border border-outline-variant rounded-xl p-5">
           <h3 className="font-headline font-bold text-on-surface mb-4">
-            Revenue - last 7 days
+            {t('dashboard.revenue7days')}
           </h3>
           <div style={{ height: 180 }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -263,7 +265,7 @@ export default function Dashboard() {
                 <Tooltip
                   formatter={(value: number) => [
                     `TZS ${value.toLocaleString()}`,
-                    'Revenue',
+                    t('dashboard.revenue'),
                   ]}
                 />
                 <Line
@@ -280,7 +282,7 @@ export default function Dashboard() {
 
         <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
           <h3 className="font-headline font-bold text-on-surface mb-4">
-            Quick actions
+            {t('dashboard.quickActions')}
           </h3>
           <div className="space-y-2">
             <Link
@@ -290,7 +292,7 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-primary">
                 point_of_sale
               </span>
-              <span className="text-sm font-medium">Open POS Terminal</span>
+              <span className="text-sm font-medium">{t('dashboard.openPos')}</span>
             </Link>
             <Link
               to="/inventory"
@@ -299,7 +301,7 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-primary">
                 inventory_2
               </span>
-              <span className="text-sm font-medium">Manage Inventory</span>
+              <span className="text-sm font-medium">{t('dashboard.manageInventory')}</span>
             </Link>
             <Link
               to="/settings"
@@ -308,7 +310,7 @@ export default function Dashboard() {
               <span className="material-symbols-outlined text-primary">
                 settings
               </span>
-              <span className="text-sm font-medium">Settings</span>
+              <span className="text-sm font-medium">{t('dashboard.viewSettings')}</span>
             </Link>
           </div>
         </div>

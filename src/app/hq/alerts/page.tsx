@@ -1,11 +1,13 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getT } from "@/lib/i18n/server";
 import Link from "next/link";
 import HQSidebarServer from "@/components/HQSidebarServer";
 import { getHQAlerts, type HQAlert } from "@/lib/actions/hq";
 import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
 
 export default async function HQAlertsPage() {
+  const t = await getT();
   const cookieStore = await cookies();
   if (!isValidHQToken(cookieStore.get(HQ_COOKIE_NAME)?.value)) redirect("/hq");
 
@@ -54,7 +56,7 @@ export default async function HQAlertsPage() {
           {alerts.length === 0 && !error && (
             <div className="bg-surface-base border border-outline-variant rounded-xl p-16 text-center">
               <span className="material-symbols-outlined text-6xl text-secondary mb-4">verified</span>
-              <h2 className="font-headline-md text-headline-md text-on-surface mb-2">All Clear</h2>
+              <h2 className="font-headline-md text-headline-md text-on-surface mb-2">{t("dash.all_clear")}</h2>
               <p className="font-body-md text-on-surface-variant">No active alerts. Your network is running smoothly.</p>
             </div>
           )}

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { ensureLinked, getAccessToken, runSyncCycle } from '../lib/sync'
 import { open } from '@tauri-apps/plugin-shell'
 import { WEB_URL } from '../lib/web'
+import { useTranslation } from '../lib/i18n'
 
 interface BranchInfo {
   id: string
@@ -27,6 +28,7 @@ function formatTzs(n: number): string {
 }
 
 export default function Subscription() {
+  const { t } = useTranslation()
   const [branch, setBranch] = useState<BranchInfo | null>(null)
   const [plans, setPlans] = useState<Plan[]>([])
   const [branchCount, setBranchCount] = useState(0)
@@ -210,9 +212,9 @@ export default function Subscription() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h1 className="font-headline text-2xl font-black text-on-surface mb-2">POS Subscription</h1>
+      <h1 className="font-headline text-2xl font-black text-on-surface mb-2">{t('subscription.posTitle')}</h1>
       <p className="text-sm text-on-surface-variant mb-6">
-        Manage the pharmacy account plan that covers this POS branch.
+        {t('subscription.posSubtitle')}
       </p>
 
       {error && <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</div>}
@@ -221,8 +223,8 @@ export default function Subscription() {
       <div className="bg-surface-base border border-outline-variant rounded-xl p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Current Plan</p>
-            <p className="font-headline text-3xl font-black text-on-surface mt-1">{branch?.tier || 'No plan yet'}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('subscription.currentPlan')}</p>
+            <p className="font-headline text-3xl font-black text-on-surface mt-1">{branch?.tier || t('subscription.noPlan')}</p>
           </div>
           <span className={`px-3 py-1.5 rounded-full text-sm font-semibold ${statusColor(branch?.status || 'trial')}`}>
             {(branch?.status || 'trial').replace('_', ' ')}
@@ -232,7 +234,7 @@ export default function Subscription() {
         <div className="flex items-center gap-2 p-3 bg-outline-variant/20 rounded-lg mb-3">
           <span className="material-symbols-outlined text-on-surface-variant">store</span>
           <div>
-            <p className="text-sm font-medium text-on-surface">Branches on this account</p>
+            <p className="text-sm font-medium text-on-surface">{t('subscription.branchesOnAccount')}</p>
             <p className="text-xs text-on-surface-variant">{branchCount}</p>
           </div>
         </div>
@@ -240,9 +242,9 @@ export default function Subscription() {
         <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg mb-3">
           <span className="material-symbols-outlined text-primary">domain</span>
           <div>
-            <p className="text-sm font-medium text-on-surface">Linked pharmacy account</p>
+            <p className="text-sm font-medium text-on-surface">{t('subscription.linkedAccount')}</p>
             <p className="text-xs text-on-surface-variant">
-              {accountName ?? 'Account name unavailable'}{branchName ? ` · Branch: ${branchName}` : ''}
+              {accountName ?? t('subscription.accountUnavailable')}{branchName ? ` · ${t('subscription.branch')}: ${branchName}` : ''}
             </p>
           </div>
         </div>
@@ -251,7 +253,7 @@ export default function Subscription() {
           <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
             <span className="material-symbols-outlined text-primary">schedule</span>
             <div>
-              <p className="text-sm font-medium text-on-surface">Trial period</p>
+              <p className="text-sm font-medium text-on-surface">{t('subscription.trialPeriod')}</p>
               <p className="text-xs text-on-surface-variant">{countdown(branch.trial_ends_at)}</p>
             </div>
           </div>
@@ -261,7 +263,7 @@ export default function Subscription() {
           <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg">
             <span className="material-symbols-outlined text-amber-700">warning</span>
             <div>
-              <p className="text-sm font-medium text-on-surface">Grace period</p>
+              <p className="text-sm font-medium text-on-surface">{t('subscription.gracePeriod')}</p>
               <p className="text-xs text-on-surface-variant">{countdown(branch.grace_ends_at)}</p>
             </div>
           </div>
@@ -271,7 +273,7 @@ export default function Subscription() {
           <input
             value={wallet}
             onChange={(e) => setWallet(e.target.value)}
-            placeholder="Mobile money number (0712 345 678)"
+            placeholder={t('subscription.mmPlaceholder')}
             className="w-full px-3 py-2 border border-outline-variant rounded-lg text-sm"
           />
           <button
@@ -279,12 +281,12 @@ export default function Subscription() {
             className="flex items-center justify-center gap-2 w-full py-3 rounded-lg border border-outline-variant text-on-surface font-semibold hover:bg-outline-variant/20"
           >
             <span className="material-symbols-outlined">open_in_new</span>
-            Manage Plan & Payment on the Web Portal
+            {t('subscription.manageOnWeb')}
           </button>
         </div>
       </div>
 
-      <h2 className="font-headline text-xl font-bold text-on-surface mb-4">Available Plans</h2>
+      <h2 className="font-headline text-xl font-bold text-on-surface mb-4">{t('subscription.availablePlans')}</h2>
       <div className="grid grid-cols-2 gap-4">
         {plans.map((plan) => {
           const isCurrent = plan.name === branch?.tier
@@ -330,26 +332,26 @@ export default function Subscription() {
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               <span className="material-symbols-outlined text-sm text-on-surface-variant">schedule</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">Coming Soon</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">{t('marketplace.comingSoon')}</span>
             </div>
             <p className="font-headline text-lg font-bold text-on-surface">Growth & Enterprise</p>
-            <p className="text-sm font-semibold text-on-surface-variant my-2">Future Tiers</p>
+            <p className="text-sm font-semibold text-on-surface-variant my-2">{t('marketplace.futureTiers')}</p>
             <p className="text-xs text-on-surface-variant mb-3">
-              Higher multi-branch enterprise plans are deferred to upcoming releases.
+              {t('subscription.deferredNote')}
             </p>
             <ul className="space-y-1">
               <li className="flex items-center gap-2 text-xs text-on-surface-variant">
                 <span className="material-symbols-outlined text-xs text-on-surface-variant">arrow_forward</span>
-                Multi-branch expansion
+                {t('subscription.multiBranch')}
               </li>
               <li className="flex items-center gap-2 text-xs text-on-surface-variant">
                 <span className="material-symbols-outlined text-xs text-on-surface-variant">arrow_forward</span>
-                Unlimited supplier linkages
+                {t('subscription.unlimitedSuppliers')}
               </li>
             </ul>
           </div>
           <p className="mt-4 text-[11px] text-on-surface-variant font-medium">
-            Contact HQ for early custom rollout
+            {t('subscription.contactHq')}
           </p>
         </div>
       </div>
