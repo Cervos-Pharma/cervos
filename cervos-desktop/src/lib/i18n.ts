@@ -16,6 +16,26 @@ export const translations: Record<Locale, Record<string, string>> = {
     // POS page
 
     // Inventory page
+    'inventory.adjustStock': 'Adjust Stock',
+    'inventory.adjustTitle': 'Adjust Batch Stock',
+    'inventory.adjustCurrent': 'Current stock',
+    'inventory.adjustAdd': 'Add',
+    'inventory.adjustRemove': 'Remove',
+    'inventory.adjustSet': 'Set exact count',
+    'inventory.adjustAmount': 'Amount',
+    'inventory.adjustNewQty': 'New quantity',
+    'inventory.adjustReason': 'Reason',
+    'inventory.adjustReasonPh': 'Why are you adjusting? (e.g. damaged items)',
+    'inventory.adjustReasonDamaged': 'Damaged goods',
+    'inventory.adjustReasonExpired': 'Expired stock',
+    'inventory.adjustReasonCount': 'Stock count correction',
+    'inventory.adjustReasonRestock': 'Extra restock',
+    'inventory.adjustReasonReturn': 'Customer return',
+    'inventory.adjustConfirm': 'Save Adjustment',
+    'inventory.adjustCancel': 'Cancel',
+    'inventory.adjustDone': 'Stock adjusted',
+    'inventory.adjustNewTotal': 'New total',
+    'inventory.adjust': 'Adjust',
 
     // Reports page
 
@@ -521,6 +541,27 @@ export const translations: Record<Locale, Record<string, string>> = {
 
     // Misc page strings
     'inventory.noProducts': 'Hakuna dawa iliyopatikana',
+    // Stock adjustment feature
+    'inventory.adjustStock': 'Rekebisha Hisa',
+    'inventory.adjustTitle': 'Rekebisha Hisa ya Fungo',
+    'inventory.adjustCurrent': 'Hisa ya sasa',
+    'inventory.adjustAdd': 'Ongeza',
+    'inventory.adjustRemove': 'Punguza',
+    'inventory.adjustSet': 'Weka idadi kamili',
+    'inventory.adjustAmount': 'Idadi',
+    'inventory.adjustNewQty': 'Hisa mpya',
+    'inventory.adjustReason': 'Sababu',
+    'inventory.adjustReasonPh': 'Kwa nini unarekebisha? (mf. dawa zilizoharibika)',
+    'inventory.adjustReasonDamaged': 'Dawa zilizoharibika',
+    'inventory.adjustReasonExpired': 'Dawa zilizopitwa na muda',
+    'inventory.adjustReasonCount': 'Makadirio ya hesabu ya mwisho',
+    'inventory.adjustReasonRestock': 'Marejesho ya ziada',
+    'inventory.adjustReasonReturn': 'Mauzo yaliyorejeshwa',
+    'inventory.adjustConfirm': 'Hifadhi Rekebisho',
+    'inventory.adjustCancel': 'Ghairi',
+    'inventory.adjustDone': 'Hisa imerekebishwa',
+    'inventory.adjustNewTotal': 'Hisa mpya kwa jumla',
+    'inventory.adjust': 'Rekebisha',
     'inventory.productCol': 'Dawa',
     'inventory.costCol': 'Bei ya Kununua',
     'shifts.activeShift': 'Zamu Inayoendelea',

@@ -110,6 +110,68 @@ export default function Inventory() {
     return matchesSearch && matchesCategory;
   });
 
+  /**
+   * Persist a stock adjustment for one batch: update the local DB, mirror the
+   * new quantity to the cloud (update op), and log the reason for the audit
+   * trail. Works fully offline — the sync engine pushes the change later.
+   */
+  async function handleAdjustBatch(
+    batch: Batch,
+    mode: 'add' | 'remove' | 'set',
+    amount: number,
+    reason: string
+  ) {
+    if (!branchId) return;
+    const newQty =
+      mode === 'set' ? amount : mode === 'add' ? batch.quantity + amount : Math.max(0, batch.quantity - amount);
+
+    await executeDb(`UPDATE batches SET quantity = ?, updated_at = ? WHERE id = ?`, [
+      newQty,
+      nowIso(),
+      batch.id,
+    ]);
+    await queueForSync("batches", batch.id, "update", {
+      id: batch.id,
+      branch_id: branchId,
+      product_id: batch.product_id,
+      batch_number: (batch as any).batch_number ?? null,
+      quantity: newQty,
+      cost_price: batch.cost_price,
+      sale_price: batch.sale_price,
+      expiry_date: batch.expiry_date ?? null,
+      updated_at: nowIso(),
+    });
+    // Audit trail row so HQ can see who adjusted what and why.
+    const logId = generateId();
+    const detail = {
+      product_id: batch.product_id,
+      mode,
+      amount,
+      old_quantity: batch.quantity,
+      new_quantity: newQty,
+      reason: reason || null,
+    };
+    await executeDb(
+      `INSERT INTO activity_log (id, branch_id, action, entity_type, entity_id, detail, created_at) VALUES (?,?,?,?,?,?,?)`,
+      [logId, branchId, 'stock_adjustment', 'batch', batch.id, JSON.stringify(detail), nowIso()]
+    );
+    await queueForSync("activity_log", logId, "insert", {
+      id: logId,
+      branch_id: branchId,
+      action: 'stock_adjustment',
+      entity_type: 'batch',
+      entity_id: batch.id,
+      detail,
+      created_at: nowIso(),
+    });
+
+    // Refresh the detail view so the new quantity shows immediately.
+    if (viewingProduct) {
+      await loadProductDetails(viewingProduct);
+    }
+    await loadData();
+  }
+
   function handleProductClick(product: Product) {
     if (isAdmin && permissions.canEditInventory) {
       setEditingProduct(product);
@@ -294,12 +356,25 @@ export default function Inventory() {
                   </td>
                   {isAdmin && (
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setEditingProduct(product)}
-                        className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
-                      >
-                        <span className="material-symbols-outlined">edit</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => {
+                            loadProductDetails(product);
+                            setViewingProduct(product);
+                          }}
+                          title={t('inventory.adjustStock')}
+                          className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
+                        >
+                          <span className="material-symbols-outlined">visibility</span>
+                        </button>
+                        <button
+                          onClick={() => setEditingProduct(product)}
+                          title={t('inventory.editProduct')}
+                          className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
+                        >
+                          <span className="material-symbols-outlined">edit</span>
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -321,6 +396,7 @@ export default function Inventory() {
           product={viewingProduct}
           batches={productBatches}
           sales={productSales}
+          onAdjustBatch={handleAdjustBatch}
           onClose={() => {
             setViewingProduct(null);
             setProductBatches([]);
@@ -1091,10 +1167,12 @@ interface ProductDetailModalProps {
   batches: Batch[];
   sales: any[];
   onClose: () => void;
+  onAdjustBatch: (batch: Batch, mode: 'add' | 'remove' | 'set', amount: number, reason: string) => void;
 }
 
-function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailModalProps) {
+function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch }: ProductDetailModalProps) {
   const { t } = useTranslation();
+  const [adjustingBatch, setAdjustingBatch] = useState<Batch | null>(null);
   const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
   const totalSales = sales.reduce((sum, s) => sum + (s.quantity || 0), 0);
 
@@ -1159,12 +1237,13 @@ function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailM
                     <th className="px-4 py-2 text-right">{t('inventory.qtyCol')}</th>
                     <th className="px-4 py-2 text-right">{t('inventory.costCol')}</th>
                     <th className="px-4 py-2 text-right">{t('inventory.priceCol')}</th>
+                    <th className="px-4 py-2 text-right">{t('inventory.adjust')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {batches.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-6 text-center text-on-surface-variant">{t('inventory.batches')}: 0</td>
+                      <td colSpan={6} className="px-4 py-6 text-center text-on-surface-variant">{t('inventory.batches')}: 0</td>
                     </tr>
                   ) : (
                     batches.map((batch) => (
@@ -1174,6 +1253,14 @@ function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailM
                         <td className={`px-4 py-2 text-right font-semibold ${batch.quantity <= 10 ? 'text-error' : ''}`}>{batch.quantity}</td>
                         <td className="px-4 py-2 text-right">TZS ${batch.cost_price.toLocaleString()}</td>
                         <td className="px-4 py-2 text-right">TZS ${batch.sale_price.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right">
+                          <button
+                            onClick={() => setAdjustingBatch(batch)}
+                            className="px-2 py-1 rounded-md text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                          >
+                            {t('inventory.adjust')}
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1210,6 +1297,165 @@ function ProductDetailModal({ product, batches, sales, onClose }: ProductDetailM
             </div>
           )}
         </div>
+
+        {adjustingBatch && (
+          <StockAdjustModal
+            batch={adjustingBatch}
+            onClose={() => setAdjustingBatch(null)}
+            onSave={(mode, amount, reason) => {
+              onAdjustBatch(adjustingBatch, mode, amount, reason);
+              setAdjustingBatch(null);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface StockAdjustModalProps {
+  batch: Batch;
+  onClose: () => void;
+  /** Called with (+delta) or an absolute set-quantity plus the reason. */
+  onSave: (mode: 'add' | 'remove' | 'set', amount: number, reason: string) => void;
+}
+
+const ADJUST_REASONS = [
+  'inventory.adjustReasonDamaged',
+  'inventory.adjustReasonExpired',
+  'inventory.adjustReasonCount',
+  'inventory.adjustReasonRestock',
+  'inventory.adjustReasonReturn',
+] as const;
+
+/** Full-screen modal (scrollable, phone-friendly) to adjust one batch's stock. */
+function StockAdjustModal({ batch, onClose, onSave }: StockAdjustModalProps) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState<'add' | 'remove' | 'set'>('add');
+  const [amount, setAmount] = useState('');
+  const [reason, setReason] = useState('');
+
+  const amountN = parseInt(amount, 10) || 0;
+  const newTotal =
+    mode === 'set' ? amountN : mode === 'add' ? batch.quantity + amountN : Math.max(0, batch.quantity - amountN);
+  const valid =
+    mode === 'set' ? amountN >= 0 && amountN !== batch.quantity : amountN > 0;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid) return;
+    onSave(mode, amountN, reason.trim());
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-6 pb-4 shrink-0">
+          <h2 className="font-headline text-lg font-bold text-on-surface">
+            {t('inventory.adjustTitle')}
+          </h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-outline-variant transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-4">
+            <div className="flex items-center justify-between bg-surface p-3 rounded-lg border border-outline-variant">
+              <div>
+                <p className="text-sm font-semibold text-on-surface">{(batch as any).batch_number || batch.id.slice(0, 8)}</p>
+                {batch.expiry_date && (
+                  <p className="text-xs text-on-surface-variant">{t('inventory.expiry')}: {new Date(batch.expiry_date).toLocaleDateString()}</p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-on-surface-variant">{t('inventory.adjustCurrent')}</p>
+                <p className="font-headline text-xl font-black text-on-surface">{batch.quantity}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 p-1 bg-surface rounded-lg border border-outline-variant">
+              {(['add', 'remove', 'set'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => { setMode(m); setAmount(''); }}
+                  className={`px-2 py-2 rounded-md text-sm font-semibold transition-colors ${
+                    mode === m ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-outline-variant/40'
+                  }`}
+                >
+                  {m === 'add' ? t('inventory.adjustAdd') : m === 'remove' ? t('inventory.adjustRemove') : t('inventory.adjustSet')}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+                {mode === 'set' ? t('inventory.adjustNewQty') : t('inventory.adjustAmount')} *
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-white text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder={mode === 'set' ? String(batch.quantity) : '0'}
+                required
+                autoFocus
+              />
+              {valid && (
+                <p className="text-xs text-on-surface-variant mt-1">
+                  {t('inventory.adjustNewTotal')}: <span className="font-semibold text-on-surface">{newTotal}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t('inventory.adjustReason')}</label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {ADJUST_REASONS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setReason(t(key))}
+                    className={`px-2 py-1 rounded-full text-xs border transition-colors ${
+                      reason === t(key)
+                        ? 'bg-primary/10 border-primary text-primary font-semibold'
+                        : 'border-outline-variant text-on-surface-variant hover:bg-outline-variant/30'
+                    }`}
+                  >
+                    {t(key)}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-white text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                placeholder={t('inventory.adjustReasonPh')}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 p-6 pt-2 border-t border-outline-variant shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 rounded-lg border border-outline-variant text-on-surface-variant font-semibold hover:bg-outline-variant/30 transition-colors"
+            >
+              {t('inventory.adjustCancel')}
+            </button>
+            <button
+              type="submit"
+              disabled={!valid}
+              className="flex-1 px-4 py-2.5 rounded-lg bg-primary text-on-primary font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {t('inventory.adjustConfirm')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
