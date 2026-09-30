@@ -4,10 +4,12 @@ import { useAuth } from '../lib/hooks'
 import { queryDb } from '../lib/database'
 import { fetchOperators, validateOperatorPin, fetchBranchSubscription } from '../lib/queries'
 import type { Operator, OperatorRole } from '../types'
+import { useTranslation } from '../lib/i18n'
 import Logo from '../components/Logo'
 
 export default function Login() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { setOperator } = useAuth()
   const [operators, setOperators] = useState<Operator[]>([])
   const [selectedRole, setSelectedRole] = useState<OperatorRole>('operator')
@@ -53,7 +55,7 @@ export default function Login() {
     try {
       const op = await validateOperatorPin(selectedOperator.id, pin)
       if (!op) {
-        setError('Invalid PIN')
+        setError(t('login.invalidPin'))
         return
       }
 
@@ -63,8 +65,8 @@ export default function Login() {
       if (sub && sub.subscription_status === 'locked') {
         setLockedReason(
           sub.locked_reason === 'max_branches_exceeded'
-            ? "This branch isn't covered by your current plan. Upgrade your subscription to restore POS access here."
-            : 'Upgrade your subscription for desktop POS access.'
+            ? t('login.branchNotCovered')
+            : t('login.upgradeDesktop')
         )
         setBlocked(true)
         return
@@ -88,7 +90,7 @@ export default function Login() {
         navigate('/pos')
       }
     } catch (err: any) {
-      setError(err.message || 'Login failed')
+      setError(err.message || t('login.failed'))
     } finally {
       setLoading(false)
     }
@@ -102,17 +104,17 @@ export default function Login() {
             <Logo size="lg" className="mx-auto" />
           </div>
           <h1 className="text-2xl font-display font-bold text-on-surface mb-2">
-            {lockedReason ? 'Upgrade Required' : 'Subscription Inactive'}
+            {lockedReason ? t('login.upgradeRequired') : t('login.subscriptionInactive')}
           </h1>
           <p className="text-gray-400 mb-6">
-            {lockedReason || 'Your subscription is inactive or past due. Please update your payment method to continue.'}
+            {lockedReason || t('login.subscriptionInactiveMsg')}
           </p>
           <Link
             to="/settings"
             className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
           >
             <span className="material-symbols-outlined">payments</span>
-            Update Payment
+            {t('login.updatePayment')}
           </Link>
         </div>
       </div>
@@ -126,8 +128,8 @@ export default function Login() {
           <div className="w-16 h-16 mx-auto mb-4">
             <Logo size="lg" className="mx-auto" />
           </div>
-          <h1 className="text-3xl font-display font-bold text-on-surface mb-2">Cervos POS</h1>
-          <p className="text-on-surface-variant">Choose your role and enter your PIN</p>
+          <h1 className="text-3xl font-display font-bold text-on-surface mb-2">{t('login.title')}</h1>
+          <p className="text-on-surface-variant">{t('login.chooseRole')}</p>
         </div>
 
         <div className="bg-surface-base border border-outline-variant rounded-xl p-8 shadow-sm">
@@ -150,7 +152,7 @@ export default function Login() {
                   }`}
                 >
                   <span className="material-symbols-outlined text-lg">badge</span>
-                  Operator
+                  {t('login.operator')}
                 </button>
                 <button
                   type="button"
@@ -167,7 +169,7 @@ export default function Login() {
                   }`}
                 >
                   <span className="material-symbols-outlined text-lg">admin_panel_settings</span>
-                  Admin
+                  {t('login.admin')}
                 </button>
               </div>
 
@@ -180,7 +182,7 @@ export default function Login() {
               {filteredOperators.length === 0 ? (
                 <div className="text-center py-6 text-on-surface-variant text-sm">
                   <span className="material-symbols-outlined text-3xl mb-2 text-on-surface-variant/70">person_off</span>
-                  <p>No {selectedRole === 'admin' ? 'Admin' : 'Operator'} profiles registered for this branch.</p>
+                  <p>{t('login.noProfiles').replace('profiles', selectedRole === 'admin' ? 'Admin' : 'Operator')}</p>
                   <p className="text-xs text-on-surface-variant/70 mt-1">
                     Manage operators in the web dashboard or switch role above.
                   </p>
@@ -189,8 +191,8 @@ export default function Login() {
                 <form onSubmit={handlePinSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-semibold text-on-surface-variant mb-2">
-                      {selectedRole === 'admin' ? 'Admin Account' : 'Operator Account'}
-                    </label>
+                    {selectedRole === 'admin' ? t('login.adminAccount') : t('login.operatorAccount')}
+                  </label>
                     <select
                       value={selectedOperator?.id || ''}
                       onChange={(e) => {
@@ -201,7 +203,7 @@ export default function Login() {
                       required
                       className="w-full px-4 py-3 bg-surface border border-outline-variant rounded-lg text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     >
-                      <option value="">Select profile</option>
+                      <option value="">{t('login.selectProfile')}</option>
                       {filteredOperators.map((op) => (
                         <option key={op.id} value={op.id}>
                           {op.name}
@@ -213,7 +215,7 @@ export default function Login() {
                   {selectedOperator && (
                     <div>
                       <label className="block text-sm font-semibold text-on-surface-variant mb-2">
-                        Enter PIN
+                        {t('login.enterPinLabel')}
                       </label>
                       <input
                         type="password"
@@ -223,7 +225,7 @@ export default function Login() {
                         required
                         maxLength={8}
                         className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                        placeholder="Enter your assigned PIN"
+                        placeholder={t('login.enterPin')}
                         autoFocus
                       />
                     </div>
@@ -234,7 +236,7 @@ export default function Login() {
                     disabled={loading || !selectedOperator || !pin}
                     className="w-full py-3 bg-primary text-white rounded-lg font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
-                    {loading ? 'Signing in...' : `Sign In as ${selectedRole === 'admin' ? 'Admin' : 'Operator'}`}
+                    {loading ? t('login.signingIn') : selectedRole === 'admin' ? t('login.signInAsAdmin') : t('login.signInAsOperator')}
                   </button>
                 </form>
               )}
@@ -244,7 +246,7 @@ export default function Login() {
               <span className="material-symbols-outlined text-4xl text-on-surface-variant animate-spin">
                 progress_activity
               </span>
-              <p className="mt-2 text-on-surface-variant">Loading accounts...</p>
+              <p className="mt-2 text-on-surface-variant">{t('login.loadingAccounts')}</p>
             </div>
           )}
         </div>

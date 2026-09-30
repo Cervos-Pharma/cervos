@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import HQSidebarServer from "@/components/HQSidebarServer";
 import HQAuditClient from "./HQAuditClient";
 import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
+import { getT } from "@/lib/i18n/server";
 
 export default async function HQAudiPage() {
+  const t = await getT();
   const cookieStore = await cookies();
   if (!isValidHQToken(cookieStore.get(HQ_COOKIE_NAME)?.value)) redirect("/hq");
 
@@ -21,9 +23,9 @@ export default async function HQAudiPage() {
         <div className="max-w-7xl">
           <div className="mb-8">
             <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">
-              HQ Console
+              {t("hqnet.console")}
             </p>
-            <h1 className="font-headline-lg text-headline-lg text-ink-deep">Audit Log</h1>
+            <h1 className="font-headline-lg text-headline-lg text-ink-deep">{t("hq.audit_log")}</h1>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
               God-mode view of every admin action across the entire network.
             </p>

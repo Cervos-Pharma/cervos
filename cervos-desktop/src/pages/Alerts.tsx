@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { queryDb, executeDb } from '../lib/database'
 import { useAuthStore } from '../lib/store'
 import { getSupabase } from '../lib/sync'
+import { useTranslation } from '../lib/i18n'
 
 interface SubscriptionInfo {
   status: string
@@ -22,6 +23,7 @@ interface LocalNotification {
 }
 
 export default function Alerts() {
+  const { t } = useTranslation()
   const { isAdmin, isAuthenticated } = useAuthStore()
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null)
   const [showBanner, setShowBanner] = useState(false)
@@ -76,7 +78,7 @@ export default function Alerts() {
       const daysLeft = graceEnd.getTime() - now.getTime()
       if (daysLeft <= THREE_DAYS && daysLeft > 0) {
         setShowBanner(true)
-        setBannerMessage(`Your account is at risk of being locked. Contact your administrator to renew the subscription. (${Math.ceil(daysLeft / (24 * 60 * 60 * 1000))} days remaining)`)
+        setBannerMessage(t('alerts.lockWarning').replace('{days}', String(Math.ceil(daysLeft / (24 * 60 * 60 * 1000)))))
       }
     }
 
@@ -85,7 +87,7 @@ export default function Alerts() {
       const daysLeft = trialEnd.getTime() - now.getTime()
       if (daysLeft <= THREE_DAYS && daysLeft > 0) {
         setShowBanner(true)
-        setBannerMessage(`Your trial ends in ${Math.ceil(daysLeft / (24 * 60 * 60 * 1000))} days. Contact your administrator to subscribe.`)
+        setBannerMessage(t('alerts.trialWarning').replace('{days}', String(Math.ceil(daysLeft / (24 * 60 * 60 * 1000)))))
       }
     }
   }
@@ -95,14 +97,14 @@ export default function Alerts() {
   return (
     <div className="p-6">
       <h1 className="font-headline text-2xl font-black text-on-surface mb-6">
-        Alerts
+        {t('nav.alerts')}
       </h1>
 
       {showBanner && !isAdmin && (
         <div className="mb-6 p-4 bg-error/10 border border-error/30 rounded-xl flex items-start gap-3">
           <span className="material-symbols-outlined text-error text-xl">warning</span>
           <div>
-            <p className="font-semibold text-error">Account at Risk</p>
+            <p className="font-semibold text-error">{t('alerts.accountAtRisk')}</p>
             <p className="text-sm text-on-surface mt-1">{bannerMessage}</p>
           </div>
         </div>
@@ -112,7 +114,7 @@ export default function Alerts() {
         <div className="bg-surface-base border border-outline-variant rounded-xl p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-headline text-lg font-bold text-on-surface">
-              Branch Subscription Status
+              {t('alerts.subscriptionStatus')}
             </h2>
             <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
               subscription.status === 'active' ? 'bg-secondary/10 text-secondary' :
@@ -125,24 +127,24 @@ export default function Alerts() {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-on-surface-variant">Plan Tier</span>
+              <span className="text-sm text-on-surface-variant">{t('alerts.planTier')}</span>
               <span className="text-sm font-semibold capitalize text-on-surface">{subscription.tier || 'Standard'}</span>
             </div>
             {subscription.trial_ends_at && (
               <div className="flex items-center justify-between">
-                <span className="text-sm text-on-surface-variant">Trial Ends</span>
+                <span className="text-sm text-on-surface-variant">{t('alerts.trialEnds')}</span>
                 <span className="text-sm font-medium">{new Date(subscription.trial_ends_at).toLocaleDateString()}</span>
               </div>
             )}
             {subscription.grace_ends_at && (
               <div className="flex items-center justify-between">
-                <span className="text-sm text-on-surface-variant">Grace Period Ends</span>
+                <span className="text-sm text-on-surface-variant">{t('alerts.graceEnds')}</span>
                 <span className="text-sm font-medium">{new Date(subscription.grace_ends_at).toLocaleDateString()}</span>
               </div>
             )}
             {subscription.status !== 'active' && !isAdmin && (
               <p className="text-xs text-on-surface-variant pt-2 border-t border-outline-variant/60">
-                Contact your pharmacy administrator if subscription updates or renewals are needed.
+                {t('alerts.contactAdminRenew')}
               </p>
             )}
           </div>
@@ -152,23 +154,23 @@ export default function Alerts() {
       {!showBanner && isAdmin && (
         <div className="mt-6 text-center text-on-surface-variant">
           <span className="material-symbols-outlined text-5xl">check_circle</span>
-          <p className="mt-2 font-medium">No active alerts</p>
-          <p className="text-sm">Your subscription is in good standing</p>
+          <p className="mt-2 font-medium">{t('alerts.noActiveAlerts')}</p>
+          <p className="text-sm">{t('alerts.goodStanding')}</p>
         </div>
       )}
 
       {!showBanner && !isAdmin && notifications.length === 0 && (
         <div className="mt-6 text-center text-on-surface-variant">
           <span className="material-symbols-outlined text-5xl">notifications_off</span>
-          <p className="mt-2 font-medium">No alerts</p>
-          <p className="text-sm">You're all caught up</p>
+          <p className="mt-2 font-medium">{t('alerts.noAlerts')}</p>
+          <p className="text-sm">{t('alerts.allCaughtUp')}</p>
         </div>
       )}
 
       {notifications.filter((n) => isAdmin || !n.admin_only).length > 0 && (
         <div className="mt-6 bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
           <h2 className="font-headline text-lg font-bold text-on-surface p-5 pb-3">
-            Notifications from your pharmacy
+            {t('alerts.fromPharmacy')}
           </h2>
           <ul className="divide-y divide-outline-variant/60">
             {notifications

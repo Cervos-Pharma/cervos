@@ -9,6 +9,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/lib/i18n/context";
 import {
   getIntelligenceOverview,
   type IntelligenceOverview,
@@ -118,6 +119,7 @@ export default function HQIntelligenceClient({
   userActivity,
   userActivityError,
 }: Props) {
+  const { t } = useI18n();
   const [period, setPeriod] = useState<Period>(30);
   const [data, setData] = useState<IntelligenceOverview | null>(overview);
   const [loading, setLoading] = useState(false);
@@ -403,7 +405,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Sync Status Distribution</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.sync_status")}</p>
             {syncStatusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -429,7 +431,7 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Avg Sync Frequency</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.avg_sync_freq")}</p>
             <div className="flex items-center justify-center h-[200px]">
               <div className="text-center">
                 <p className="font-headline-lg text-headline-lg text-ink-deep">{syncHealth.avgSyncFrequencyHours}h</p>
@@ -440,7 +442,7 @@ export default function HQIntelligenceClient({
         </div>
 
         <div className="bg-surface-base border border-outline-variant p-6 mb-8">
-          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Branches by Subscription Status</p>
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.branches_by_status")}</p>
           {syncHealth.branchesBySyncStatus.length > 0 ? (
             <div className="flex flex-col gap-2.5">
               {syncHealth.branchesBySyncStatus.map((s) => {
@@ -506,7 +508,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Top Regions by Activity</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.top_regions")}</p>
             {regionData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={regionData} layout="vertical">
@@ -552,7 +554,7 @@ export default function HQIntelligenceClient({
               <p className="font-headline-md text-headline-md text-ink-deep">{engagement.accountsWhoTransactedThisMonth}</p>
             </div>
             <div>
-              <p className="font-body-sm text-on-surface-variant">Avg Orders per Transacting Account</p>
+              <p className="font-body-sm text-on-surface-variant">{t("hqint.avg_orders")}</p>
               <p className="font-headline-md text-headline-md text-ink-deep">{engagement.avgOrdersPerTransactingAccount}</p>
             </div>
           </div>
@@ -609,7 +611,7 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Revenue by Region</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.revenue_region")}</p>
             {revenue.revenueByRegion.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={revenue.revenueByRegion} layout="vertical">
@@ -628,7 +630,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Revenue by Account Type</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.revenue_account")}</p>
             {revenue.revenuePerAccountType.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -718,7 +720,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Status Distribution</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.status_dist")}</p>
             {statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
@@ -744,14 +746,14 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Inventory Health</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.inventory_health")}</p>
             <div className="flex flex-col gap-4">
               <div>
-                <p className="font-body-sm text-on-surface-variant">Avg Batches per Branch</p>
+                <p className="font-body-sm text-on-surface-variant">{t("hqint.avg_batches")}</p>
                 <p className="font-headline-md text-headline-md text-ink-deep">{networkHealth.avgBatchesPerBranch}</p>
               </div>
               <div>
-                <p className="font-body-sm text-on-surface-variant">Avg Products per Branch</p>
+                <p className="font-body-sm text-on-surface-variant">{t("hqint.avg_products")}</p>
                 <p className="font-headline-md text-headline-md text-ink-deep">{networkHealth.avgProductsPerBranch}</p>
               </div>
               <div>
@@ -761,7 +763,7 @@ export default function HQIntelligenceClient({
                 </p>
               </div>
               <div>
-                <p className="font-body-sm text-on-surface-variant">Out of Stock Products</p>
+                <p className="font-body-sm text-on-surface-variant">{t("hqint.oos_products")}</p>
                 <p className={`font-headline-md text-headline-md ${networkHealth.outOfStockProducts > 0 ? "text-error" : "text-ink-deep"}`}>
                   {networkHealth.outOfStockProducts}
                 </p>
@@ -806,7 +808,7 @@ export default function HQIntelligenceClient({
 
         {bi.branchLocations.length > 0 && (
           <div className="bg-surface-base border border-outline-variant p-6 mb-8">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Branch Locations Map</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.branch_map")}</p>
             <BranchMap branches={bi.branchLocations} />
           </div>
         )}
@@ -885,7 +887,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Expiry Risk</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.expiry_risk")}</p>
             <div className="flex flex-col gap-4">
               {[
                 { label: "Expired", value: risk.expired, color: "text-error" },
@@ -913,10 +915,10 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Stock Alerts</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.stock_alerts")}</p>
             <div className="flex flex-col gap-4 mb-4">
               <div className="flex justify-between items-center">
-                <span className="font-body-sm text-on-surface-variant">Out of Stock</span>
+                <span className="font-body-sm text-on-surface-variant">{t("hqint.oos")}</span>
                 <span className={`font-headline-md ${alerts.totalOutOfStock > 0 ? "text-error" : "text-on-surface-variant"}`}>
                   {alerts.totalOutOfStock}
                 </span>
@@ -930,7 +932,7 @@ export default function HQIntelligenceClient({
             </div>
             {alerts.outOfStock.length > 0 && (
               <div className="mt-4 pt-4 border-t border-outline-variant/40">
-                <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">Out of Stock Items</p>
+                <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-2">{t("hqint.oos_items")}</p>
                 {alerts.outOfStock.slice(0, 5).map((item, i) => (
                   <div key={i} className="flex justify-between py-1">
                     <span className="font-body-sm text-on-surface truncate">{item.productName}</span>
@@ -942,7 +944,7 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Top Products by Revenue</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.top_products_rev")}</p>
             {bi.topProductsByRevenue.length === 0 ? (
               <p className="font-body-md text-on-surface-variant">No product data.</p>
             ) : (
@@ -966,7 +968,7 @@ export default function HQIntelligenceClient({
 
         {bi.topProductsByQuantity.length > 0 && (
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Top Products by Units Sold</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.top_products_units")}</p>
             <div className="flex flex-col gap-2">
               {bi.topProductsByQuantity.slice(0, 15).map((p, i) => {
                 const max = bi.topProductsByQuantity[0]?.unitsSold ?? 1;
@@ -1033,7 +1035,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Product Categories by Revenue</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.categories_rev")}</p>
             {categoryChart.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={categoryChart.slice(0, 12)} layout="vertical">
@@ -1048,7 +1050,7 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Regional Revenue</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.regional_rev")}</p>
             {m.regionalBreakdown.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={m.regionalBreakdown.slice(0, 10)} layout="vertical">
@@ -1065,7 +1067,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Supplier Performance</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.supplier_perf")}</p>
             {m.supplierPerformance.length === 0 ? <p className="text-on-surface-variant">No supplier data.</p> : (
               <div className="flex flex-col gap-2">
                 {m.supplierPerformance.slice(0, 12).map((s) => (
@@ -1085,7 +1087,7 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Order Trends</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.order_trends")}</p>
             {m.orderTrends.length > 0 ? (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={m.orderTrends.slice(-30)}>
@@ -1102,7 +1104,7 @@ export default function HQIntelligenceClient({
         </div>
 
         <div className="bg-surface-base border border-outline-variant p-6 mb-8">
-          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Engagement Funnel</p>
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.funnel")}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {m.engagementFunnel.map((f) => (
               <div key={f.stage} className="text-center">
@@ -1123,7 +1125,7 @@ export default function HQIntelligenceClient({
                 <th className="text-left py-2 px-3 text-xs font-semibold text-on-surface-variant">Category</th>
                 <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Units</th>
                 <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Revenue</th>
-                <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Avg Price</th>
+                <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">{t("hqint.avg_price")}</th>
                 <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Orders</th>
               </tr></thead>
               <tbody className="divide-y divide-outline-variant/30">
@@ -1203,7 +1205,7 @@ export default function HQIntelligenceClient({
           </div>
 
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Expiry Distribution</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.expiry_dist")}</p>
             {l.stockAlertsSummary.expiringBatches.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={l.stockAlertsSummary.expiringBatches}>
@@ -1253,7 +1255,7 @@ export default function HQIntelligenceClient({
         </div>
 
         <div className="bg-surface-base border border-outline-variant p-6 mb-8">
-          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Reorder Recommendations</p>
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.reorder")}</p>
           {l.reorderRecommendations.filter((r) => r.urgency !== "ok").length === 0 ? (
             <p className="text-on-surface-variant">No reorder recommendations.</p>
           ) : (
@@ -1262,10 +1264,10 @@ export default function HQIntelligenceClient({
                 <thead><tr className="border-b border-outline-variant">
                   <th className="text-left py-2 px-3 text-xs font-semibold text-on-surface-variant">Product</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-on-surface-variant">Category</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Daily Use</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">{t("hqint.daily_use")}</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Stock</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Days Left</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Reorder Pt</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">{t("hqint.days_left")}</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">{t("hqint.reorder_pt")}</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Urgency</th>
                 </tr></thead>
                 <tbody className="divide-y divide-outline-variant/30">
@@ -1348,7 +1350,7 @@ export default function HQIntelligenceClient({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-surface-base border border-outline-variant p-6">
-            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">Operator Roles</p>
+            <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.operator_roles")}</p>
             {u.operatorStats.byRole.length === 0 ? <p className="text-on-surface-variant">No operator data.</p> : (
               <div className="flex flex-col gap-3">
                 {u.operatorStats.byRole.map((r) => (
@@ -1404,7 +1406,7 @@ export default function HQIntelligenceClient({
         </div>
 
         <div className="bg-surface-base border border-outline-variant p-6">
-          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">User Activity Trail</p>
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-4">{t("hqint.activity_trail")}</p>
           {u.userActivityTrail.length === 0 ? <p className="text-on-surface-variant">No user activity recorded.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -1414,7 +1416,7 @@ export default function HQIntelligenceClient({
                   <th className="text-left py-2 px-3 text-xs font-semibold text-on-surface-variant">Branch</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-on-surface-variant">Role</th>
                   <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Actions</th>
-                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">Last Seen</th>
+                  <th className="text-right py-2 px-3 text-xs font-semibold text-on-surface-variant">{t("hqint.last_seen")}</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-on-surface-variant">Recent</th>
                 </tr></thead>
                 <tbody className="divide-y divide-outline-variant/30">
@@ -1512,28 +1514,28 @@ export default function HQIntelligenceClient({
     return (
       <>
         <div className="bg-surface-base border border-outline-variant rounded-xl p-6 mb-8">
-          <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">Generate Intelligence Report</h2>
+          <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">{t("hqint.generate")}</h2>
           <p className="font-body-sm text-on-surface-variant mb-6">
             Filter and download a comprehensive intelligence report. Reports include all selected sections with the latest data from the network.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div>
-              <label className="block text-xs font-semibold text-on-surface-variant mb-1">From Date</label>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t("hqint.from_date")}</label>
               <input type="date" value={reportFromDate} onChange={(e) => setReportFromDate(e.target.value)} className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-on-surface-variant mb-1">To Date</label>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t("hqint.to_date")}</label>
               <input type="date" value={reportToDate} onChange={(e) => setReportToDate(e.target.value)} className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-on-surface-variant mb-1">Region Filter</label>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t("hqint.region_filter")}</label>
               <input type="text" value={reportRegion} onChange={(e) => setReportRegion(e.target.value)} placeholder="e.g. Dar es Salaam" className="w-full px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary" />
             </div>
           </div>
 
           <div className="mb-6">
-            <label className="block text-xs font-semibold text-on-surface-variant mb-2">Sections to Include</label>
+            <label className="block text-xs font-semibold text-on-surface-variant mb-2">{t("hqint.sections")}</label>
             <div className="flex flex-wrap gap-2">
               {ALL_SECTIONS.map((s) => (
                 <button
@@ -1564,7 +1566,7 @@ export default function HQIntelligenceClient({
         </div>
 
         <div className="bg-surface-base border border-outline-variant rounded-xl p-6">
-          <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">Quick Reports</h2>
+          <h2 className="font-headline-md text-headline-md text-ink-deep mb-4">{t("hqint.quick_reports")}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { label: "Full Network Report", sections: ["summary", "revenue", "products", "logistics", "users"], desc: "Everything — all sections" },

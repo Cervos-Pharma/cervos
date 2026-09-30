@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { PharmacyAlert, PharmacyNotification } from "@/lib/actions/pharmacy";
+import { useI18n } from "@/lib/i18n/context";
 
 const SEVERITY_STYLES: Record<string, { bg: string; border: string; text: string; icon: string; label: string }> = {
   critical: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", icon: "error", label: "Critical" },
@@ -33,6 +34,7 @@ interface AlertsClientProps {
 }
 
 export default function AlertsClient({ alerts, notifications, error }: AlertsClientProps) {
+  const { t } = useI18n();
   if (error) {
     return (
       <div className="bg-error-container text-on-error-container p-6 rounded-xl">
@@ -48,7 +50,7 @@ export default function AlertsClient({ alerts, notifications, error }: AlertsCli
     return (
       <div className="bg-surface border border-outline-variant rounded-xl p-16 text-center">
         <span className="material-symbols-outlined text-6xl text-secondary mb-4">verified</span>
-        <h2 className="font-headline-md text-headline-md text-on-surface mb-2">All Clear</h2>
+        <h2 className="font-headline-md text-headline-md text-on-surface mb-2">{t("dash.all_clear")}</h2>
         <p className="font-body-md text-on-surface-variant">
           No active alerts. Your branches are running smoothly.
         </p>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { queryDb, executeDb, generateId, nowIso } from '../lib/database'
 import { runSyncCycle, queueForSync } from '../lib/sync'
+import { useTranslation } from '../lib/i18n'
 import {
   LineChart,
   Line,
@@ -82,6 +83,7 @@ interface ReportData {
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981']
 
 export default function Reports() {
+  const { t } = useTranslation()
   const [data, setData] = useState<ReportData | null>(null)
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date()
@@ -320,7 +322,7 @@ export default function Reports() {
   async function saveExpense() {
     const amount = parseFloat(expenseAmount)
     if (!amount || amount <= 0) {
-      setExpenseFeedback('Enter an amount greater than zero.')
+      setExpenseFeedback(t('reports.expErrAmount'))
       return
     }
     setExpenseSaving(true)
@@ -349,12 +351,12 @@ export default function Reports() {
       }
       setExpenseDesc('')
       setExpenseAmount('')
-      setExpenseFeedback('Expense saved.')
+      setExpenseFeedback(t('reports.expSaved'))
       setShowExpenseForm(false)
       loadData()
     } catch (err) {
       console.error('saveExpense failed:', err)
-      setExpenseFeedback('Could not save the expense. Try again.')
+      setExpenseFeedback(t('reports.expErrSave'))
     } finally {
       setExpenseSaving(false)
     }
@@ -493,8 +495,8 @@ export default function Reports() {
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="font-headline text-2xl font-black text-on-surface">Reports & Analytics</h1>
-          <p className="text-sm text-on-surface-variant">Live branch records connected to the pharmacy portal</p>
+          <h1 className="font-headline text-2xl font-black text-on-surface">{t('reports.title')}</h1>
+          <p className="text-sm text-on-surface-variant">{t('reports.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <input
@@ -538,29 +540,29 @@ export default function Reports() {
         <>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Total Revenue</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.totalRevenue')}</p>
               <p className="font-headline text-2xl font-black text-primary mt-1">
                 TZS {data.sales.totalRevenue.toLocaleString()}
               </p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Transactions</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.transactions')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">{data.sales.totalSales}</p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Avg Transaction</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.avgTransaction')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">
                 TZS {data.sales.avgTransaction.toLocaleString()}
               </p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Total Tax</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.totalTax')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">
                 TZS {data.sales.totalTax.toLocaleString()}
               </p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Discounts Given</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.discountsGiven')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">
                 TZS {data.sales.totalDiscount.toLocaleString()}
               </p>
@@ -569,7 +571,7 @@ export default function Reports() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 bg-surface-base border border-outline-variant rounded-xl p-5">
-              <h3 className="font-headline font-bold text-on-surface mb-4">Revenue Trend</h3>
+              <h3 className="font-headline font-bold text-on-surface mb-4">{t('reports.revenueTrend')}</h3>
               <div style={{ height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={data.sales.chartData}>
@@ -583,7 +585,7 @@ export default function Reports() {
               </div>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-              <h3 className="font-headline font-bold text-on-surface mb-4">Payment Methods</h3>
+              <h3 className="font-headline font-bold text-on-surface mb-4">{t('reports.paymentMethods')}</h3>
               <div style={{ height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
@@ -612,25 +614,25 @@ export default function Reports() {
         <>
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Revenue</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.revenueKpi')}</p>
               <p className="font-headline text-2xl font-black text-primary mt-1">
                 TZS {data.finance.revenue.toLocaleString()}
               </p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Cost of Goods Sold</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.cogs')}</p>
               <p className="font-headline text-2xl font-black text-on-surface mt-1">
                 TZS {data.finance.cogs.toLocaleString()}
               </p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Gross Profit</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.grossProfit')}</p>
               <p className={`font-headline text-2xl font-black mt-1 ${data.finance.grossProfit >= 0 ? 'text-secondary' : 'text-error'}`}>
                 TZS {data.finance.grossProfit.toLocaleString()}
               </p>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Expenditure</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('reports.expenditure')}</p>
               <p className="font-headline text-2xl font-black text-warning mt-1">
                 TZS {data.finance.expenses.toLocaleString()}
               </p>
@@ -647,7 +649,7 @@ export default function Reports() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 bg-surface-base border border-outline-variant rounded-xl p-5">
-              <h3 className="font-headline font-bold text-on-surface mb-4">Profit &amp; Loss Breakdown</h3>
+              <h3 className="font-headline font-bold text-on-surface mb-4">{t('reports.profitLoss')}</h3>
               <div style={{ height: 260 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -677,7 +679,7 @@ export default function Reports() {
               </div>
             </div>
             <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-              <h3 className="font-headline font-bold text-on-surface mb-4">Expenditure by Category</h3>
+              <h3 className="font-headline font-bold text-on-surface mb-4">{t('reports.expByCategory')}</h3>
               {data.finance.expensesByCategory.length > 0 ? (
                 <div style={{ height: 260 }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -699,7 +701,7 @@ export default function Reports() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-sm text-on-surface-variant">No expenses recorded for this period.</p>
+                <p className="text-sm text-on-surface-variant">{t('reports.noExpenses')}</p>
               )}
             </div>
           </div>
@@ -707,13 +709,13 @@ export default function Reports() {
           {/* Expense recording */}
           <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-headline font-bold text-on-surface">Branch Expenditure</h3>
+              <h3 className="font-headline font-bold text-on-surface">{t('reports.branchExpenditure')}</h3>
               <button
                 onClick={() => setShowExpenseForm((v) => !v)}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:opacity-90 transition-opacity"
               >
                 <span className="material-symbols-outlined text-lg">add</span>
-                Add Expense
+                {t('reports.addExpense')}
               </button>
             </div>
 
@@ -731,14 +733,14 @@ export default function Reports() {
                 <input
                   value={expenseDesc}
                   onChange={(e) => setExpenseDesc(e.target.value)}
-                  placeholder="Description (optional)"
+                  placeholder={t('reports.descOptional')}
                   className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-base text-sm text-on-surface col-span-2"
                 />
                 <input
                   value={expenseAmount}
                   onChange={(e) => setExpenseAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                   inputMode="decimal"
-                  placeholder="Amount (TZS)"
+                  placeholder={t('reports.amountTzs')}
                   className="px-3 py-2 rounded-lg border border-outline-variant bg-surface-base text-sm text-on-surface"
                 />
                 <div className="flex gap-2">
@@ -753,7 +755,7 @@ export default function Reports() {
                     disabled={expenseSaving || !expenseAmount}
                     className="px-4 py-2 rounded-lg bg-secondary text-on-secondary text-sm font-semibold disabled:opacity-50 hover:opacity-90 transition-opacity whitespace-nowrap"
                   >
-                    {expenseSaving ? 'Saving…' : 'Save'}
+                    {expenseSaving ? t('reports.expSaving') : t('common.save')}
                   </button>
                 </div>
                 {expenseFeedback && (
@@ -767,10 +769,10 @@ export default function Reports() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs uppercase tracking-wide text-on-surface-variant border-b border-outline-variant">
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Category</th>
-                      <th className="py-2 pr-4">Description</th>
-                      <th className="py-2 pr-4 text-right">Amount</th>
+                      <th className="py-2 pr-4">{t('reports.expDateCol')}</th>
+                      <th className="py-2 pr-4">{t('reports.expCategoryCol')}</th>
+                      <th className="py-2 pr-4">{t('reports.expDescCol')}</th>
+                      <th className="py-2 pr-4 text-right">{t('reports.expAmountCol')}</th>
                       <th className="py-2"></th>
                     </tr>
                   </thead>
@@ -784,7 +786,7 @@ export default function Reports() {
                         <td className="py-2 text-right">
                           <button
                             onClick={() => deleteExpense(e.id)}
-                            title="Delete expense"
+                            title={t('reports.deleteExpense')}
                             className="p-1.5 rounded-md text-error hover:bg-error/10 transition-colors"
                           >
                             <span className="material-symbols-outlined text-lg">delete</span>
@@ -797,7 +799,7 @@ export default function Reports() {
               </div>
             ) : (
               <p className="text-sm text-on-surface-variant">
-                No expenditure recorded in this period. Use “Add Expense” to log rent, salaries, utilities and other branch costs.
+                {t('reports.noExpenses')}
               </p>
             )}
           </div>

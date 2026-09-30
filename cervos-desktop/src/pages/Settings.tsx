@@ -96,7 +96,7 @@ export default function Settings() {
 
   async function handleDeleteOperator(id: string) {
     if (id === currentOperator?.id) return
-    if (!confirm('Delete this operator?')) return
+    if (!confirm(t('settings.deleteOperatorConfirm'))) return
     await deleteOperator(id)
     runSyncCycle().catch(() => {})
     loadOperators()
@@ -150,18 +150,21 @@ export default function Settings() {
     try {
       const result = await runSyncCycle()
       if (!result.ok) {
-        setSyncMessage(`Sync failed: ${result.message || 'unknown error'}`)
+        setSyncMessage(t('settings.syncFailed').replace('{error}', result.message || ''))
       } else if (result.message?.startsWith('already syncing')) {
-        setSyncMessage('A sync is already running — hang tight.')
+        setSyncMessage(t('settings.syncAlreadyRunning'))
       } else if (result.message?.startsWith('offline')) {
-        setSyncMessage(result.message)
+        setSyncMessage(t('settings.offlineMsg'))
       } else {
         setSyncMessage(
-          `Synced at ${new Date().toLocaleTimeString()} â€” pulled ${result.pulled ?? 0}, pushed ${result.pushed ?? 0}`
+          t('settings.syncedAt')
+            .replace('{time}', new Date().toLocaleTimeString())
+            .replace('{pulled}', String(result.pulled ?? 0))
+            .replace('{pushed}', String(result.pushed ?? 0))
         )
       }
     } catch (err: any) {
-      setSyncMessage(`Sync failed: ${err.message}`)
+      setSyncMessage(t('settings.syncFailed').replace('{error}', err.message))
     } finally {
       const s = await getDashboardStats()
       setStats(s)
@@ -170,9 +173,7 @@ export default function Settings() {
   }
 
   async function handleUnlink() {
-    const confirmed = window.confirm(
-      'This will unlink this device from its branch and free the branch for another device. Any unsynced local data may be lost. Continue?'
-    )
+    const confirmed = window.confirm(t('settings.unlinkConfirm'))
     if (!confirmed) return
     await unlinkDevice()
     logout()
@@ -202,9 +203,9 @@ export default function Settings() {
               <div className="flex items-start gap-2 rounded-lg bg-primary/5 border border-primary/15 p-3">
                 <span className="material-symbols-outlined text-primary">domain</span>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Linked pharmacy account</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('settings.linkedAccount')}</p>
                   <p className="text-sm font-medium text-on-surface">
-                    {accountName || 'Pharmacy account'}{linkedBranchName ? ` · Branch: ${linkedBranchName}` : ''}
+                    {accountName || 'Pharmacy account'}{linkedBranchName ? ` · ${t('settings.branchLabel')}: ${linkedBranchName}` : ''}
                   </p>
                 </div>
               </div>
@@ -325,7 +326,7 @@ export default function Settings() {
                       onChange={(e) => setNewOpName(e.target.value)}
                       required
                       className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm"
-                      placeholder="Operator name"
+                      placeholder={t('settings.name')}
                     />
                   </div>
                   <div>
@@ -500,7 +501,7 @@ export default function Settings() {
           <div className="space-y-3">
             <button
               onClick={async () => {
-                if (confirm('Export all data as JSON?')) {
+                if (confirm(t('settings.exportConfirm'))) {
                   const data = {
                     products: await queryDb('SELECT * FROM products'),
                     batches: await queryDb('SELECT * FROM batches'),
@@ -531,7 +532,7 @@ export default function Settings() {
               onClick={() => {
                 if (
                   confirm(
-                    'This will clear all local data. This action cannot be undone. Continue?'
+                    t('settings.clearConfirm')
                   )
                 ) {
                   localStorage.clear()

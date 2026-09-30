@@ -3,6 +3,7 @@ import { queryDb } from '../lib/database'
 import { supabase } from '../lib/supabase'
 import { getAccessToken } from '../lib/sync'
 import { WEB_URL } from '../lib/web'
+import { useTranslation } from '../lib/i18n'
 
 interface MarketplaceProduct {
   id: string
@@ -34,6 +35,7 @@ interface ConnectionRequest {
 }
 
 export default function Marketplace() {
+  const { t } = useTranslation()
   const [products, setProducts] = useState<MarketplaceProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -297,8 +299,8 @@ export default function Marketplace() {
       <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-headline text-2xl font-black text-on-surface">Marketplace</h1>
-          <p className="text-sm text-on-surface-variant mt-1">Browse products from suppliers — escrow-secured mobile money payments</p>
+          <h1 className="font-headline text-2xl font-black text-on-surface">{t('marketplace.title')}</h1>
+          <p className="text-sm text-on-surface-variant mt-1">{t('marketplace.subtitle')}</p>
         </div>
         {activeTab === 'browse' && (
           <button
@@ -306,7 +308,7 @@ export default function Marketplace() {
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-semibold hover:opacity-90"
           >
             <span className="material-symbols-outlined">shopping_cart</span>
-            Cart ({cart.length})
+            {t('marketplace.cart')} ({cart.length})
           </button>
         )}
       </div>
@@ -316,13 +318,13 @@ export default function Marketplace() {
           onClick={() => setActiveTab('browse')}
           className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${activeTab === 'browse' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}
         >
-          Browse
+          {t('marketplace.browse')}
         </button>
         <button
           onClick={() => setActiveTab('connections')}
           className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px ${activeTab === 'connections' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant'}`}
         >
-          Connection Requests
+          {t('marketplace.connectionRequests')}
           {connections.filter((c) => c.status === 'pending').length > 0 && (
             <span className="ml-2 px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-xs">
               {connections.filter((c) => c.status === 'pending').length}
@@ -333,14 +335,12 @@ export default function Marketplace() {
 
       {activeTab === 'connections' ? (
         <div>
-          <p className="text-sm text-on-surface-variant mb-4">
             Suppliers must be approved here before this branch can place orders with them.
             Browsing their catalog in the Marketplace stays open either way.
-          </p>
           {connectionsError && (
             <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm flex items-center justify-between">
               <span>{connectionsError}</span>
-              <button onClick={loadConnections} className="ml-4 px-3 py-1 rounded bg-error text-white text-xs font-semibold">Retry</button>
+              <button onClick={loadConnections} className="ml-4 px-3 py-1 rounded bg-error text-white text-xs font-semibold">{t('marketplace.retry')}</button>
             </div>
           )}
           {connectionsLoading ? (
@@ -350,16 +350,16 @@ export default function Marketplace() {
           ) : connections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
               <span className="material-symbols-outlined text-5xl">link_off</span>
-              <p className="mt-2">No connection requests yet</p>
+              <p className="mt-2">{t('marketplace.noRequestsYet')}</p>
             </div>
           ) : (
             <div className="bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
               <table className="w-full">
                 <thead className="bg-outline-variant/50">
                   <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-                    <th className="px-4 py-3">Supplier</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Requested</th>
+                    <th className="px-4 py-3">{t('marketplace.supplier')}</th>
+                    <th className="px-4 py-3">{t('marketplace.status')}</th>
+                    <th className="px-4 py-3">{t('marketplace.requested')}</th>
                     <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
@@ -384,13 +384,13 @@ export default function Marketplace() {
                               onClick={() => respondToConnection(c.id, 'approved')}
                               className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-semibold hover:opacity-90"
                             >
-                              Approve
+                              {t('marketplace.approve')}
                             </button>
                             <button
                               onClick={() => respondToConnection(c.id, 'rejected')}
                               className="px-3 py-1.5 rounded-lg border border-outline-variant text-xs font-semibold hover:bg-error/10"
                             >
-                              Reject
+                              {t('marketplace.reject')}
                             </button>
                           </div>
                         )}
@@ -408,7 +408,7 @@ export default function Marketplace() {
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20 text-error text-sm flex items-center justify-between">
           <span>{error}</span>
-          <button onClick={loadProducts} className="ml-4 px-3 py-1 rounded bg-error text-white text-xs font-semibold">Retry</button>
+          <button onClick={loadProducts} className="ml-4 px-3 py-1 rounded bg-error text-white text-xs font-semibold">{t('marketplace.retry')}</button>
         </div>
       )}
 
@@ -418,7 +418,7 @@ export default function Marketplace() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search products or suppliers..."
+            placeholder={t('marketplace.searchPlaceholder')}
             className="w-full px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary"
           />
         </div>
@@ -427,7 +427,7 @@ export default function Marketplace() {
           onChange={(e) => setSelectedCategory(e.target.value)}
           className="px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary"
         >
-          <option value="">All Categories</option>
+          <option value="">{t('marketplace.allCategories')}</option>
           {categories.map((cat) => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
@@ -437,8 +437,8 @@ export default function Marketplace() {
       {filteredProducts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
           <span className="material-symbols-outlined text-5xl">store</span>
-          <p className="mt-2 font-medium">{products.length === 0 ? 'No supplier products available yet' : 'No products found'}</p>
-          <p className="text-sm">Suppliers publish active listings from the web portal.</p>
+          <p className="mt-2 font-medium">{products.length === 0 ? t('marketplace.noProductsYet') : t('marketplace.noProductsFound')}</p>
+          <p className="text-sm">{t('marketplace.suppliersPublishHint')}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -462,10 +462,10 @@ export default function Marketplace() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20"
                 >
                   <span className="material-symbols-outlined text-sm">add</span>
-                  Add
+                  {t('marketplace.add')}
                 </button>
               </div>
-              <p className="text-xs text-on-surface-variant mt-1">Min order: {product.minOrderQty} · Stock: {product.stockAvailable}</p>
+              <p className="text-xs text-on-surface-variant mt-1">{t('marketplace.minOrder')}: {product.minOrderQty} · {t('marketplace.stock')}: {product.stockAvailable}</p>
             </div>
           ))}
         </div>
@@ -475,7 +475,7 @@ export default function Marketplace() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-lg p-6">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="font-headline text-xl font-bold text-on-surface">Cart</h2>
+              <h2 className="font-headline text-xl font-bold text-on-surface">{t('marketplace.cart')}</h2>
               <button onClick={() => setShowCart(false)} className="p-1 rounded hover:bg-outline-variant">
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -483,7 +483,7 @@ export default function Marketplace() {
             {cart.length === 0 ? (
               <div className="text-center py-8 text-on-surface-variant">
                 <span className="material-symbols-outlined text-4xl">shopping_cart</span>
-                <p className="mt-2">Your cart is empty</p>
+                <p className="mt-2">{t('marketplace.emptyCart')}</p>
               </div>
             ) : (
               <>
@@ -508,11 +508,11 @@ export default function Marketplace() {
                 </div>
                 <div className="border-t border-outline-variant mt-4 pt-4 space-y-3">
                   <div className="flex justify-between font-headline text-lg font-black">
-                    <span>Total</span>
+                    <span>{t('marketplace.total')}</span>
                     <span>TZS {getCartTotal().toLocaleString()}</span>
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-on-surface-variant">Mobile money wallet (charged on order)</label>
+                    <label className="text-xs font-semibold text-on-surface-variant">{t('marketplace.walletLabel')}</label>
                     <input
                       value={walletMsisdn}
                       onChange={(e) => setWalletMsisdn(e.target.value)}
@@ -526,9 +526,9 @@ export default function Marketplace() {
                     className="w-full py-3 rounded-lg bg-primary text-white font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {placing ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : null}
-                    {placing ? 'Placing order...' : 'Place Order & Pay'}
+                    {placing ? t('marketplace.placingOrder') : t('marketplace.placeOrder')}
                   </button>
-                  <p className="text-xs text-on-surface-variant text-center">Payment held securely in Cervos escrow until delivery is confirmed.</p>
+                  <p className="text-xs text-on-surface-variant text-center">{t('marketplace.escrowNote')}</p>
                 </div>
               </>
             )}

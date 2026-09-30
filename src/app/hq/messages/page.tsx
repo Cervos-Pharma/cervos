@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import HQSidebarServer from "@/components/HQSidebarServer";
 import HQMessagesClient from "./HQMessagesClient";
 import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
+import { getT } from "@/lib/i18n/server";
 
 export default async function HQMessagesPage() {
+  const t = await getT();
   const cookieStore = await cookies();
   if (!isValidHQToken(cookieStore.get(HQ_COOKIE_NAME)?.value)) redirect("/hq");
 
@@ -28,9 +30,9 @@ export default async function HQMessagesPage() {
         <div className="max-w-6xl">
           <div className="mb-8">
             <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">
-              HQ Console
+              {t("hqnet.console")}
             </p>
-            <h1 className="font-headline-lg text-headline-lg text-ink-deep">Broadcast Messaging</h1>
+            <h1 className="font-headline-lg text-headline-lg text-ink-deep">{t("hq.broadcast")}</h1>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
               Push alerts and announcements to pharmacies and suppliers.
             </p>

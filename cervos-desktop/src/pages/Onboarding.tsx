@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { signIn, getLinkStatus, linkToExistingBranch, forceClaimBranch, runSyncCycle, type RemoteBranch } from '../lib/sync'
 import { queryDb } from '../lib/database'
 import { open } from '@tauri-apps/plugin-shell'
+import { useTranslation } from '../lib/i18n'
 import { WEB_URL } from '../lib/web'
 
 type OnboardingStep = 'welcome' | 'link' | 'select-branch' | 'done'
@@ -13,6 +14,7 @@ interface OnboardingProps {
 }
 
 export default function Onboarding({ onComplete, relinking = false }: OnboardingProps) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [step, setStep] = useState<OnboardingStep>('welcome')
   const [email, setEmail] = useState('')
@@ -211,12 +213,12 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                 <div className="w-20 h-20 mx-auto mb-6 relative">
                   <img src="/logo.png" alt="Cervos" className="w-full h-full object-contain" />
                 </div>
-                <h1 className="font-headline-lg text-headline-lg text-ink-deep mb-2">Welcome to Cervos POS</h1>
+                <h1 className="font-headline-lg text-headline-lg text-ink-deep mb-2">{t('onboarding.welcome')}</h1>
                 <p className="font-body-md text-body-md text-on-surface-variant mb-8">
-                  Sign in with your pharmacy account to link this device to a branch.
+                  {t('onboarding.welcomeHint')}
                 </p>
                 <button onClick={() => setStep('link')} className={btnClass}>
-                  Sign In & Link This POS
+                  {t('onboarding.signInLink')}
                 </button>
                 <button
                   type="button"
@@ -224,7 +226,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   className="w-full h-12 mt-3 border border-ink-deep/20 text-ink-deep font-label-md font-bold rounded-none flex items-center justify-center gap-2 hover:border-primary hover:text-primary transition-all"
                 >
                   <span className="material-symbols-outlined text-[18px]">domain_add</span>
-                  Create Pharmacy Account
+                  {t('onboarding.createAccount')}
                 </button>
               </div>
             )}
@@ -235,11 +237,11 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   <button type="button" onClick={() => setStep('link')} className="text-on-surface-variant hover:text-primary">
                     <span className="material-symbols-outlined">arrow_back</span>
                   </button>
-                  <h2 className="font-headline-md text-headline-md text-ink-deep">Select Branch</h2>
+                  <h2 className="font-headline-md text-headline-md text-ink-deep">{t('onboarding.selectBranch')}</h2>
                 </div>
 
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  This account has multiple branches. Which one is this device for?
+                  {t('onboarding.selectBranchHint')}
                 </p>
 
                 {error && !forceClaimBranchId && (
@@ -253,9 +255,9 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                     <div className="flex items-start gap-2">
                       <span className="material-symbols-outlined text-warning text-xl mt-0.5">warning</span>
                       <div>
-                        <p className="font-label-md font-bold text-ink-deep text-sm">Branch already activated</p>
+                        <p className="font-label-md font-bold text-ink-deep text-sm">{t('onboarding.branchActivated')}</p>
                         <p className="text-xs text-on-surface-variant mt-1">
-                          Another POS device holds this branch. Force-claiming will deactivate that device — it will be locked out on its next sync.
+                          {t('onboarding.branchActivatedHint')}
                         </p>
                       </div>
                     </div>
@@ -266,7 +268,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                       className="w-full h-10 bg-warning text-white rounded-none font-label-md font-bold text-sm flex items-center justify-center gap-2 hover:bg-warning/90 active:scale-[0.98] transition-all disabled:opacity-60"
                     >
                       <span className="material-symbols-outlined text-[16px]">device_reset</span>
-                      {isLoading ? 'Claiming…' : 'Force Claim This Device'}
+                      {isLoading ? t('onboarding.claiming') : t('onboarding.forceClaim')}
                     </button>
                     <button
                       type="button"
@@ -274,7 +276,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                       onClick={() => { setForceClaimBranchId(null); setError(null) }}
                       className="text-xs text-on-surface-variant hover:text-primary text-center"
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </button>
                   </div>
                 )}
@@ -302,11 +304,11 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   <button type="button" onClick={() => setStep('welcome')} className="text-on-surface-variant hover:text-primary">
                     <span className="material-symbols-outlined">arrow_back</span>
                   </button>
-                  <h2 className="font-headline-md text-headline-md text-ink-deep">Link Admin Account</h2>
+                  <h2 className="font-headline-md text-headline-md text-ink-deep">{t('onboarding.linkAdmin')}</h2>
                 </div>
 
                 <p className="font-body-sm text-body-sm text-on-surface-variant">
-                  Sign in with your Cervos admin account to enable online sync and payments.
+                  {t('onboarding.linkHint')}
                 </p>
 
                 <form onSubmit={handleLogin} className="flex flex-col gap-3">
@@ -314,7 +316,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Email"
+                    placeholder={t('onboarding.email')}
                     required
                     className={inputClass}
                   />
@@ -322,7 +324,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password"
+                    placeholder={t('onboarding.password')}
                     required
                     className={inputClass}
                   />
@@ -334,7 +336,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   )}
 
                   <button type="submit" disabled={isLoading || !email.trim() || !password} className={btnClass}>
-                    {isLoading ? 'Signing in...' : 'Sign In & Link'}
+                    {isLoading ? t('login.signingIn') : t('onboarding.signInAndLink')}
                   </button>
                 </form>
 
@@ -343,7 +345,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                     <div className="w-full border-t border-ink-deep/10" />
                   </div>
                   <div className="relative flex justify-center">
-                    <span className="bg-surface-base px-4 text-sm text-on-surface-variant">or</span>
+                    <span className="bg-surface-base px-4 text-sm text-on-surface-variant">{t('onboarding.or')}</span>
                   </div>
                 </div>
 
@@ -353,7 +355,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   className="w-full h-12 border border-ink-deep/20 text-ink-deep font-label-md font-bold rounded-none flex items-center justify-center gap-2 hover:border-primary hover:text-primary transition-all"
                 >
                   <span className="material-symbols-outlined text-[18px]">domain_add</span>
-                  Create Account at cervos.online
+                  {t('onboarding.createAtWeb')}
                 </button>
               </div>
             )}
@@ -363,21 +365,21 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                 <div className="w-16 h-16 mx-auto mb-4 bg-secondary/10 rounded-full flex items-center justify-center">
                   <span className="material-symbols-outlined text-5xl text-secondary">check_circle</span>
                 </div>
-                <h2 className="font-headline-md text-headline-md text-ink-deep mb-2">You're All Set!</h2>
+                <h2 className="font-headline-md text-headline-md text-ink-deep mb-2">{t('onboarding.allSet')}</h2>
                 <p className="font-body-md text-body-md text-on-surface-variant mb-6">
-                  This device is linked to your branch. Operators can now sign in with the PIN assigned in the pharmacy portal.
+                  {t('onboarding.allSetHint')}
                 </p>
 
                 <div className="bg-surface-container rounded p-4 text-left text-sm mb-6">
-                  <h3 className="font-medium text-ink-deep mb-2">Branch</h3>
+                  <h3 className="font-medium text-ink-deep mb-2">{t('onboarding.branch')}</h3>
                   <div className="space-y-1 text-on-surface-variant">
-                    <p><span className="text-text-muted">Name:</span> {linkedBranch?.name ?? '—'}</p>
-                    <p><span className="text-text-muted">Address:</span> {linkedBranch?.address || '—'}</p>
+                    <p><span className="text-text-muted">{t('onboarding.name')}:</span> {linkedBranch?.name ?? '—'}</p>
+                    <p><span className="text-text-muted">{t('onboarding.address')}:</span> {linkedBranch?.address || '—'}</p>
                   </div>
                 </div>
 
                 <button onClick={handleDone} className={btnClass}>
-                  Go to Sign In
+                  {t('onboarding.goToSignIn')}
                 </button>
               </div>
             )}

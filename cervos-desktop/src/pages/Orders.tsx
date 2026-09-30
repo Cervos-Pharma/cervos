@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { queryDb } from '../lib/database'
 import { getAccessToken, runSyncCycle } from '../lib/sync'
 import { WEB_URL } from '../lib/web'
+import { useTranslation } from '../lib/i18n'
 
 interface LocalOrder {
   id: string
@@ -48,14 +49,7 @@ const STATUS_STYLES: Record<LocalOrder['status'], string> = {
   cancelled: 'bg-red-100 text-red-700',
 }
 
-const STATUS_LABEL: Record<LocalOrder['status'], string> = {
-  pending: 'Awaiting supplier approval',
-  approved: 'Approved — ready to pay',
-  confirmed: 'Paid — awaiting shipment',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-}
+
 
 /**
  * The real backend keeps status = 'pending' both before AND after supplier
@@ -71,6 +65,7 @@ function effectiveStatus(order: LocalOrder): LocalOrder['status'] {
 }
 
 export default function Orders() {
+  const { t } = useTranslation()
   const [orders, setOrders] = useState<LocalOrder[]>([])
   const [lineItems, setLineItems] = useState<Record<string, LineItem[]>>({})
   const [loading, setLoading] = useState(true)
@@ -180,24 +175,24 @@ export default function Orders() {
           <div className="w-full max-w-sm rounded-xl bg-surface-base p-6 shadow-xl">
             <div className="text-center">
               <span className="material-symbols-outlined text-5xl text-secondary">check_circle</span>
-              <h2 className="mt-2 text-xl font-bold">Payment receipt</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">Mobile money payment completed</p>
+              <h2 className="mt-2 text-xl font-bold">{t('orders.paymentReceipt')}</h2>
+              <p className="mt-1 text-sm text-on-surface-variant">{t('orders.mmCompleted')}</p>
             </div>
             <div className="mt-5 space-y-2 border-y border-outline-variant py-4 text-sm">
-              <div className="flex justify-between"><span>Order</span><strong>{paymentReceipt.orderReference}</strong></div>
-              <div className="flex justify-between"><span>Amount</span><strong>{paymentReceipt.currency} {paymentReceipt.amount.toLocaleString()}</strong></div>
-              <div className="flex justify-between"><span>Reference</span><span className="font-mono text-xs">{paymentReceipt.reference ?? 'Pending provider reference'}</span></div>
-              <div className="flex justify-between"><span>Status</span><strong className="text-secondary">Paid</strong></div>
+              <div className="flex justify-between"><span>{t('orders.order')}</span><strong>{paymentReceipt.orderReference}</strong></div>
+              <div className="flex justify-between"><span>{t('orders.amount')}</span><strong>{paymentReceipt.currency} {paymentReceipt.amount.toLocaleString()}</strong></div>
+              <div className="flex justify-between"><span>{t('orders.reference')}</span><span className="font-mono text-xs">{paymentReceipt.reference ?? t('orders.pendingRef')}</span></div>
+              <div className="flex justify-between"><span>{t('subscription.status')}</span><strong className="text-secondary">{t('orders.paid')}</strong></div>
             </div>
-            <button onClick={() => setPaymentReceipt(null)} className="mt-5 w-full rounded-md bg-primary py-2.5 font-semibold text-on-primary">Done</button>
+            <button onClick={() => setPaymentReceipt(null)} className="mt-5 w-full rounded-md bg-primary py-2.5 font-semibold text-on-primary">{t('common.done')}</button>
           </div>
         </div>
       )}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-on-surface">Orders</h1>
+          <h1 className="text-2xl font-bold text-on-surface">{t('orders.title')}</h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            Marketplace orders placed by this branch, synced from the pharmacy portal.
+            {t('orders.subtitle')}
           </p>
         </div>
         <button
@@ -206,18 +201,18 @@ export default function Orders() {
           className="flex items-center gap-2 px-3 py-2 rounded-lg border border-outline-variant text-sm font-medium hover:bg-outline-variant/30 disabled:opacity-60"
         >
           <span className={`material-symbols-outlined text-[18px] ${syncing ? 'animate-spin' : ''}`}>sync</span>
-          {syncing ? 'Syncing…' : 'Refresh'}
+          {syncing ? t('orders.syncing') : t('orders.refresh')}
         </button>
       </div>
 
       {payError && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{payError}</div>}
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading…</p>
+        <p className="text-sm text-on-surface-variant">{t('orders.loading')}</p>
       ) : orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-on-surface-variant">
           <span className="material-symbols-outlined text-5xl mb-2">receipt_long</span>
-          <p>No orders yet. Place one from Marketplace.</p>
+          <p>{t('orders.noOrders')}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -239,7 +234,7 @@ export default function Orders() {
                       {order.currency} {total.toLocaleString()}
                     </span>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${STATUS_STYLES[effectiveStatus(order)]}`}>
-                      {STATUS_LABEL[effectiveStatus(order)]}
+                      {t(`orders.status${effectiveStatus(order).charAt(0).toUpperCase()}${effectiveStatus(order).slice(1)}`)}
                     </span>
                     <span className="material-symbols-outlined text-on-surface-variant">
                       {isExpanded ? 'expand_less' : 'expand_more'}
@@ -260,7 +255,7 @@ export default function Orders() {
 
                     {order.status === 'pending' && !order.supplier_approved_at && (
                       <p className="text-sm text-on-surface-variant">
-                        Waiting for {order.supplier_name} to approve this order before it can be paid.
+                        {t('orders.waitingApproval').replace('{supplier}', order.supplier_name)}
                       </p>
                     )}
 
@@ -269,7 +264,7 @@ export default function Orders() {
                         <input
                           value={payWallet}
                           onChange={(e) => setPayWallet(e.target.value)}
-                          placeholder="0712 345 678 or +255712345678"
+                          placeholder={t('subscription.mmPlaceholder')}
                           className="flex-1 px-3 py-2 border border-outline-variant rounded-lg text-sm"
                         />
                         <button
@@ -278,7 +273,7 @@ export default function Orders() {
                           className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium disabled:opacity-60 flex items-center gap-1"
                         >
                           <span className="material-symbols-outlined text-[16px]">smartphone</span>
-                          {payBusy === order.id ? 'Paying…' : 'Pay via mobile money'}
+                          {payBusy === order.id ? t('orders.paying') : t('orders.payViaMm')}
                         </button>
                       </div>
                     )}

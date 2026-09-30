@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { searchAuditLog, type AuditLogEntry, type AuditLogFilter } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 const ACTION_COLORS: Record<string, string> = {
   login: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -47,6 +48,7 @@ export default function HQAuditClient({
   initialError: string | null;
   actionTypes: string[];
 }) {
+  const { t } = useI18n();
   const [entries, setEntries] = useState(initialEntries);
   const [total, setTotal] = useState(initialTotal);
   const [error, setError] = useState(initialError);
@@ -127,14 +129,14 @@ export default function HQAuditClient({
               onChange={(e) => setActionFilter(e.target.value)}
               className="px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
             >
-              <option value="">All actions</option>
+              <option value="">{t("hqaudit.all_actions")}</option>
               {actionTypes.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-on-surface-variant mb-1">Entity Type</label>
+            <label className="block text-xs font-semibold text-on-surface-variant mb-1">{t("hqaudit.entity_type")}</label>
             <input
               type="text"
               value={entityFilter}

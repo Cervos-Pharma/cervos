@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import CervosMap, { MarkerData } from "@/components/CervosMap";
 import type { BranchRow } from "./page";
 import { arrayToCSV, downloadCSV } from "@/lib/export";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   branches: BranchRow[];
@@ -40,6 +41,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function NetworkMapClient({ branches }: Props) {
+  const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<BranchRow | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -114,8 +116,8 @@ export default function NetworkMapClient({ branches }: Props) {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">HQ Console</p>
-          <h1 className="font-headline-lg text-headline-lg text-ink-deep">Network Map</h1>
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">{t("hqnet.console")}</p>
+          <h1 className="font-headline-lg text-headline-lg text-ink-deep">{t("hqnet.map")}</h1>
           <p className="font-body-md text-body-md text-on-surface-variant mt-1">
             {filtered.length} branch{filtered.length !== 1 ? "es" : ""} with live coordinates
           </p>
@@ -169,7 +171,7 @@ export default function NetworkMapClient({ branches }: Props) {
             {filtered.length === 0 ? (
               <div className="p-6 text-center">
                 <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-2">location_off</span>
-                <p className="font-body-sm text-on-surface-variant">No branches found</p>
+                <p className="font-body-sm text-on-surface-variant">{t("hqnet.no_branches")}</p>
               </div>
             ) : (
               filtered.map((b) => {
@@ -243,12 +245,12 @@ export default function NetworkMapClient({ branches }: Props) {
                   <StatusBadge status={selected.subscription_status} />
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-label-md text-label-md text-on-surface-variant">Last Sync</span>
+                  <span className="font-label-md text-label-md text-on-surface-variant">{t("hqnet.last_sync")}</span>
                   <span className="font-body-sm text-body-sm text-on-surface">{formatDate(selected.last_synced_at)}</span>
                 </div>
                 {selected.trial_ends_at && (
                   <div className="flex items-center justify-between">
-                    <span className="font-label-md text-label-md text-on-surface-variant">Trial Ends</span>
+                    <span className="font-label-md text-label-md text-on-surface-variant">{t("hqnet.trial_ends")}</span>
                     <span className="font-body-sm text-body-sm text-on-surface">
                       {new Date(selected.trial_ends_at).toLocaleDateString("en-GB")}
                     </span>
@@ -256,7 +258,7 @@ export default function NetworkMapClient({ branches }: Props) {
                 )}
                 {selected.grace_ends_at && (
                   <div className="flex items-center justify-between">
-                    <span className="font-label-md text-label-md text-on-surface-variant">Grace Ends</span>
+                    <span className="font-label-md text-label-md text-on-surface-variant">{t("hqnet.grace_ends")}</span>
                     <span className="font-body-sm text-body-sm text-amber-600">
                       {new Date(selected.grace_ends_at).toLocaleDateString("en-GB")}
                     </span>

@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { addHQAdmin, removeHQAdmin, setHQAdminDisabled, type HQAdminRow } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface Props {
   admins: HQAdminRow[] | null;
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export default function HQTeamClient({ admins, error }: Props) {
+  const { t } = useI18n();
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -83,7 +85,7 @@ export default function HQTeamClient({ admins, error }: Props) {
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
-              <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Full name</span>
+              <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("hqteam.full_name")}</span>
               <input
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}

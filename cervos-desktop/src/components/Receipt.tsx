@@ -1,4 +1,5 @@
 ﻿import type { Sale, SaleItem, Product, Batch } from "../types";
+import { useTranslation } from "../lib/i18n";
 
 interface ReceiptProps {
   sale: Sale;
@@ -15,6 +16,7 @@ export default function Receipt({
   batches,
   pharmacyName,
 }: ReceiptProps) {
+  const { t } = useTranslation();
   function getProduct(batchId: string): Product | undefined {
     const batch = batches.find((b) => b.id === batchId);
     if (!batch) return undefined;
@@ -29,9 +31,9 @@ export default function Receipt({
       </div>
 
       <div className="border-b border-dashed border-gray-300 pb-2 mb-2">
-        <p>Receipt: {sale.id.slice(0, 8).toUpperCase()}</p>
-        <p>Date: {new Date(sale.created_at).toLocaleString()}</p>
-        <p>Payment: {sale.payment_method?.toUpperCase()}</p>
+        <p>{t('receipt.receipt')}: {sale.id.slice(0, 8).toUpperCase()}</p>
+        <p>{t('receipt.date')}: {new Date(sale.created_at).toLocaleString()}</p>
+        <p>{t('receipt.payment')}: {sale.payment_method?.toUpperCase()}</p>
       </div>
 
       <div className="space-y-1 border-b border-dashed border-gray-300 pb-2 mb-2">
@@ -50,35 +52,35 @@ export default function Receipt({
 
       <div className="space-y-1">
         <div className="flex justify-between">
-          <span>Subtotal</span>
+          <span>{t('receipt.subtotal')}</span>
           <span>TZS {(sale.total - sale.tax - sale.discount).toLocaleString()}</span>
         </div>
         <div className="flex justify-between">
-          <span>Tax</span>
+          <span>{t('receipt.tax')}</span>
           <span>TZS {sale.tax.toLocaleString()}</span>
         </div>
         {sale.discount > 0 && (
           <div className="flex justify-between text-green-600">
-            <span>Discount</span>
+            <span>{t('receipt.discount')}</span>
             <span>-TZS {sale.discount.toLocaleString()}</span>
           </div>
         )}
         <div className="flex justify-between font-bold border-t border-gray-300 pt-1">
-          <span>Total</span>
+          <span>{t('receipt.total')}</span>
           <span>TZS {sale.total.toLocaleString()}</span>
         </div>
         <div className="flex justify-between">
-          <span>Tender</span>
+          <span>{t('receipt.tender')}</span>
           <span>TZS {sale.tender.toLocaleString()}</span>
         </div>
         <div className="flex justify-between">
-          <span>Change</span>
+          <span>{t('receipt.change')}</span>
           <span>TZS {sale.change_due.toLocaleString()}</span>
         </div>
       </div>
 
       <div className="mt-4 text-center text-xs text-gray-500">
-        <p>Thank you for your purchase!</p>
+        <p>{t('receipt.thankYou')}</p>
         <p>Powered by Cervos Pharmacy OS</p>
       </div>
     </div>

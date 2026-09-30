@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import HQSidebarServer from "@/components/HQSidebarServer";
 import HQNewsClient from "./HQNewsClient";
 import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
+import { getT } from "@/lib/i18n/server";
 
 export default async function HQNewsPage() {
+  const t = await getT();
   const cookieStore = await cookies();
   if (!isValidHQToken(cookieStore.get(HQ_COOKIE_NAME)?.value)) redirect("/hq");
 
@@ -19,9 +21,9 @@ export default async function HQNewsPage() {
           <div className="flex items-start justify-between mb-8">
             <div>
               <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-1">
-                HQ Console
+                {t("hqnet.console")}
               </p>
-              <h1 className="font-headline-lg text-headline-lg text-ink-deep">News Management</h1>
+              <h1 className="font-headline-lg text-headline-lg text-ink-deep">{t("hq.news_mgmt")}</h1>
               <p className="font-body-md text-body-md text-on-surface-variant mt-1">
                 Create and manage news articles for the public news page.
               </p>

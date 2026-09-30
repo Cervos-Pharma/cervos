@@ -13,10 +13,12 @@ import SupplierSidebar from "@/components/SupplierSidebar";
 import Link from "next/link";
 import PlanPayButton from "@/components/PlanPayButton";
 import MobileMenuButton from "@/components/MobileMenuButton";
+import { getT } from "@/lib/i18n/server";
 
 const UNLIMITED = 999999;
 
 export default async function SupplierSubscriptionPage() {
+  const t = await getT();
   const authClient = await createClient();
   const {
     data: { user },
@@ -95,7 +97,7 @@ export default async function SupplierSubscriptionPage() {
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-1">
-                    <h2 className="font-headline-md text-headline-md text-ink-deep">Subscription status</h2>
+                    <h2 className="font-headline-md text-headline-md text-ink-deep">{t("supsub.status")}</h2>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-label-md border ${statusConfig.color}`}>
                       {statusConfig.label}
                     </span>
@@ -103,14 +105,14 @@ export default async function SupplierSubscriptionPage() {
                   <p className="font-body-md text-body-md text-on-surface-variant">{statusConfig.description}</p>
                   <div className="grid grid-cols-2 gap-6 mt-6 pt-6 border-t border-outline-variant">
                     <div>
-                      <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Current plan</p>
+                      <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">{t("supsub.current_plan")}</p>
                       <p className="font-body-lg text-body-lg text-ink-deep">
                         {currentPlan ? currentPlan.name : (account.subscription_plan ?? "No plan selected")}
                       </p>
                     </div>
                     {(account.subscription_expires_at || latestSub?.expires_at) && (
                       <div>
-                        <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Paid until</p>
+                        <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">{t("supsub.paid_until")}</p>
                         <p className="font-body-lg text-body-lg text-ink-deep">
                           {new Date(account.subscription_expires_at || latestSub?.expires_at || "").toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
                         </p>
@@ -148,7 +150,7 @@ export default async function SupplierSubscriptionPage() {
           </div>
 
           {/* Plan cards */}
-          <h2 className="font-headline-md text-headline-md text-ink-deep mb-1">Choose a supplier plan</h2>
+          <h2 className="font-headline-md text-headline-md text-ink-deep mb-1">{t("supsub.choose_plan")}</h2>
           <p className="font-body-sm text-body-sm text-on-surface-variant mb-6">
             Billed monthly via mobile money. In sandbox mode payments are simulated and confirmed instantly.
           </p>
@@ -217,7 +219,7 @@ export default async function SupplierSubscriptionPage() {
                   </span>
                 </div>
                 <div>
-                  <h3 className="font-label-md text-label-md text-ink-deep">Desktop app access</h3>
+                  <h3 className="font-label-md text-label-md text-ink-deep">{t("supsub.desktop_access")}</h3>
                   <p className="font-body-sm text-body-sm text-on-surface-variant">
                     {account.download_enabled ? "Enabled" : "Disabled"}
                   </p>
@@ -233,7 +235,7 @@ export default async function SupplierSubscriptionPage() {
                   </span>
                 </div>
                 <div>
-                  <h3 className="font-label-md text-label-md text-ink-deep">Marketplace verification</h3>
+                  <h3 className="font-label-md text-label-md text-ink-deep">{t("supsub.verification")}</h3>
                   <p className="font-body-sm text-body-sm text-on-surface-variant">
                     {account.verified ? "Verified" : "Not verified"}
                   </p>

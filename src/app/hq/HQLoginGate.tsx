@@ -14,8 +14,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginHQ } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 export default function HQLoginGate() {
+  const { t } = useI18n();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,7 +56,7 @@ export default function HQLoginGate() {
               <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-2">
                 Cervos
               </p>
-              <h1 className="font-headline-lg text-headline-lg text-ink-deep">HQ Console</h1>
+              <h1 className="font-headline-lg text-headline-lg text-ink-deep">{t("hqnet.console")}</h1>
               <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">
                 Restricted access. Sign in with your HQ admin credentials.
               </p>

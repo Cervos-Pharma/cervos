@@ -26,6 +26,7 @@ import {
   type BillingOverview,
 } from "@/lib/actions/hq";
 import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
 
 interface PaymentRecord {
   id: string;
@@ -84,6 +85,7 @@ export default function HQBillingClient({
   payments,
   paymentsError,
 }: Props) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<"accounts" | "plans" | "history">("accounts");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -438,11 +440,11 @@ export default function HQBillingClient({
                         <span className="font-mono text-ink-deep">{formatTzs(plan.price_annual_tzs)}</span>
                       </div>
                       <div className="flex justify-between font-body-sm">
-                        <span className="text-on-surface-variant">Max Branches</span>
+                        <span className="text-on-surface-variant">{t("bill.max_branches")}</span>
                         <span className="font-mono text-ink-deep">{plan.max_branches}</span>
                       </div>
                       <div className="flex justify-between font-body-sm">
-                        <span className="text-on-surface-variant">Max Operators</span>
+                        <span className="text-on-surface-variant">{t("bill.max_operators")}</span>
                         <span className="font-mono text-ink-deep">{plan.max_operators}</span>
                       </div>
                     </div>
@@ -487,7 +489,7 @@ export default function HQBillingClient({
                   onChange={(e) => setPaymentFilter(e.target.value)}
                   className="border border-outline-variant bg-surface-container-low px-4 py-2 text-sm focus:outline-none focus:border-primary"
                 >
-                  <option value="all">All References</option>
+                  <option value="all">{t("hqb.all_refs")}</option>
                   <option value="mpesa">M-Pesa</option>
                   <option value="bank">Bank</option>
                 </select>
@@ -567,7 +569,7 @@ export default function HQBillingClient({
           <div className="relative ml-auto w-[480px] h-full bg-surface-container-lowest border-l border-outline-variant shadow-xl flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-outline-variant">
               <div>
-                <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Billing History</p>
+                <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{t("hqb.history")}</p>
                 <h2 className="font-headline-md text-headline-md text-ink-deep mt-1">{selectedAccount?.account_name}</h2>
               </div>
               <button onClick={() => setHistoryOpen(false)} className="text-on-surface-variant hover:text-on-surface">
@@ -621,11 +623,11 @@ export default function HQBillingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40" onClick={() => setChangePlanOpen(false)} />
           <div className="relative bg-surface-container-lowest border border-outline-variant rounded p-6 w-full max-w-md shadow-xl">
-            <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">Change Plan</h3>
+            <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">{t("hqb.change_plan")}</h3>
             <p className="font-body-sm text-on-surface-variant mb-6">{changePlanTarget.account_name}</p>
             <div className="space-y-4">
               <label className="flex flex-col gap-1">
-                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Subscription Plan</span>
+                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("hqb.plan")}</span>
                 <select
                   value={changePlanValue}
                   onChange={(e) => setChangePlanValue(e.target.value)}
@@ -638,7 +640,7 @@ export default function HQBillingClient({
                 </select>
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Subscription Status</span>
+                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("bill.status")}</span>
                 <select
                   value={changePlanStatusValue}
                   onChange={(e) => setChangePlanStatusValue(e.target.value)}
@@ -646,7 +648,7 @@ export default function HQBillingClient({
                 >
                   <option value="active">Active</option>
                   <option value="trial">Trial</option>
-                  <option value="payment_due">Payment Due</option>
+                  <option value="payment_due">{t("hqb.payment_due")}</option>
                   <option value="grace">Grace</option>
                   <option value="locked">Locked</option>
                 </select>
@@ -677,7 +679,7 @@ export default function HQBillingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40" onClick={() => setRecordPaymentOpen(false)} />
           <div className="relative bg-surface-container-lowest border border-outline-variant rounded p-6 w-full max-w-md shadow-xl">
-            <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">Record Manual Payment</h3>
+            <h3 className="font-headline-md text-headline-md text-ink-deep mb-1">{t("hqb.manual_pay")}</h3>
             <p className="font-body-sm text-on-surface-variant mb-6">Manually record a payment received outside the system.</p>
             <div className="space-y-4">
               <label className="flex flex-col gap-1">
@@ -752,7 +754,7 @@ export default function HQBillingClient({
             <h3 className="font-headline-md text-headline-md text-ink-deep mb-6">Edit Plan: {editPlanTarget?.name}</h3>
             <div className="space-y-4">
               <label className="flex flex-col gap-1">
-                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Plan Name</span>
+                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("hqb.plan_name")}</span>
                 <input
                   type="text"
                   value={editPlanForm.name}
@@ -782,7 +784,7 @@ export default function HQBillingClient({
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <label className="flex flex-col gap-1">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Max Branches</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("bill.max_branches")}</span>
                   <input
                     type="number"
                     value={editPlanForm.max_branches}
@@ -791,7 +793,7 @@ export default function HQBillingClient({
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Max Operators</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("bill.max_operators")}</span>
                   <input
                     type="number"
                     value={editPlanForm.max_operators}
@@ -835,10 +837,10 @@ export default function HQBillingClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/40" onClick={() => setAddPlanOpen(false)} />
           <div className="relative bg-surface-container-lowest border border-outline-variant rounded p-6 w-full max-w-lg shadow-xl max-h-[90vh] overflow-auto">
-            <h3 className="font-headline-md text-headline-md text-ink-deep mb-6">Add New Plan</h3>
+            <h3 className="font-headline-md text-headline-md text-ink-deep mb-6">{t("hqb.add_plan")}</h3>
             <div className="space-y-4">
               <label className="flex flex-col gap-1">
-                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Plan Name</span>
+                <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("hqb.plan_name")}</span>
                 <input
                   type="text"
                   value={addPlanForm.name}
@@ -869,7 +871,7 @@ export default function HQBillingClient({
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <label className="flex flex-col gap-1">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Max Branches</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("bill.max_branches")}</span>
                   <input
                     type="number"
                     value={addPlanForm.max_branches}
@@ -878,7 +880,7 @@ export default function HQBillingClient({
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">Max Operators</span>
+                  <span className="font-label-md text-label-md text-xs text-on-surface-variant uppercase tracking-wider">{t("bill.max_operators")}</span>
                   <input
                     type="number"
                     value={addPlanForm.max_operators}
