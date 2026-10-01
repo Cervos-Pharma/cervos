@@ -50,10 +50,50 @@ export const translations: Record<Locale, Record<string, string>> = {
     // Shifts page
 
     // Records page
+    'records.title': 'Transaction Records',
+    'records.receipt': 'Receipt',
+    'records.operator': 'Operator',
+    'records.amount': 'Amount',
+    'records.syncStatus': 'Sync Status',
+    'records.synced': 'Synced',
+    'records.pending': 'Pending',
+    'records.noReceipts': 'No receipts found',
+    'records.receiptNo': 'Receipt No.',
+    'records.items': 'Items',
+    'records.search': 'Search by receipt number, operator, or product...',
+    'records.dateCol': 'Date',
+    'records.itemsCol': 'Items',
+    'records.totalCol': 'Total',
+    'records.paymentCol': 'Payment',
+    'records.paymentMethod': 'Payment Method',
+    'records.subtotal': 'Subtotal',
+    'records.tax': 'Tax',
+    'records.discount': 'Discount',
+    'records.tendered': 'Tendered',
+    'records.tabReceipts': 'Receipts',
+    'records.tabAudit': 'Audit Log',
+    'records.auditTitle': 'Activity Log',
+    'records.auditHint': 'Who changed what on this POS — adjustments, edits and other actions.',
+    'records.auditEmpty': 'No activity recorded yet',
+    'records.auditEmptyHint': 'Actions like stock adjustments will appear here.',
+    'records.auditSearch': 'Search by action, actor, or product...',
+    'records.auditActor': 'Performed by',
+    'records.auditChange': 'Change',
+    'records.auditReason': 'Reason',
+    'records.auditNoReason': 'No reason given',
+    'records.auditActionStock': 'Stock adjustment',
+    'records.auditAllActions': 'All actions',
 
     // Subscription page
 
     // Login page
+    'login.title': 'Cervos POS',
+    'login.enterPin': 'Enter your PIN',
+    'login.signingIn': 'Signing in...',
+    'login.invalidPin': 'Incorrect PIN',
+    'login.upgradeRequired': 'Upgrade Required',
+    'login.subscriptionInactive': 'Subscription Inactive',
+    'login.updatePayment': 'Update Payment',
 
     // Settings page
 
@@ -62,6 +102,22 @@ export const translations: Record<Locale, Record<string, string>> = {
     // POS extras
 
     // Login extras
+    'login.chooseRole': 'Choose your role and enter your PIN',
+    'login.operator': 'Operator',
+    'login.admin': 'Admin',
+    'login.adminAccount': 'Admin Account',
+    'login.operatorAccount': 'Operator Account',
+    'login.selectProfile': 'Select profile',
+    'login.enterPinLabel': 'Enter PIN',
+    'login.signInAsOperator': 'Sign in as Operator',
+    'login.signInAsAdmin': 'Sign in as Admin',
+    'login.noProfiles': 'No registered profiles on this branch.',
+    'login.noProfilesHint': 'Manage operators in the web dashboard or switch role above.',
+    'login.loadingAccounts': 'Loading accounts...',
+    'login.subscriptionInactiveMsg': 'Your subscription is inactive or past due. Please update your payment method to continue.',
+    'login.branchNotCovered': "This branch isn't covered by your plan. Upgrade your subscription to restore service here.",
+    'login.upgradeDesktop': 'Upgrade your subscription to access the POS.',
+    'login.failed': 'Sign-in failed',
 
     // Onboarding
 
@@ -586,6 +642,19 @@ export const translations: Record<Locale, Record<string, string>> = {
     'records.tax': 'Kodi',
     'records.discount': 'Punguzo',
     'records.tendered': 'Nililipwa',
+    'records.tabReceipts': 'Risiti',
+    'records.tabAudit': 'Kumbukumbu za Ukaguzi',
+    'records.auditTitle': 'Kumbukumbu za Shughuli',
+    'records.auditHint': 'Nani alibadilisha nini kwenye POS hii — marekebisho ya hisa na vitendo vingine.',
+    'records.auditEmpty': 'Hakuna shughuli zilizorekodiwa bado',
+    'records.auditEmptyHint': 'Vitendo kama marekebisho ya hisa vitaonekana hapa.',
+    'records.auditSearch': 'Tafuta kwa kitendo, mtendaji, au dawa...',
+    'records.auditActor': 'Aliyefanya',
+    'records.auditChange': 'Mabadiliko',
+    'records.auditReason': 'Sababu',
+    'records.auditNoReason': 'Hakuna sababu iliyotolewa',
+    'records.auditActionStock': 'Marekebisho ya Hisa',
+    'records.auditAllActions': 'Vitendo vyote',
     'reports.revenueKpi': 'Mapato',
     'reports.cogs': 'Gharama ya Bidhaa Zilizouzwa',
     'reports.grossProfit': 'Faida Ghafi',

@@ -19,7 +19,7 @@ declare global {
 export default function Inventory() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { isAdmin, permissions } = useAuthStore()
+  const { isAdmin, permissions, currentOperator } = useAuthStore()
   const [products, setProducts] = useState<Product[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -141,10 +141,16 @@ export default function Inventory() {
       expiry_date: batch.expiry_date ?? null,
       updated_at: nowIso(),
     });
-    // Audit trail row so HQ can see who adjusted what and why.
+    // Audit trail row so HQ can see who adjusted what and why. The current
+    // operator id is stamped on the row for attribution in the Records audit
+    // view; the product name is resolved from the batch for readability.
     const logId = generateId();
+    const prodRows = await queryDb('SELECT generic_name FROM products WHERE id = ?', [batch.product_id]);
     const detail = {
       product_id: batch.product_id,
+      product_name: prodRows.length > 0 ? prodRows[0].generic_name : null,
+      operator_id: currentOperator?.id ?? null,
+      operator_name: currentOperator?.name ?? null,
       mode,
       amount,
       old_quantity: batch.quantity,

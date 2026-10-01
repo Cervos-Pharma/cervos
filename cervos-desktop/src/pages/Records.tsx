@@ -17,10 +17,25 @@ interface ReceiptData {
   items: { product_name: string; quantity: number; unit_price: number }[]
 }
 
+interface AuditEntry {
+  id: string
+  action: string
+  actor: string | null
+  entity_type: string | null
+  detail: string | null
+  created_at: string
+  synced: number
+}
+
+type RecordsTab = 'receipts' | 'audit'
+
 export default function Records() {
   const { t } = useTranslation()
+  const [tab, setTab] = useState<RecordsTab>('receipts')
   const [receipts, setReceipts] = useState<ReceiptData[]>([])
   const [filteredReceipts, setFilteredReceipts] = useState<ReceiptData[]>([])
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
+  const [filteredAudit, setFilteredAudit] = useState<AuditEntry[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFilter, setDateFilter] = useState('')
@@ -28,11 +43,16 @@ export default function Records() {
 
   useEffect(() => {
     loadReceipts()
+    loadAudit()
   }, [])
 
   useEffect(() => {
     filterReceipts()
   }, [receipts, searchQuery, dateFilter])
+
+  useEffect(() => {
+    filterAudit()
+  }, [auditEntries, searchQuery, dateFilter])
 
   async function loadReceipts() {
     setIsLoading(true)
@@ -78,6 +98,45 @@ export default function Records() {
     setIsLoading(false)
   }
 
+  async function loadAudit() {
+    // Local audit trail: every logged action on this POS (stock adjustments
+    // and more), newest first. Stays visible offline; the same rows sync to
+    // the cloud in the background.
+    const rows = await queryDb(`
+      SELECT a.id, a.action, a.entity_type, a.detail, a.created_at, a.synced,
+             COALESCE(o.name, a.actor) as actor
+      FROM activity_log a
+      LEFT JOIN operators o ON o.id = a.operator_id
+      ORDER BY a.created_at DESC
+      LIMIT 500
+    `)
+    // Older rows have no operator stamped in the detail; newer rows carry
+    // operator_name in detail — prefer it when the join came up empty.
+    const withNames = (rows as AuditEntry[]).map((r) => {
+      if (r.actor) return r
+      try {
+        const d = r.detail ? JSON.parse(r.detail) : {}
+        if (d.operator_name) return { ...r, actor: d.operator_name }
+      } catch { /* fall through */ }
+      return r
+    })
+    setAuditEntries(withNames)
+  }
+
+  function parseDetail(detail: string | null): Record<string, any> {
+    if (!detail) return {}
+    try {
+      return JSON.parse(detail)
+    } catch {
+      return {}
+    }
+  }
+
+  function auditActionLabel(action: string): string {
+    if (action === 'stock_adjustment') return t('records.auditActionStock')
+    return action.replace(/_/g, ' ')
+  }
+
   function filterReceipts() {
     let filtered = receipts
 
@@ -96,6 +155,29 @@ export default function Records() {
     setFilteredReceipts(filtered)
   }
 
+  function filterAudit() {
+    let filtered = auditEntries
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      filtered = filtered.filter(a => {
+        const d = parseDetail(a.detail)
+        return (
+          a.action.toLowerCase().includes(q) ||
+          auditActionLabel(a.action).toLowerCase().includes(q) ||
+          a.actor?.toLowerCase().includes(q) ||
+          (typeof d.reason === 'string' && d.reason.toLowerCase().includes(q))
+        )
+      })
+    }
+
+    if (dateFilter) {
+      filtered = filtered.filter(a => a.created_at.startsWith(dateFilter))
+    }
+
+    setFilteredAudit(filtered)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -111,12 +193,42 @@ export default function Records() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-headline text-2xl font-black text-on-surface">
-            Records
+            {t('records.title')}
           </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            {filteredReceipts.length} receipts
+            {tab === 'receipts'
+              ? `${filteredReceipts.length} receipts`
+              : `${filteredAudit.length} entries`}
           </p>
         </div>
+      </div>
+
+      {/* Tab switch: Receipts | Audit Log */}
+      <div className="inline-flex p-1 bg-surface rounded-lg border border-outline-variant mb-6">
+        <button
+          type="button"
+          onClick={() => setTab('receipts')}
+          className={`flex items-center justify-center gap-2 py-2.5 px-5 rounded-md text-sm font-semibold transition-all ${
+            tab === 'receipts'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg">receipt_long</span>
+          {t('records.tabReceipts')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('audit')}
+          className={`flex items-center justify-center gap-2 py-2.5 px-5 rounded-md text-sm font-semibold transition-all ${
+            tab === 'audit'
+              ? 'bg-primary text-white shadow-sm'
+              : 'text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-lg">history</span>
+          {t('records.tabAudit')}
+        </button>
       </div>
 
       <div className="flex gap-4 mb-6">
@@ -125,7 +237,7 @@ export default function Records() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('records.search')}
+            placeholder={tab === 'receipts' ? t('records.search') : t('records.auditSearch')}
             className="w-full px-4 py-2.5 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           />
         </div>
@@ -137,6 +249,7 @@ export default function Records() {
         />
       </div>
 
+      {tab === 'receipts' && (
       <div className="bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
         <table className="w-full">
           <thead className="bg-outline-variant/50">
@@ -187,8 +300,81 @@ export default function Records() {
           </tbody>
         </table>
       </div>
+      )}
 
-      {selectedReceipt && (
+      {tab === 'audit' && (
+        <div className="space-y-3">
+          {filteredAudit.length === 0 ? (
+            <div className="bg-surface-base border border-outline-variant rounded-xl px-4 py-12 text-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-5xl">history</span>
+              <p className="mt-2 font-medium">{t('records.auditEmpty')}</p>
+              <p className="mt-1 text-sm">{t('records.auditEmptyHint')}</p>
+            </div>
+          ) : (
+            filteredAudit.map((entry) => {
+              const d = parseDetail(entry.detail)
+              const hasQtyChange =
+                typeof d.old_quantity === 'number' && typeof d.new_quantity === 'number'
+              return (
+                <div
+                  key={entry.id}
+                  className="bg-surface-base border border-outline-variant rounded-xl px-4 py-3 flex items-start justify-between gap-4"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        <span className="material-symbols-outlined text-xs">edit</span>
+                        {auditActionLabel(entry.action)}
+                      </span>
+                      <span className="text-sm font-medium text-on-surface">
+                        {d.product_name || entry.entity_type || ''}
+                      </span>
+                    </div>
+                    {hasQtyChange && (
+                      <p className="text-sm text-on-surface-variant mt-1">
+                        {t('records.auditChange')}:{' '}
+                        <span className="font-semibold text-on-surface">
+                          {d.old_quantity} → {d.new_quantity}
+                        </span>
+                        {typeof d.amount === 'number' && (
+                          <span className="ml-2">
+                            ({d.amount > 0 ? '+' : ''}{d.amount})
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <p className="text-xs text-on-surface-variant mt-1">
+                      {t('records.auditActor')}: {entry.actor || 'Unknown'}
+                      {' · '}
+                      {new Date(entry.created_at).toLocaleDateString()} {new Date(entry.created_at).toLocaleTimeString()}
+                    </p>
+                    <p className="text-xs mt-1">
+                      <span className="text-on-surface-variant">{t('records.auditReason')}: </span>
+                      <span className={d.reason ? 'text-on-surface' : 'text-on-surface-variant/60 italic'}>
+                        {d.reason || t('records.auditNoReason')}
+                      </span>
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ${
+                      entry.synced
+                        ? 'bg-secondary/10 text-secondary'
+                        : 'bg-warning/10 text-warning'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-xs">
+                      {entry.synced ? 'cloud_done' : 'cloud_upload'}
+                    </span>
+                    {entry.synced ? t('records.synced') : t('records.pending')}
+                  </span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      )}
+
+      {selectedReceipt && tab === 'receipts' && (
         <ReceiptModal
           receipt={selectedReceipt}
           onClose={() => setSelectedReceipt(null)}
