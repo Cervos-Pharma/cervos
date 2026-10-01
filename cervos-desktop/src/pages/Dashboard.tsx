@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { queryDb } from '../lib/database'
 import { getLinkedBranchOverview, getLinkedBranchId, runSyncCycle } from '../lib/sync'
+import { useSyncStore } from '../lib/store'
 import {
   LineChart,
   Line,
@@ -40,6 +41,7 @@ function subscriptionDetail(graceEndsAt: string | null, t: (k: string) => string
 
 export default function Dashboard() {
   const { t } = useTranslation()
+  const lastSyncAt = useSyncStore((s) => s.lastSyncAt)
   const [data, setData] = useState<DashboardData>({
     currency: 'TZS',
     todayRevenue: 0,
@@ -56,9 +58,58 @@ export default function Dashboard() {
   })
   const [isLoading, setIsLoading] = useState(true)
 
+  const refreshLiveStats = useCallback(async () => {
+    const branchId = await getLinkedBranchId()
+    if (!branchId) return
+
+    getLinkedBranchOverview().then((refreshed) => {
+      setData((prev) => ({
+        ...prev,
+        branchCount: refreshed.branchCount,
+        subscriptionStatus: refreshed.subscriptionStatus,
+        graceEndsAt: refreshed.graceEndsAt,
+        branchName: refreshed.branchName ?? prev.branchName,
+        dataWarning: refreshed.error,
+      }))
+    }).catch(() => {})
+
+    const [freshSales, freshBatches] = await Promise.all([
+      queryDb(`SELECT * FROM sales WHERE branch_id = ? ORDER BY created_at DESC LIMIT 50`, [branchId]),
+      queryDb('SELECT * FROM batches WHERE branch_id = ?', [branchId]),
+    ])
+    const today = new Date().toDateString()
+    const tSales = freshSales.filter((s: any) => s.created_at && new Date(s.created_at).toDateString() === today)
+    const stock = new Map<string, number>()
+    for (const b of freshBatches) stock.set(b.product_id, (stock.get(b.product_id) || 0) + (b.quantity || 0))
+    const last7 = new Map<string, number>()
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      last7.set(d.toISOString().slice(0, 10), 0)
+    }
+    for (const s of freshSales) {
+      const k = s.created_at?.slice(0, 10)
+      if (k && last7.has(k)) last7.set(k, (last7.get(k) || 0) + (s.total || 0))
+    }
+    setData((prev) => ({
+      ...prev,
+      todayRevenue: tSales.reduce((sum: number, s: any) => sum + (s.total || 0), 0),
+      todaySales: tSales.length,
+      pendingSync: freshSales.filter((s: any) => !s.synced).length,
+      lowStock: Array.from(stock.values()).filter((q) => q <= LOW_STOCK_THRESHOLD).length,
+      chartData: Array.from(last7.entries()).map(([date, value]) => ({ label: date.slice(5), value })),
+    }))
+  }, [])
+
   useEffect(() => {
     loadData()
   }, [])
+
+  // Automatically refresh live overview & stats whenever background sync connects & completes
+  useEffect(() => {
+    if (!lastSyncAt) return
+    refreshLiveStats()
+  }, [lastSyncAt, refreshLiveStats])
 
   async function loadData() {
     // Read the local SQLite cache FIRST so the dashboard renders instantly,

@@ -41,3 +41,31 @@ body {
   -webkit-font-smoothing: antialiased;
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
+
+@layer components {
+  /* HUD glassmorphism panel for Onboarding & Authentication */
+  .hud-panel {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 32px), calc(100% - 32px) 100%, 0 100%);
+  }
+
+  .hud-border {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border: 1px solid rgba(26, 26, 46, 0.2);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 32px), calc(100% - 32px) 100%, 0 100%);
+  }
+
+  .hud-notch-line {
+    position: absolute;
+    bottom: 15px;
+    right: -6px;
+    width: 45px;
+    height: 1px;
+    background-color: rgba(26, 26, 46, 0.35);
+    transform: rotate(-45deg);
+    pointer-events: none;
+  }
+}
