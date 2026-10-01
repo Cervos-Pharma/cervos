@@ -2,6 +2,7 @@ import { supabase, isConfigured } from './supabase'
 import { queryDb, executeDb, generateId, nowIso } from './database'
 import { useSyncStore } from './store'
 import type { DashboardStats } from '../types'
+import { hashPin } from './queries'
 
 let Ie: any = null
 const SESSION_KEY = 'cervos_supabase_session'
@@ -260,22 +261,242 @@ export async function getLinkStatus(): Promise<LinkStatus> {
   return { alreadyLinked: false, branches: (branches ?? []) as RemoteBranch[] }
 }
 
+export interface RegisterPharmacyParams {
+  pharmacyName: string
+  fullName: string
+  email: string
+  password: string
+  phone?: string
+  managerPin: string
+  onProgress?: (stage: 'account' | 'branch' | 'operator' | 'sync') => void
+}
+
+export interface RegisterPharmacyResult {
+  success: boolean
+  requiresEmailConfirmation?: boolean
+  branchId?: string
+  branchName?: string
+  error?: string
+}
+
+/**
+ * Executes a 100% standalone registration directly from the mobile APK.
+ * Creates the Supabase Auth user, ensures the pharmacy account record, provisions
+ * the initial branch and administrator operator with a SHA-256 PIN hash, links
+ * the local SQLite database, and kicks off an initial catalog sync.
+ */
+export async function registerAndScaffoldPharmacy(
+  params: RegisterPharmacyParams
+): Promise<RegisterPharmacyResult> {
+  if (!isConfigured) {
+    throw new Error('POS not configured — Supabase keys missing. Rebuild APK with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
+  }
+
+  Ie = supabase
+  params.onProgress?.('account')
+
+  // 1. Sign up Supabase auth user
+  const { data: authData, error: authErr } = await Ie.auth.signUp({
+    email: params.email.trim(),
+    password: params.password,
+    options: {
+      data: {
+        full_name: params.fullName.trim(),
+        phone: params.phone?.trim() || null,
+        account_type: 'pharmacy',
+        entity_name: params.pharmacyName.trim(),
+      },
+    },
+  })
+
+  if (authErr) {
+    Ie = null
+    return { success: false, error: authErr.message }
+  }
+
+  // If user signed up but email confirmation is mandatory in Supabase
+  if (authData.user && !authData.session) {
+    return { success: false, requiresEmailConfirmation: true }
+  }
+
+  if (!authData.session || !authData.user) {
+    return { success: false, error: 'Account created, but no active mobile session was received.' }
+  }
+
+  await saveSession(authData.session)
+
+  // 2. Ensure accounts row exists in Supabase
+  params.onProgress?.('branch')
+  let accountId: string | null = null
+
+  // Check if DB trigger auto-created the accounts row
+  const { data: existingAcct } = await Ie
+    .from('accounts')
+    .select('id')
+    .eq('auth_user_id', authData.user.id)
+    .maybeSingle()
+
+  if (existingAcct) {
+    accountId = existingAcct.id
+  } else {
+    // Fallback: create row directly if trigger is not installed
+    const { data: createdAcct } = await Ie
+      .from('accounts')
+      .insert({
+        auth_user_id: authData.user.id,
+        name: params.pharmacyName.trim(),
+        type: 'pharmacy',
+        email: authData.user.email,
+      })
+      .select('id')
+      .maybeSingle()
+
+    if (createdAcct) {
+      accountId = createdAcct.id
+    } else {
+      // Small pause in case trigger was slightly delayed
+      await new Promise((r) => setTimeout(r, 600))
+      const { data: retryAcct } = await Ie
+        .from('accounts')
+        .select('id')
+        .eq('auth_user_id', authData.user.id)
+        .maybeSingle()
+      if (retryAcct) {
+        accountId = retryAcct.id
+      } else {
+        return {
+          success: false,
+          error: 'Could not link cloud pharmacy account record in database.',
+        }
+      }
+    }
+  }
+
+  // 3. Create initial Branch in Supabase
+  const { data: branch, error: branchErr } = await Ie
+    .from('branches')
+    .insert({
+      account_id: accountId,
+      name: params.pharmacyName.trim(),
+      is_active: true,
+      pos_activated_at: new Date().toISOString(),
+    })
+    .select('id, name, address, account_id')
+    .single()
+
+  if (branchErr || !branch) {
+    return { success: false, error: `Failed to create pharmacy branch: ${branchErr?.message}` }
+  }
+
+  // 4. Create initial Admin Operator in Supabase with sha256 pin_hash
+  params.onProgress?.('operator')
+  const pinHash = await hashPin(params.managerPin)
+  const { data: opData, error: opErr } = await Ie
+    .from('operators')
+    .insert({
+      branch_id: branch.id,
+      name: params.fullName.trim() || 'Manager',
+      role: 'admin',
+      pin_hash: pinHash,
+    })
+    .select('id, name, role, branch_id')
+    .maybeSingle()
+
+  if (opErr) {
+    return { success: false, error: `Failed to configure manager operator: ${opErr.message}` }
+  }
+
+  // 5. Link local SQLite terminal settings
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['branch_id', JSON.stringify(branch.id)]
+  )
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['account_id', JSON.stringify(branch.account_id)]
+  )
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['account_name', JSON.stringify(params.pharmacyName.trim())]
+  )
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['centre_name', JSON.stringify(branch.name)]
+  )
+  await executeDb(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ['centre_address', JSON.stringify(branch.address ?? '')]
+  )
+  await executeDb(
+    `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET account_id = excluded.account_id, name = excluded.name`,
+    [branch.id, branch.account_id, branch.name, 'trial', 'free']
+  )
+
+  // Write operator directly into local SQLite so terminal can unlock immediately offline
+  const localOpId = opData?.id || generateId()
+  await executeDb(
+    `INSERT INTO operators (id, branch_id, name, pin_hash, role, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, pin_hash = excluded.pin_hash`,
+    [localOpId, branch.id, params.fullName.trim() || 'Manager', pinHash, 'admin', new Date().toISOString()]
+  )
+
+  // 6. Run initial sync cycle in background to populate catalog
+  params.onProgress?.('sync')
+  runSyncCycle().catch((err) => console.warn('Initial background sync cycle:', err))
+
+  return {
+    success: true,
+    branchId: branch.id,
+    branchName: branch.name,
+  }
+}
+
 /**
  * Executes the "Standalone Initialization" flow for new users directly from the APK.
  * Creates a branch and an admin operator entirely through the Supabase client.
  */
-export async function scaffoldAccount(branchName: string, managerPin: string): Promise<string> {
+export async function scaffoldAccount(
+  branchName: string,
+  managerPin: string,
+  adminName = 'Manager'
+): Promise<string> {
   if (!Ie) throw new Error('Not linked to Supabase — please sign in again.')
   const { data: user } = await Ie.auth.getUser()
   if (!user.user) throw new Error('No authenticated user found. Please sign in again.')
 
-  const { data: account } = await Ie
+  let { data: account } = await Ie
     .from('accounts')
     .select('id')
     .eq('auth_user_id', user.user.id)
     .maybeSingle()
 
-  if (!account) throw new Error('No pharmacy account found for this login.')
+  if (!account) {
+    const { data: newAcct } = await Ie
+      .from('accounts')
+      .insert({
+        auth_user_id: user.user.id,
+        name: user.user.user_metadata?.entity_name || branchName,
+        type: 'pharmacy',
+        email: user.user.email,
+      })
+      .select('id')
+      .maybeSingle()
+
+    if (newAcct) {
+      account = newAcct
+    } else {
+      const { data: retryAcct } = await Ie
+        .from('accounts')
+        .select('id')
+        .eq('auth_user_id', user.user.id)
+        .maybeSingle()
+      if (retryAcct) account = retryAcct
+      else throw new Error('No pharmacy account found for this login.')
+    }
+  }
 
   // 1. Create Branch
   const { data: branch, error: branchErr } = await Ie
@@ -283,24 +504,36 @@ export async function scaffoldAccount(branchName: string, managerPin: string): P
     .insert({
       account_id: account.id,
       name: branchName,
-      is_active: true
+      is_active: true,
     })
     .select('id')
     .single()
 
   if (branchErr || !branch) throw new Error(`Failed to create branch: ${branchErr?.message}`)
 
-  // 2. Create Admin Operator
-  const { error: opErr } = await Ie
+  // 2. Create Admin Operator with pin_hash
+  const pinHash = await hashPin(managerPin)
+  const { data: opData, error: opErr } = await Ie
     .from('operators')
     .insert({
       branch_id: branch.id,
-      name: 'Manager',
+      name: adminName,
       role: 'admin',
-      pin: managerPin
+      pin_hash: pinHash,
     })
+    .select('id')
+    .maybeSingle()
 
   if (opErr) throw new Error(`Failed to create operator: ${opErr.message}`)
+
+  // Local SQLite insert
+  const opId = opData?.id || generateId()
+  await executeDb(
+    `INSERT INTO operators (id, branch_id, name, pin_hash, role, created_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name = excluded.name, pin_hash = excluded.pin_hash`,
+    [opId, branch.id, adminName, pinHash, 'admin', new Date().toISOString()]
+  )
 
   return branch.id
 }
@@ -848,9 +1081,6 @@ let _autoTimer: any = null
 let _cleanupAuto: (() => void) | null = null
 let _failStreak = 0
 let _syncing = false
-const BASE_INTERVAL = 5 * 60 * 1000
-const MAX_BACKOFF = 30 * 60 * 1000
-const FIRST_DELAY = 8000
 
 export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pushed?: number; message?: string }> {
   if (typeof window === 'undefined') return { ok: false, message: 'no window' }
@@ -971,41 +1201,72 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
   }
 }
 
-// ─── Auto-sync scheduler (free-tier friendly) ───────────────────────────────
-// - One cycle at a time (no overlap)
-// - Base interval 5 min; on failure, exponential backoff capped at 30 min
-// - Also fires on tab focus / network reconnect (debounced by the single-flight guard)
-// - Skips entirely when offline or not linked
+// ─── Auto-sync & Background Reconnect Scheduler ─────────────────────────────
+// - Immediate fast reconnect loops on network reconnect / app launch
+// - Normal interval 3 min when healthy
+// - Fast backoff [2.5s, 5s, 10s, 20s, 45s, 90s] when offline or reconnecting
+// - Wakes up instantly on window online / focus / document visible events
+
+const NORMAL_INTERVAL = 3 * 60 * 1000
+const RETRY_INTERVALS = [2500, 5000, 10000, 20000, 45000, 90000]
+const FIRST_DELAY = 1200
 
 export function startAutoSync(): void {
   if (_autoTimer) return
 
-  const tick = async () => {
-    try {
-      await runSyncCycle()
-    } catch {
-      /* swallow — backoff handles retries */
-    }
-    const next = _failStreak > 0
-      ? Math.min(BASE_INTERVAL * Math.pow(2, _failStreak), MAX_BACKOFF)
-      : BASE_INTERVAL
-    _autoTimer = setTimeout(tick, next)
+  const scheduleNext = (delayMs: number) => {
+    if (_autoTimer) clearTimeout(_autoTimer)
+    _autoTimer = setTimeout(tick, delayMs)
   }
+
+  const tick = async () => {
+    let success = false
+    try {
+      const res = await runSyncCycle()
+      success = Boolean(res.ok)
+    } catch {
+      success = false
+    }
+
+    if (success) {
+      _failStreak = 0
+      scheduleNext(NORMAL_INTERVAL)
+    } else {
+      _failStreak++
+      const retryDelay = RETRY_INTERVALS[Math.min(_failStreak, RETRY_INTERVALS.length - 1)]
+      scheduleNext(retryDelay)
+    }
+  }
+
+  // Fast initial sync & session restoration shortly after APK boot
   _autoTimer = setTimeout(tick, FIRST_DELAY)
+
+  const triggerImmediateSync = () => {
+    if (_syncing) return
+    if (_autoTimer) clearTimeout(_autoTimer)
+    tick()
+  }
 
   const onVisible = () => {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      runSyncCycle().catch(() => {})
+      triggerImmediateSync()
     }
   }
-  const onOnline = () => runSyncCycle().catch(() => {})
+  const onOnline = () => triggerImmediateSync()
+  const onFocus = () => triggerImmediateSync()
 
   if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible)
-  if (typeof window !== 'undefined') window.addEventListener('online', onOnline)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', onOnline)
+    window.addEventListener('focus', onFocus)
+  }
 
   _cleanupAuto = () => {
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible)
-    if (typeof window !== 'undefined') window.removeEventListener('online', onOnline)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('focus', onFocus)
+    }
   }
 }
 

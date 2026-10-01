@@ -112,7 +112,7 @@ export async function updateBranchSubscription(branchId: string, data: {
   }
 }
 
-async function hashPin(pin: string): Promise<string> {
+export async function hashPin(pin: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(pin)
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)

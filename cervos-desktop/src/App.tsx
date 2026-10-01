@@ -148,9 +148,13 @@ function AppRoutes() {
       // refreshSession() can block for 60s+ waiting for network timeout.
       setSessionRestored(true)
       
+      // Start the background auto-sync & reconnect runner immediately.
+      // Even if offline on initial APK boot, its fast reconnect loop will
+      // hook into the network the moment connectivity becomes available.
+      startAutoSync()
+
       ensureLinked().then(() => {
         if (disposed) return
-        startAutoSync()
         checkSubscriptionBlocked()
           .then((b) => useSyncStore.getState().setBlocked(b.blocked, b.reason ?? null))
           .catch(() => {})
