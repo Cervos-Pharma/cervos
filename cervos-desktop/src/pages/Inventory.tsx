@@ -141,9 +141,9 @@ export default function Inventory() {
       expiry_date: batch.expiry_date ?? null,
       updated_at: nowIso(),
     });
-    // Audit trail row so HQ can see who adjusted what and why. The current
-    // operator id is stamped on the row for attribution in the Records audit
-    // view; the product name is resolved from the batch for readability.
+    // Audit trail row — local to this device ONLY. It is deliberately never
+    // queued for cloud sync: the who/why of adjustments is the branch's own
+    // business, visible in Records > Audit Log (admin), not HQ data.
     const logId = generateId();
     const prodRows = await queryDb('SELECT generic_name FROM products WHERE id = ?', [batch.product_id]);
     const detail = {
@@ -161,15 +161,6 @@ export default function Inventory() {
       `INSERT INTO activity_log (id, branch_id, action, entity_type, entity_id, detail, created_at) VALUES (?,?,?,?,?,?,?)`,
       [logId, branchId, 'stock_adjustment', 'batch', batch.id, JSON.stringify(detail), nowIso()]
     );
-    await queueForSync("activity_log", logId, "insert", {
-      id: logId,
-      branch_id: branchId,
-      action: 'stock_adjustment',
-      entity_type: 'batch',
-      entity_id: batch.id,
-      detail,
-      created_at: nowIso(),
-    });
 
     // Refresh the detail view so the new quantity shows immediately.
     if (viewingProduct) {
