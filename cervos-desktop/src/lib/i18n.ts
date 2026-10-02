@@ -155,31 +155,6 @@ export const translations: Record<Locale, Record<string, string>> = {
     'nav.orders': 'Orders',
     'nav.subscription': 'Subscription',
 
-    // Onboarding (full coverage)
-    'onboarding.address': "Address",
-    'onboarding.allSet': "All Set!",
-    'onboarding.allSetHint': "This device is linked to your branch. Operators can sign in with the PIN assigned in the web portal.",
-    'onboarding.branch': "Branch",
-    'onboarding.branchActivated': "Branch Already Activated",
-    'onboarding.branchActivatedHint': "Another POS device holds this branch. Claiming it here will deactivate that one — it will unlink on its next sync.",
-    'onboarding.claiming': "Claiming…",
-    'onboarding.createAccount': "Create Pharmacy Account",
-    'onboarding.createAtWeb': "Create an account at cervos.online",
-    'onboarding.email': "Email",
-    'onboarding.forceClaim': "Claim for this device",
-    'onboarding.goToSignIn': "Go to Sign In",
-    'onboarding.linkAdmin': "Link Admin Account",
-    'onboarding.linkHint': "Sign in with your Cervos admin account to enable cloud sync and online payments.",
-    'onboarding.name': "Name",
-    'onboarding.or': "or",
-    'onboarding.password': "Password",
-    'onboarding.selectBranch': "Choose Branch",
-    'onboarding.selectBranchHint': "This account has more than one branch. Which one is this device?",
-    'onboarding.signInAndLink': "Sign In & Link",
-    'onboarding.signInLink': "Sign In & Link this POS",
-    'onboarding.welcome': "Welcome to Cervos POS",
-    'onboarding.welcomeHint': "Sign in with your pharmacy account to link this device to a branch.",
-
     // Orders (full coverage)
     'orders.amount': "Amount",
     'orders.loading': "Loading…",
@@ -480,6 +455,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.failed': 'Sign-in failed',
 
     // Onboarding
+    'onboarding.stepPharmacy': 'Register Your Pharmacy',
     'onboarding.welcome': 'Welcome to Cervos POS',
     'onboarding.welcomeHint': 'High-performance offline-first point of sale for retail and community pharmacies.',
     'onboarding.signInLink': 'Sign In to Existing Account',
@@ -951,6 +927,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'login.failed': 'Kuingia kumeshindikana',
 
     // Onboarding (SW)
+    'onboarding.stepPharmacy': 'Sajili Duka Lako la Dawa',
     'onboarding.welcome': 'Karibu kwenye Cervos POS',
     'onboarding.welcomeHint': 'Mfumo wa mauzo wa kisasa unaofanya kazi hata bila intaneti kwa maduka ya dawa.',
     'onboarding.signInLink': 'Ingia kwenye Akaunti Iliyopo',
