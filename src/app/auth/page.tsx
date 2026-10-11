@@ -84,6 +84,11 @@ function AuthForm() {
   const [suShowPw, setSuShowPw] = useState(false);
 
   const [resetEmail, setResetEmail] = useState("");
+  // Persistent post-send state: the reset form switches to a confirmation
+  // showing which address the link went to. It stays until the user leaves
+  // (no auto-jump back to sign-in — that made the success invisible and
+  // invited duplicate submissions).
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null);
 
   useEffect(() => {
     if (inviteToken) {
@@ -178,8 +183,8 @@ function AuthForm() {
       });
       if (error) { setToast({ message: error.message, type: "error" }); return; }
       setToast({ message: t("auth.reset.sent"), type: "success" });
+      setResetSentTo(resetEmail.trim());
       setResetEmail("");
-      setTimeout(() => setTab("signin"), 3500);
     } finally {
       setLoading(false);
     }
@@ -314,10 +319,29 @@ function AuthForm() {
                       <h2 className="font-headline-md text-headline-md text-ink-deep mb-1">{t("auth.reset.title")}</h2>
                       <p className="font-body-sm text-body-sm text-on-surface-variant">{t("auth.reset.body")}</p>
                     </div>
-                    <input type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder={t("auth.email")} required className={inputCls} />
-                    <button type="submit" disabled={loading} className={btnCls}>
-                      {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>{t("auth.reset.send_link")} <span className="material-symbols-outlined text-[18px]">send</span></>}
-                    </button>
+                    {resetSentTo && (
+                      <div className="flex flex-col items-center gap-3 p-5 border border-secondary/40 bg-secondary/[0.06] rounded">
+                        <div className="w-10 h-10 rounded-full bg-secondary/15 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[22px] text-secondary">mark_email_read</span>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-body-md text-ink-deep">{t("auth.reset.sent")}</p>
+                          <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 break-all">{resetSentTo}</p>
+                          <p className="font-body-sm text-body-sm text-on-surface-variant mt-2">{t("auth.reset.check_spam")}</p>
+                        </div>
+                        <button type="button" onClick={() => setResetSentTo(null)} className="font-label-md text-label-md text-primary hover:underline">
+                          {t("auth.reset.use_other")}
+                        </button>
+                      </div>
+                    )}
+                    {!resetSentTo && (
+                      <>
+                        <input type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder={t("auth.email")} required className={inputCls} />
+                        <button type="submit" disabled={loading} className={btnCls}>
+                          {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>{t("auth.reset.send_link")} <span className="material-symbols-outlined text-[18px]">send</span></>}
+                        </button>
+                      </>
+                    )}
                     <button type="button" onClick={() => setTab("signin")} className="text-center font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center gap-1">
                       <span className="material-symbols-outlined text-[16px]">arrow_back</span> {t("auth.back_to_signin")}
                     </button>

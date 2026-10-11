@@ -93,6 +93,8 @@ export const strings: Record<string, Record<Lang, string>> = {
   "auth.confirm.body":  { EN: "We've sent a confirmation link to", SW: "Tumekutumia kiungo cha uthibitisho kwa" },
   "auth.confirm.note":  { EN: "Click the link to activate your account, then sign in.", SW: "Bonyeza kiungo ili kuanzisha akaunti yako, kisha ingia." },
   "auth.reset.sent":    { EN: "Password reset link sent. Check your email.", SW: "Kiungo cha kuweka upya nywila kimetumwa. Angalia barua pepe yako." },
+  "auth.reset.check_spam": { EN: "Didn't arrive? Check your spam folder — the link expires after a short time and works once.", SW: "Hakupata? Angalia folda yako ya junk — kiungo kinaisha baada ya muda mfupi na kinatumika mara moja tu." },
+  "auth.reset.use_other": { EN: "Send to a different email", SW: "Tuma kwa barua pepe nyingine" },
 
   // ── Portal — shared ───────────────────────────────────────────────────────
   "portal.dashboard":   { EN: "Dashboard",   SW: "Dashibodi" },
