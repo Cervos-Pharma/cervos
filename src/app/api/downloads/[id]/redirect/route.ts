@@ -10,6 +10,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { checkIpRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
@@ -17,6 +18,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Real download flow fires this once per click — 10/min per IP is generous
+  // for humans and caps bandwidth/infra abuse of the 10–20MB binaries.
+  const rl = checkIpRateLimit(req, "download-stream", 10, 60_000);
+  if (!rl.allowed) return rateLimitResponse(rl.resetAt);
+
   const { id } = await params;
 
   if (!id) {
@@ -49,18 +55,43 @@ export async function GET(
 
   const filename = filePath.split("/").pop() || "download";
 
+  /**
+   * Correct, specific MIME types for installer formats. Serving .exe/.apk as a
+   * bare application/octet-stream is one of the heuristics Chrome's Safe
+   * Browsing uses to flag a download as "suspicious" — a generic type on an
+   * executable extension looks like disguise. Declaring the canonical type
+   * plus nosniff removes the mismatch signal Android/Chrome warn on.
+   */
+  const INSTALLER_MIME: Record<string, string> = {
+    ".exe": "application/vnd.microsoft.portable-executable",
+    ".apk": "application/vnd.android.package-archive",
+    ".dmg": "application/x-apple-diskimage",
+    ".msi": "application/x-msi",
+    ".appimage": "application/x-executable",
+    ".deb": "application/vnd.debian.binary-package",
+  };
+  const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+  const installerMime = INSTALLER_MIME[ext];
+
+  /** Shared hardening headers for every streamed binary response. */
+  function downloadHeaders(upstream?: Response): Record<string, string> {
+    return {
+      "Content-Type": installerMime ?? upstream?.headers.get("content-type") ?? "application/octet-stream",
+      "Content-Length": upstream?.headers.get("content-length") ?? "",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "X-Content-Type-Options": "nosniff",
+      "X-Download-Options": "noopen",
+      "Cache-Control": "no-store",
+    };
+  }
+
   // If file_url is already a full public URL (starts with http), stream it
   // through instead of redirecting — see the signed-URL comment below for why
   // a redirect alone can silently do nothing on Android Chrome.
   if (release.file_url && release.file_url.startsWith("http")) {
     const upstream = await fetch(release.file_url);
     return new NextResponse(upstream.body, {
-      headers: {
-        "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
-        "Content-Length": upstream.headers.get("content-length") ?? "",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
+      headers: downloadHeaders(upstream),
     });
   }
 
@@ -97,12 +128,7 @@ export async function GET(
     const publicUrl = `${supabaseUrl}/storage/v1/object/public/app-releases/${filePath}`;
     const upstream = await fetch(publicUrl);
     return new NextResponse(upstream.body, {
-      headers: {
-        "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
-        "Content-Length": upstream.headers.get("content-length") ?? "",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-        "Cache-Control": "no-store",
-      },
+      headers: downloadHeaders(upstream),
     });
   }
 
@@ -121,11 +147,6 @@ export async function GET(
     return NextResponse.redirect(target);
   }
   return new NextResponse(upstream.body, {
-    headers: {
-      "Content-Type": upstream.headers.get("content-type") ?? "application/octet-stream",
-      "Content-Length": upstream.headers.get("content-length") ?? "",
-      "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "no-store",
-    },
+    headers: downloadHeaders(upstream),
   });
 }

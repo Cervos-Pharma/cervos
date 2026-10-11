@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { checkIpRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
+  // Token-guessing resistance: lookup is keyed on a guessable URL param, so
+  // throttle per IP tighter than normal public routes.
+  const rl = checkIpRateLimit(request, "invite-lookup", 10, 60_000);
+  if (!rl.allowed) return rateLimitResponse(rl.resetAt);
+
   const token = request.nextUrl.searchParams.get("token");
 
   if (!token) {

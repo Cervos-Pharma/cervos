@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { checkIpRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Public endpoint with service-role reads — cap abuse without hurting the
+  // landing page (which fires this once per load).
+  const rl = checkIpRateLimit(request, "public-stats", 15, 60_000);
+  if (!rl.allowed) return rateLimitResponse(rl.resetAt);
+
   try {
     const supabase = await createServiceClient();
 

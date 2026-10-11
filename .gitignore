@@ -36,3 +36,10 @@ Thumbs.db
 
 .vercel
 .mock-releases/
+
+# Release signing artifacts (never commit)
+*.apk
+*.exe
+hq-drop/
+private.key
+releases.manifest.json

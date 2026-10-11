@@ -33,11 +33,36 @@ function mockUserFromRequest(request: NextRequest) {
   return { user_metadata: { account_type: role === "supplier" ? "supplier" : "pharmacy" } };
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+/**
+ * Origins allowed to call the desktop-facing CORS routes. The Tauri webview
+ * uses `tauri://localhost` on Windows/Linux and `http://tauri.localhost` in
+ * some configs; include both plus the production web origin. An unmatched
+ * Origin gets no CORS headers (browser blocks the response) instead of `*`,
+ * so arbitrary sites can no longer relay authenticated sessions.
+ */
+const ALLOWED_CORS_ORIGINS = [
+  "https://cervos.online",
+  "https://www.cervos.online",
+  "http://localhost:1420", // POS dev server
+  "https://tauri.localhost",
+  "http://tauri.localhost",
+  "tauri://localhost",
+];
+
+const CORS_METHODS = "GET, POST, PATCH, PUT, DELETE, OPTIONS";
+const CORS_HEADERS = "Content-Type, Authorization";
+
+/** Builds per-request CORS headers: reflects the origin only if allowlisted. */
+function corsHeadersFor(request: NextRequest): Record<string, string> {
+  const origin = request.headers.get("origin") ?? "";
+  if (!ALLOWED_CORS_ORIGINS.includes(origin)) return {};
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": CORS_METHODS,
+    "Access-Control-Allow-Headers": CORS_HEADERS,
+    Vary: "Origin",
+  };
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -49,11 +74,13 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/subscription");
 
   if (isCorsRoute) {
+    const cors = corsHeadersFor(request);
     if (request.method === "OPTIONS") {
-      return new NextResponse(null, { status: 204, headers: corsHeaders });
+      // Preflight from a non-allowlisted origin gets 204 but no CORS grant.
+      return new NextResponse(null, { status: 204, headers: cors });
     }
     const response = NextResponse.next();
-    for (const [key, value] of Object.entries(corsHeaders)) {
+    for (const [key, value] of Object.entries(cors)) {
       response.headers.set(key, value);
     }
     return response;

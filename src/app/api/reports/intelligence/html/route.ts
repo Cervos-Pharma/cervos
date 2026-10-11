@@ -8,6 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { checkIpRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import {
   getIntelligenceOverview,
   getBranchIntelligenceMetrics,
@@ -33,6 +34,10 @@ interface ReportRequest {
 }
 
 export async function POST(req: NextRequest) {
+  // Report generation is expensive (multi-table aggregations) — throttle hard.
+  const rl = checkIpRateLimit(req, "intel-report", 5, 60_000);
+  if (!rl.allowed) return rateLimitResponse(rl.resetAt);
+
   try {
     const body: ReportRequest = await req.json();
     const { sections = ["summary"] } = body;
