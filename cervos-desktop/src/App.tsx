@@ -16,9 +16,12 @@ import Subscription from './pages/Subscription'
 import Onboarding from './pages/Onboarding'
 import Records from './pages/Records'
 import Alerts from './pages/Alerts'
+import Support from './pages/Support'
 import { initDb } from './lib/database'
 import { queryDb } from './lib/database'
-import { startAutoSync, stopAutoSync, checkSubscriptionBlocked, ensureLinked } from './lib/sync'
+import { startAutoSync, stopAutoSync, checkSubscriptionBlocked, ensureLinked, getLinkedBranchId } from './lib/sync'
+import { runPredictionEngine } from './lib/predict'
+import { flushPendingTickets } from './lib/support'
 import { useSyncStore } from './lib/store'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -162,9 +165,23 @@ function AppRoutes() {
     }
 
     initializeSync()
+
+    // Prediction engine: generate stockout / sales-trend / expiry notifications
+    // from local data at boot, then refresh after each sync completes so new
+    // sale data changes the forecast. Every 30 min as a floor.
+    let predictTimer: ReturnType<typeof setInterval> | null = null
+    ensureLinked().then(async () => {
+      const branchId = await getLinkedBranchId()
+      if (!branchId || disposed) return
+      runPredictionEngine(branchId)
+      flushPendingTickets()
+      predictTimer = setInterval(() => runPredictionEngine(branchId), 30 * 60 * 1000)
+    }).catch(() => {})
+
     return () => {
       disposed = true
       stopAutoSync()
+      if (predictTimer) clearInterval(predictTimer)
     }
   }, [dbReady])
 
@@ -191,6 +208,7 @@ function AppRoutes() {
           <Route path="records" element={<AdminRoute><Records /></AdminRoute>} />
           <Route path="shifts" element={<Shifts />} />
           <Route path="alerts" element={<Alerts />} />
+          <Route path="support" element={<Support />} />
           <Route path="marketplace" element={<Marketplace />} />
           <Route path="orders" element={<AdminRoute><Orders /></AdminRoute>} />
           <Route path="subscription" element={<Subscription />} />

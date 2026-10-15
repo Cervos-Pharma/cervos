@@ -242,6 +242,29 @@ async function runMigrations(): Promise<void> {
   `)
 
   db.run(`
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id TEXT PRIMARY KEY,
+      account_id TEXT,
+      subject TEXT,
+      message TEXT,
+      category TEXT,
+      status TEXT DEFAULT 'open',
+      contact_email TEXT,
+      source TEXT DEFAULT 'pos',
+      created_at TEXT,
+      updated_at TEXT,
+      remote INTEGER DEFAULT 0
+    )
+  `)
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS prediction_state (
+      key TEXT PRIMARY KEY,
+      last_fired TEXT
+    )
+  `)
+
+  db.run(`
     CREATE TABLE IF NOT EXISTS orders (
       id TEXT PRIMARY KEY,
       order_reference TEXT,

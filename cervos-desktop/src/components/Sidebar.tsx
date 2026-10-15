@@ -1,8 +1,9 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
 import { signOut } from '../lib/sync'
+import { queryDb } from '../lib/database'
 import { LogoMark } from './Logo'
 import { useShell } from './Shell'
 
@@ -13,6 +14,7 @@ const baseNavItems = [
   { path: '/shifts', icon: 'schedule', key: 'nav.shifts' },
   { path: '/settings', icon: 'settings', key: 'nav.settings' },
   { path: '/alerts', icon: 'notifications', key: 'nav.alerts' },
+  { path: '/support', icon: 'support_agent', key: 'nav.support' },
 ]
 
 const adminNavItems = [
@@ -30,6 +32,22 @@ export default function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { sidebarOpen, setSidebarOpen } = useShell()
+  // Unread notification count (prediction alerts + HQ notices) → badge on Alerts.
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    async function loadUnread() {
+      try {
+        const rows = await queryDb('SELECT COUNT(*) AS c FROM notifications WHERE read = 0')
+        setUnread(Number(rows[0]?.c) || 0)
+      } catch {
+        /* db not ready yet */
+      }
+    }
+    loadUnread()
+    const timer = setInterval(loadUnread, 30000)
+    return () => clearInterval(timer)
+  }, [location.pathname])
 
   // Close the drawer on any route change (tap a link → slide back out).
   useEffect(() => {
@@ -85,6 +103,11 @@ export default function Sidebar() {
               {item.icon}
             </span>
             {t(item.key)}
+            {item.path === '/alerts' && unread > 0 && (
+              <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-error text-on-primary text-[11px] font-bold flex items-center justify-center">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
           </NavLink>
         ))}
 

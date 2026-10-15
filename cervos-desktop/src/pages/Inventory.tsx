@@ -169,6 +169,69 @@ export default function Inventory() {
     await loadData();
   }
 
+  /**
+   * Delete a product entirely (admin only): removes every batch and the
+   * product row locally AND in the cloud (delete ops flow through the same
+   * sync queue — verified 204 under RLS). Refuses if the product has any
+   * sale history so receipts, reports and the audit trail keep meaning what
+   * they say — set the stock to zero instead in that case.
+   */
+  async function handleDeleteProduct(product: Product) {
+    if (!branchId) return;
+    const bats = batches.filter((b) => b.product_id === product.id);
+
+    // Guard: never delete a product that has sales history anywhere.
+    const soldHist = await queryDb(
+      `SELECT COUNT(*) AS c FROM sale_items si
+       JOIN sales s ON s.id = si.sale_id
+       JOIN batches b ON b.id = si.batch_id
+       WHERE b.product_id = ?`,
+      [product.id]
+    );
+    if (Number((soldHist[0] as any)?.c) > 0) {
+      setSyncError(t('inventory.deleteBlockedSales'));
+      return;
+    }
+
+    // Also drop it from orders/order lines if the branch ever ordered it.
+    const orderedHist = await queryDb(
+      `SELECT COUNT(*) AS c FROM order_line_items oli
+       JOIN orders o ON o.id = oli.order_id
+       JOIN batches b ON b.id = oli.batch_id
+       WHERE b.product_id = ?`,
+      [product.id]
+    );
+    if (Number((orderedHist[0] as any)?.c) > 0) {
+      setSyncError(t('inventory.deleteBlockedOrders'));
+      return;
+    }
+
+    // Local delete: batches first (FK order), then the product.
+    for (const b of bats) {
+      await executeDb('DELETE FROM batches WHERE id = ?', [b.id]);
+      await queueForSync('batches', b.id, 'delete', null);
+    }
+    await executeDb('DELETE FROM products WHERE id = ?', [product.id]);
+    await queueForSync('products', product.id, 'delete', null);
+
+    // Audit trail row — local-only, same policy as stock adjustments.
+    const prodDetail = {
+      product_id: product.id,
+      product_name: product.generic_name,
+      operator_id: currentOperator?.id ?? null,
+      operator_name: currentOperator?.name ?? null,
+      batches_removed: bats.length,
+    };
+    await executeDb(
+      `INSERT INTO activity_log (id, branch_id, action, entity_type, entity_id, detail, created_at) VALUES (?,?,?,?,?,?,?)`,
+      [generateId(), branchId, 'product_deleted', 'product', product.id, JSON.stringify(prodDetail), nowIso()]
+    );
+
+    setViewingProduct(null);
+    setEditingProduct(null);
+    await loadData();
+  }
+
   function handleProductClick(product: Product) {
     if (isAdmin && permissions.canEditInventory) {
       setEditingProduct(product);
@@ -394,6 +457,7 @@ export default function Inventory() {
           batches={productBatches}
           sales={productSales}
           onAdjustBatch={handleAdjustBatch}
+          onDelete={isAdmin ? handleDeleteProduct : undefined}
           onClose={() => {
             setViewingProduct(null);
             setProductBatches([]);
@@ -1165,11 +1229,14 @@ interface ProductDetailModalProps {
   sales: any[];
   onClose: () => void;
   onAdjustBatch: (batch: Batch, mode: 'add' | 'remove' | 'set', amount: number, reason: string) => void;
+  /** Present only for admins — shows the Delete Product control. */
+  onDelete?: (product: Product) => void;
 }
 
-function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch }: ProductDetailModalProps) {
+function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch, onDelete }: ProductDetailModalProps) {
   const { t } = useTranslation();
   const [adjustingBatch, setAdjustingBatch] = useState<Batch | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const totalStock = batches.reduce((sum, b) => sum + (b.quantity || 0), 0);
   const totalSales = sales.reduce((sum, s) => sum + (s.quantity || 0), 0);
 
@@ -1180,12 +1247,23 @@ function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch }:
           <h2 className="font-headline text-xl font-bold text-on-surface">
             Product Details
           </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-outline-variant transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {onDelete && (
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-semibold text-error hover:bg-error/10 transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg">delete</span>
+                {t('inventory.deleteProduct')}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-outline-variant transition-colors"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -1304,6 +1382,38 @@ function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch }:
               setAdjustingBatch(null);
             }}
           />
+        )}
+
+        {confirmingDelete && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md p-6">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="material-symbols-outlined text-error text-2xl">warning</span>
+                <h3 className="font-headline text-lg font-bold text-on-surface">{t('inventory.deleteConfirmTitle')}</h3>
+              </div>
+              <p className="text-sm text-on-surface-variant mb-2">
+                {t('inventory.deleteConfirmBody').replace('{name}', product.generic_name).replace('{count}', String(batches.length))}
+              </p>
+              <p className="text-xs text-on-surface-variant mb-5">{t('inventory.deleteConfirmNote')}</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setConfirmingDelete(false)}
+                  className="px-4 py-2 rounded-lg border border-outline-variant text-on-surface font-semibold text-sm hover:bg-outline-variant/30 transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    onDelete?.(product);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-error text-on-primary font-semibold text-sm hover:opacity-90 transition-opacity"
+                >
+                  {t('inventory.deleteProduct')}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
