@@ -120,14 +120,17 @@ async function uploadOne(localId: string): Promise<{ error: string | null; offli
       await executeDb('UPDATE support_tickets SET remote = 2 WHERE id = ?', [localId])
       return { error: typeof data?.error === 'string' ? 'support.error.rejected' : 'support.error.rejected', offline: false }
     }
-    // Success: real server id/created_at replace our local placeholder.
+    // Success: adopt the SERVER's ticket id so later status changes made at
+    // HQ (matched by id in refreshTicketStatuses) land on this local row.
+    // SQLite allows updating a TEXT primary key; the local id was a scratch
+    // placeholder only the local table knew about.
     const server = data?.ticket
-    if (server?.id) {
+    if (server?.id && server.id !== localId) {
       await executeDb(
-        `UPDATE support_tickets SET remote = 1, status = ?, created_at = ?, updated_at = ? WHERE id = ?`,
-        [server.status ?? 'open', server.created_at ?? row.created_at, server.created_at ?? nowIso(), localId]
+        `UPDATE support_tickets SET id = ?, remote = 1, status = ?, created_at = ?, updated_at = ? WHERE id = ?`,
+        [server.id, server.status ?? 'open', server.created_at ?? row.created_at, server.created_at ?? nowIso(), localId]
       )
-    } else {
+    } else if (server?.id) {
       await executeDb('UPDATE support_tickets SET remote = 1 WHERE id = ?', [localId])
     }
     return { error: null, offline: false }
