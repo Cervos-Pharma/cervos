@@ -147,6 +147,13 @@ export async function loginHQ(input: {
     path: "/",
     maxAge: COOKIE_MAX_AGE,
   });
+  cookieStore.set("hq_admin", admin.email.toLowerCase().slice(0, 320), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: COOKIE_MAX_AGE,
+  });
 
   return { error: null };
 }
@@ -204,6 +211,14 @@ export async function markQuoteContacted(quoteId: string): Promise<{ error: stri
     .eq("id", quoteId);
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "quote.contact",
+      entity_type: "quote_request",
+      entity_id: quoteId.trim() ? quoteId : null,
+      detail: auditDetailFor("markQuoteContacted"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -228,6 +243,14 @@ export async function enableDownload(accountId: string): Promise<{ error: string
     .eq("id", accountId);
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "download.enable",
+      entity_type: "account",
+      entity_id: accountId.trim() ? accountId : null,
+      detail: auditDetailFor("enableDownload"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -482,6 +505,9 @@ export async function setCurrentRelease(
   try {
     const { error } = await supabase.rpc("set_current_release", { p_release_id: releaseId });
     if (error) return { error: error.message };
+    try {
+      await logHQAction({ action: "release.activate", entity_type: "release", entity_id: releaseId, detail: auditDetailFor("setCurrentRelease") });
+    } catch { /* audit is best-effort */ }
     return { error: null };
   } catch {
     return { error: "set_current_release RPC function not available. Please run the SQL migration." };
@@ -517,6 +543,14 @@ export async function deleteRelease(
     .eq("id", releaseId);
 
   if (dbError) return { error: `Database deletion failed: ${dbError.message}` };
+  try {
+    await logHQAction({
+      action: "release.delete",
+      entity_type: "release",
+      entity_id: releaseId.trim() ? releaseId : null,
+      detail: auditDetailFor("deleteRelease"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -618,6 +652,14 @@ export async function createSupplierInvite(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const inviteLink = `${appUrl}/auth?invite_token=${inviteToken}`;
 
+  try {
+    await logHQAction({
+      action: "invite.create", entity_type: "invite",
+      entity_id: invite && invite.id ? invite.id : null,
+      detail: auditDetailFor("createSupplierInvite"),
+    });
+  } catch { /* audit is best-effort */ }
+
   return { data: { inviteLink, inviteId: invite.id }, error: null };
 }
 
@@ -680,6 +722,14 @@ export async function cancelInvite(inviteId: string): Promise<{ error: string | 
     .eq("status", "pending");
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "invite.cancel",
+      entity_type: "invite",
+      entity_id: inviteId.trim() ? inviteId : null,
+      detail: auditDetailFor("cancelInvite"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -708,6 +758,10 @@ export async function resendInvite(inviteId: string): Promise<{ data: { inviteLi
 
   if (error) return { data: null, error: error.message };
 
+  try {
+    await logHQAction({ action: "invite.resend", entity_type: "invite", entity_id: inviteId, detail: auditDetailFor("resendInvite") });
+  } catch { /* audit is best-effort */ }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   return { data: { inviteLink: `${appUrl}/auth?invite_token=${newToken}` }, error: null };
 }
@@ -727,6 +781,14 @@ export async function approveSupplierAccount(accountId: string): Promise<{ error
     .eq("id", accountId);
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "account.approve",
+      entity_type: "account",
+      entity_id: accountId.trim() ? accountId : null,
+      detail: auditDetailFor("approveSupplierAccount"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -934,6 +996,14 @@ export async function manualUnlockBranch(branchId: string): Promise<{ error: str
     .eq("id", branchId);
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "branch.unlock",
+      entity_type: "branch",
+      entity_id: branchId.trim() ? branchId : null,
+      detail: auditDetailFor("manualUnlockBranch"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1701,6 +1771,14 @@ export async function updateAccountProfile(
     if (error) return { error: error.message };
   }
 
+  try {
+    await logHQAction({
+      action: "account.update",
+      entity_type: "account",
+      entity_id: accountId.trim() ? accountId : null,
+      detail: auditDetailFor("updateAccountProfile"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1718,6 +1796,14 @@ export async function suspendAccount(
     .update({ suspended_at: new Date().toISOString(), suspension_reason: reason || null })
     .eq("id", accountId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "account.suspend",
+      entity_type: "account",
+      entity_id: accountId.trim() ? accountId : null,
+      detail: auditDetailFor("suspendAccount"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1732,6 +1818,14 @@ export async function unsuspendAccount(accountId: string): Promise<{ error: stri
     .update({ suspended_at: null, suspension_reason: null })
     .eq("id", accountId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "account.unsuspend",
+      entity_type: "account",
+      entity_id: accountId.trim() ? accountId : null,
+      detail: auditDetailFor("unsuspendAccount"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1747,6 +1841,14 @@ export async function lockBranch(branchId: string): Promise<{ error: string | nu
     .update({ subscription_status: "locked" })
     .eq("id", branchId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "branch.lock",
+      entity_type: "branch",
+      entity_id: branchId.trim() ? branchId : null,
+      detail: auditDetailFor("lockBranch"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1764,6 +1866,14 @@ export async function unsuspendBranch(branchId: string): Promise<{ error: string
     })
     .eq("id", branchId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "branch.unlock",
+      entity_type: "branch",
+      entity_id: branchId.trim() ? branchId : null,
+      detail: auditDetailFor("unsuspendBranch"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1792,6 +1902,14 @@ export async function extendBranchTrial(branchId: string, days: number): Promise
     })
     .eq("id", branchId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "branch.trial_extend",
+      entity_type: "branch",
+      entity_id: branchId.trim() ? branchId : null,
+      detail: auditDetailFor("extendBranchTrial"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1817,6 +1935,14 @@ export async function resetBranchSubscription(branchId: string): Promise<{ error
     })
     .eq("id", branchId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "branch.reset_sub",
+      entity_type: "branch",
+      entity_id: branchId.trim() ? branchId : null,
+      detail: auditDetailFor("resetBranchSubscription"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1852,6 +1978,14 @@ export async function addOperator(
     role,
   });
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "operator.add",
+      entity_type: "operator",
+      entity_id: branchId.trim() ? branchId : null,
+      detail: auditDetailFor("addOperator"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1876,6 +2010,14 @@ export async function removeOperator(operatorId: string): Promise<{ error: strin
 
   const { error } = await supabase.from("operators").delete().eq("id", operatorId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "operator.remove",
+      entity_type: "operator",
+      entity_id: operatorId.trim() ? operatorId : null,
+      detail: auditDetailFor("removeOperator"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1893,6 +2035,14 @@ export async function setOperatorRole(operatorId: string, role: string): Promise
   const supabase = await createServiceClient();
   const { error } = await supabase.from("operators").update({ role }).eq("id", operatorId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "operator.role",
+      entity_type: "operator",
+      entity_id: operatorId.trim() ? operatorId : null,
+      detail: auditDetailFor("setOperatorRole"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1964,6 +2114,14 @@ export async function addHQAdmin(
     password_hash: hashHQPassword(password),
   });
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "admin.add",
+      entity_type: "admin",
+      entity_id: null,
+      detail: auditDetailFor("addHQAdmin"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -1984,6 +2142,14 @@ export async function removeHQAdmin(adminId: string): Promise<{ error: string | 
 
   const { error } = await supabase.from("hq_admins").delete().eq("id", adminId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "admin.remove",
+      entity_type: "admin",
+      entity_id: adminId.trim() ? adminId : null,
+      detail: auditDetailFor("removeHQAdmin"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -2002,6 +2168,14 @@ export async function setHQAdminDisabled(adminId: string, _disabled: boolean): P
     .update({ disabled: _disabled })
     .eq("id", adminId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "admin.toggle",
+      entity_type: "admin",
+      entity_id: adminId.trim() ? adminId : null,
+      detail: auditDetailFor("setHQAdminDisabled"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -2803,6 +2977,14 @@ export async function upsertSubscriptionPlan(
     if (error) return { error: error.message };
   }
 
+  try {
+    await logHQAction({
+      action: "plan.upsert",
+      entity_type: "plan",
+      entity_id: null,
+      detail: auditDetailFor("upsertSubscriptionPlan"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -2814,6 +2996,14 @@ export async function deleteSubscriptionPlan(planId: string): Promise<{ error: s
   const supabase = await createServiceClient();
   const { error } = await supabase.from("subscription_plans").delete().eq("id", planId);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "plan.delete",
+      entity_type: "plan",
+      entity_id: planId.trim() ? planId : null,
+      detail: auditDetailFor("deleteSubscriptionPlan"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3073,6 +3263,9 @@ export async function updateAccountSubscription(
     }
   }
 
+  try {
+    await logHQAction({ action: "billing.update", entity_type: "account", entity_id: accountId, detail: auditDetailFor("updateAccountSubscription") });
+  } catch { /* audit is best-effort */ }
   return { error: null, suspendedBranchIds };
 }
 
@@ -3131,6 +3324,9 @@ export async function recordManualPayment(
       })
       .eq("account_id", accountId);
 
+    try {
+      await logHQAction({ action: "payment.manual", entity_type: "account", entity_id: accountId, detail: auditDetailFor("recordManualPayment") });
+    } catch { /* audit is best-effort */ }
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Failed to record payment." };
@@ -3342,6 +3538,14 @@ export async function createNewsPost(input: NewsPostInput): Promise<{ error: str
   });
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "news.create",
+      entity_type: "news",
+      entity_id: null,
+      detail: auditDetailFor("createNewsPost"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3376,6 +3580,14 @@ export async function updateNewsPost(
 
   const { error } = await supabase.from("news_posts").update(patch).eq("id", id);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "news.update",
+      entity_type: "news",
+      entity_id: id.trim() ? id : null,
+      detail: auditDetailFor("updateNewsPost"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3390,6 +3602,14 @@ export async function deleteNewsPost(id: string): Promise<{ error: string | null
   const supabase = await createServiceClient();
   const { error } = await supabase.from("news_posts").delete().eq("id", id);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "news.delete",
+      entity_type: "news",
+      entity_id: id.trim() ? id : null,
+      detail: auditDetailFor("deleteNewsPost"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3411,6 +3631,14 @@ export async function toggleNewsPostPublish(
     .eq("id", id);
 
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "news.publish",
+      entity_type: "news",
+      entity_id: id.trim() ? id : null,
+      detail: auditDetailFor("toggleNewsPostPublish"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3499,6 +3727,14 @@ export async function sendHQMessage(
     // Non-fatal â€” notifications are best-effort
   }
 
+  try {
+    await logHQAction({
+      action: "message.send",
+      entity_type: "hq_message",
+      entity_id: null,
+      detail: auditDetailFor("sendHQMessage"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3533,6 +3769,14 @@ export async function deleteHQMessage(
   const supabase = await createServiceClient();
   const { error } = await supabase.from("hq_messages").delete().eq("id", id);
   if (error) return { error: error.message };
+  try {
+    await logHQAction({
+      action: "message.delete",
+      entity_type: "hq_message",
+      entity_id: id.trim() ? id : null,
+      detail: auditDetailFor("deleteHQMessage"),
+    });
+  } catch { /* audit is best-effort */ }
   return { error: null };
 }
 
@@ -3607,6 +3851,48 @@ export async function searchAuditLog(
   }
 }
 
+/**
+ * Human-readable detail line for an audit event. Per-action labels so the
+ * HQ audit console shows what happened, not just which code path ran.
+ */
+function auditDetailFor(actionName: string): string {
+  const DETAILS: Record<string, string> = {
+    enableDownload: "Enabled app download for account",
+    setCurrentRelease: "Activated installer release",
+    deleteRelease: "Deleted installer release",
+    createSupplierInvite: "Created supplier invite",
+    cancelInvite: "Cancelled supplier invite",
+    resendInvite: "Reissued supplier invite token",
+    approveSupplierAccount: "Approved supplier account",
+    manualUnlockBranch: "Manually unlocked branch",
+    updateAccountProfile: "Updated account profile",
+    suspendAccount: "Suspended account",
+    unsuspendAccount: "Unsuspended account",
+    lockBranch: "Locked branch",
+    unsuspendBranch: "Unlocked/reactivated branch",
+    extendBranchTrial: "Extended branch trial",
+    resetBranchSubscription: "Reset branch to active subscription",
+    addOperator: "Added POS operator",
+    removeOperator: "Removed POS operator",
+    setOperatorRole: "Changed operator role",
+    addHQAdmin: "Added HQ admin",
+    removeHQAdmin: "Removed HQ admin",
+    setHQAdminDisabled: "Toggled HQ admin access",
+    upsertSubscriptionPlan: "Created/updated subscription plan",
+    deleteSubscriptionPlan: "Deleted subscription plan",
+    updateAccountSubscription: "Updated account subscription",
+    recordManualPayment: "Recorded manual payment",
+    createNewsPost: "Created news post",
+    updateNewsPost: "Updated news post",
+    deleteNewsPost: "Deleted news post",
+    toggleNewsPostPublish: "Toggled news post publish state",
+    sendHQMessage: "Sent HQ broadcast message",
+    deleteHQMessage: "Deleted HQ message",
+    markQuoteContacted: "Marked quote request as contacted",
+  };
+  return DETAILS[actionName] ?? actionName;
+}
+
 export async function logHQAction(params: {
   action: string;
   entity_type?: string | null;
@@ -3621,13 +3907,23 @@ export async function logHQAction(params: {
   if (auth.error) return { error: auth.error };
 
   const supabase = await createServiceClient();
+
+  // The acting admin's email rides alongside the session cookie (set at
+  // login). It is display metadata only — the HMAC token is the real check.
+  let actingEmail = "HQ Admin";
+  try {
+    const stored = (await cookies()).get("hq_admin")?.value;
+    if (stored) actingEmail = stored.slice(0, 320);
+  } catch {
+    /* keep default */
+  }
   const { error } = await supabase.from("hq_audit_log").insert({
     action: params.action,
     entity_type: params.entity_type ?? null,
     entity_id: params.entity_id ?? null,
     detail: params.detail ?? null,
     admin_id: null,
-    admin_email: "HQ Admin",
+    admin_email: actingEmail,
     account_id: params.account_id ?? null,
     branch_id: params.branch_id ?? null,
     ip_address: params.ip_address ?? null,

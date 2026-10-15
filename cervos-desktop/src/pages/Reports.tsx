@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { queryDb, executeDb, generateId, nowIso } from '../lib/database'
 import { runSyncCycle, queueForSync } from '../lib/sync'
 import { useTranslation } from '../lib/i18n'
+import { exportReportCsv, exportReportPdf, ReportContext } from '../lib/exports'
 import {
   LineChart,
   Line,
@@ -99,6 +100,7 @@ export default function Reports() {
   const [expenseAmount, setExpenseAmount] = useState('')
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [expenseSaving, setExpenseSaving] = useState(false)
+  const [exportState, setExportState] = useState<{ busy?: 'csv' | 'pdf'; done?: string; error?: string }>({})
   const [expenseFeedback, setExpenseFeedback] = useState<string | null>(null)
   const [stockSearch, setStockSearch] = useState('')
   const [branchInfo, setBranchInfo] = useState<{ branchName: string; centreName: string; lastSyncedAt: string | null }>({
@@ -395,43 +397,68 @@ export default function Reports() {
     }
   }
 
-  function exportCSV() {
-    if (!data) return
-    const lines = [`Branch Report: ${branchInfo.branchName} (${branchInfo.centreName})`, `Period: ${dateFrom} to ${dateTo}`, '']
-    lines.push('=== SALES SUMMARY ===')
-    lines.push(`Total Revenue,TZS ${data.sales.totalRevenue.toLocaleString()}`)
-    lines.push(`Total Transactions,${data.sales.totalSales}`)
-    lines.push(`Average Transaction,TZS ${data.sales.avgTransaction.toLocaleString()}`)
-    lines.push(`Tax,TZS ${data.sales.totalTax.toLocaleString()}`)
-    lines.push(`Discount,TZS ${data.sales.totalDiscount.toLocaleString()}`, '')
-    lines.push('=== INVENTORY SUMMARY ===')
-    lines.push(`Total Products,${data.inventory.totalProducts}`)
-    lines.push(`Total Batches,${data.inventory.totalBatches}`)
-    lines.push(`Stock Value,TZS ${data.inventory.totalStockValue.toLocaleString()}`)
-    lines.push(`Out of Stock,${data.inventory.outOfStock}`, '')
-    lines.push('=== STOCK DETAILS BREAKDOWN ===')
-    lines.push('Product,Brand,Category,Batch Number,Quantity,Cost Price (TZS),Sale Price (TZS),Total Cost Value (TZS),Expiry')
-    data.inventory.stockDetails.forEach((s) => {
-      lines.push(
-        `"${s.productName}","${s.brandName}","${s.category}","${s.batchNumber || ''}",${s.quantity},${s.costPrice},${s.salePrice},${s.totalCostValue},"${s.expiryDate || 'N/A'}"`
-      )
-    })
-    lines.push('', '=== EXPIRY ===')
-    lines.push(`Expired,${data.expiry.expired}`)
-    lines.push(`Expiring within 7 days,${data.expiry.expiring7days}`)
-    lines.push(`Expiring within 30 days,${data.expiry.expiring30days}`)
-    lines.push(`Expiring within 90 days,${data.expiry.expiring90days}`, '')
-    lines.push('Date,Revenue (TZS),Transactions')
-    data.sales.chartData.forEach((d) => lines.push(`${d.label},TZS ${d.revenue.toLocaleString()},${d.sales}`))
+  /** The live, in-memory report context shared by CSV and PDF exports. */
+  function reportCtx(): ReportContext | null {
+    if (!data) return null
+    return {
+      branchName: branchInfo.branchName || 'Branch',
+      centreName: branchInfo.centreName,
+      dateFrom,
+      dateTo,
+      sales: {
+        totalRevenue: data.sales.totalRevenue,
+        totalSales: data.sales.totalSales,
+        avgTransaction: data.sales.avgTransaction,
+        totalTax: data.sales.totalTax,
+        totalDiscount: data.sales.totalDiscount,
+        chartData: data.sales.chartData,
+      },
+      inventory: {
+        totalProducts: data.inventory.totalProducts,
+        totalBatches: data.inventory.totalBatches,
+        totalStockValue: data.inventory.totalStockValue,
+        outOfStock: data.inventory.outOfStock,
+        stockDetails: data.inventory.stockDetails.map((s) => ({
+          productName: s.productName,
+          brandName: s.brandName,
+          category: s.category,
+          quantity: s.quantity,
+          costPrice: s.costPrice,
+          salePrice: s.salePrice,
+          totalCostValue: s.totalCostValue,
+          expiryDate: s.expiryDate,
+        })),
+      },
+      expiry: data.expiry,
+    }
+  }
 
-    const csv = lines.join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `branch-report-${dateFrom}-${dateTo}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  async function exportCSV() {
+    const ctx = reportCtx()
+    if (!ctx) return
+    setExportState({ busy: 'csv' })
+    try {
+      exportReportCsv(ctx)
+      setExportState({ done: t('reports.exportDone') })
+    } catch {
+      setExportState({ error: t('reports.exportFailed') })
+    } finally {
+      setTimeout(() => setExportState({}), 4000)
+    }
+  }
+
+  async function exportPDF() {
+    const ctx = reportCtx()
+    if (!ctx) return
+    setExportState({ busy: 'pdf' })
+    try {
+      await exportReportPdf(ctx)
+      setExportState({ done: t('reports.exportDone') })
+    } catch {
+      setExportState({ error: t('reports.exportFailed') })
+    } finally {
+      setTimeout(() => setExportState({}), 4000)
+    }
   }
 
   if (isLoading || !data) {
@@ -514,11 +541,31 @@ export default function Reports() {
           />
           <button
             onClick={exportCSV}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-semibold hover:opacity-90"
+            disabled={!!exportState.busy || !!exportState.error}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:opacity-90 disabled:opacity-40"
           >
-            <span className="material-symbols-outlined">download</span>
-            Export CSV
+            {exportState.busy === 'csv' && (
+              <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+            )}
+            <span className="material-symbols-outlined">table_view</span>
+            {t('reports.exportCsv')}
           </button>
+          <button
+            onClick={exportPDF}
+            disabled={!!exportState.busy}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-on-secondary font-semibold hover:opacity-90 disabled:opacity-40"
+          >
+            {exportState.busy === 'pdf' && (
+              <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+            )}
+            <span className="material-symbols-outlined">picture_as_pdf</span>
+            {t('reports.exportPdf')}
+          </button>
+          {(exportState.done || exportState.error) && (
+            <span className={`text-xs font-medium ${exportState.error ? 'text-error' : 'text-secondary'}`}>
+              {exportState.error || exportState.done}
+            </span>
+          )}
         </div>
       </div>
 

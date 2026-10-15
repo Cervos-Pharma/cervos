@@ -1,6 +1,7 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useCallback } from 'react'
 import { queryDb } from '../lib/database'
 import { useTranslation } from '../lib/i18n'
+import { exportReceiptPng, exportReceiptPdf, exportReceiptBundle, ReceiptMeta } from '../lib/exports'
 
 interface ReceiptData {
   id: string
@@ -40,6 +41,9 @@ export default function Records() {
   const [searchQuery, setSearchQuery] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [selectedReceipt, setSelectedReceipt] = useState<ReceiptData | null>(null)
+  const [checked, setChecked] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
+  const [exportNote, setExportNote] = useState<string | null>(null)
 
   useEffect(() => {
     loadReceipts()
@@ -97,6 +101,26 @@ export default function Records() {
     setReceipts(allReceipts)
     setIsLoading(false)
   }
+
+  /** Pharmacy/branch branding read from app_settings (offline-safe). */
+  const meta = useCallback(async (): Promise<ReceiptMeta> => {
+    const meta: ReceiptMeta = {}
+    try {
+      const rows = await queryDb(
+        "SELECT key, value FROM app_settings WHERE key IN ('pharmacy_name', 'branch_name', 'branch_id_name', 'account_name', 'centre_name')"
+      )
+      for (const row of rows as { key: string; value: string }[]) {
+        try {
+          const v = JSON.parse(row.value)
+          if (row.key === 'pharmacy_name') meta.pharmacyName = v
+          if (row.key === 'branch_name' || row.key === 'branch_id_name') meta.branchName = v
+          if (row.key === 'account_name') meta.branchName = meta.branchName || v
+          if (row.key === 'centre_name') meta.address = v
+        } catch { /* skip malformed row */ }
+      }
+    } catch { /* db not ready — default branding */ }
+    return meta
+  }, [])
 
   async function loadAudit() {
     // Local audit trail: every logged action on this POS (stock adjustments
@@ -188,6 +212,32 @@ export default function Records() {
     )
   }
 
+  const selectedRows = filteredReceipts.filter((r) => checked.has(r.id || r.sale_id))
+
+  function toggleChecked(receipt: ReceiptData) {
+    const id = receipt.id || receipt.sale_id
+    setChecked((prev) => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
+      return n
+    })
+  }
+
+  async function runExport(fn: () => Promise<void>) {
+    setExporting(true)
+    setExportNote(null)
+    try {
+      await fn()
+      setExportNote(t('records.exportDone'))
+    } catch {
+      setExportNote(t('records.exportFailed'))
+    } finally {
+      setExporting(false)
+      setTimeout(() => setExportNote(null), 4000)
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -201,13 +251,36 @@ export default function Records() {
               : `${filteredAudit.length} entries`}
           </p>
         </div>
+        {tab === 'receipts' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {exportNote && <span className="text-xs font-medium text-secondary">{exportNote}</span>}
+            <button
+              type="button"
+              disabled={exporting || selectedRows.length === 0}
+              onClick={() => runExport(() => exportReceiptBundle(selectedRows, 'png', {}))}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant text-sm font-semibold text-on-surface hover:bg-outline-variant/30 disabled:opacity-40 transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">image</span>
+              {t('records.exportBundlePng').replace('{count}', String(selectedRows.length))}
+            </button>
+            <button
+              type="button"
+              disabled={exporting || selectedRows.length === 0}
+              onClick={() => runExport(() => exportReceiptBundle(selectedRows, 'pdf', {}))}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:opacity-90 disabled:opacity-40 transition-colors"
+            >
+              <span className="material-symbols-outlined text-base">picture_as_pdf</span>
+              {t('records.exportBundlePdf').replace('{count}', String(selectedRows.length))}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Tab switch: Receipts | Audit Log */}
       <div className="inline-flex p-1 bg-surface rounded-lg border border-outline-variant mb-6">
         <button
           type="button"
-          onClick={() => setTab('receipts')}
+          onClick={() => { setTab('receipts'); setChecked(new Set()) }}
           className={`flex items-center justify-center gap-2 py-2.5 px-5 rounded-md text-sm font-semibold transition-all ${
             tab === 'receipts'
               ? 'bg-primary text-white shadow-sm'
@@ -261,12 +334,26 @@ export default function Records() {
               <th className="px-4 py-3 text-right">{t('records.totalCol')}</th>
               <th className="px-4 py-3">{t('records.paymentCol')}</th>
               <th className="px-4 py-3"></th>
+              <th className="px-4 py-3">
+                <input
+                  type="checkbox"
+                  aria-label={t('records.selectAll')}
+                  checked={filteredReceipts.length > 0 && selectedRows.length === filteredReceipts.length}
+                  onChange={(e) =>
+                    setChecked(
+                      e.target.checked
+                        ? new Set(filteredReceipts.map((r) => r.id || r.sale_id))
+                        : new Set()
+                    )
+                  }
+                />
+              </th>
             </tr>
           </thead>
           <tbody>
             {filteredReceipts.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-on-surface-variant">
+                <td colSpan={8} className="px-4 py-12 text-center text-on-surface-variant">
                   <span className="material-symbols-outlined text-5xl">receipt_long</span>
                   <p className="mt-2 font-medium">{t('records.noReceipts')}</p>
                 </td>
@@ -293,6 +380,32 @@ export default function Records() {
                     >
                       <span className="material-symbols-outlined">visibility</span>
                     </button>
+                    <button
+                      onClick={async () => {
+                        await runExport(async () => exportReceiptPdf(receipt, await meta()))
+                      }}
+                      title={t('records.exportPdf')}
+                      className="p-1 rounded hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined">picture_as_pdf</span>
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await runExport(async () => exportReceiptPng(receipt, await meta()))
+                      }}
+                      title={t('records.exportPng')}
+                      className="p-1 rounded hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined">image</span>
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={t('records.selectOne')}
+                      checked={checked.has(receipt.id || receipt.sale_id)}
+                      onChange={() => toggleChecked(receipt)}
+                    />
                   </td>
                 </tr>
               ))
@@ -398,12 +511,56 @@ function ReceiptModal({ receipt, onClose }: ReceiptModalProps) {
           <h2 className="font-headline text-xl font-bold text-on-surface">
             Receipt {receipt.receipt_number}
           </h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-outline-variant transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const rows = await queryDb(
+                  "SELECT key, value FROM app_settings WHERE key IN ('pharmacy_name', 'branch_name', 'branch_id_name', 'account_name')"
+                )
+                const m: ReceiptMeta = {}
+                for (const row of rows as { key: string; value: string }[]) {
+                  try {
+                    const v = JSON.parse(row.value)
+                    if (row.key === 'pharmacy_name') m.pharmacyName = v
+                    if (row.key === 'branch_name' || row.key === 'branch_id_name') m.branchName = v
+                    if (row.key === 'account_name') m.branchName = m.branchName || v
+                  } catch { /* skip malformed row */ }
+                }
+                await exportReceiptPdf(receipt, m)
+              }}
+              title={t('records.exportPdf')}
+              className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined">picture_as_pdf</span>
+            </button>
+            <button
+              onClick={async () => {
+                const rows = await queryDb(
+                  "SELECT key, value FROM app_settings WHERE key IN ('pharmacy_name', 'branch_name', 'branch_id_name', 'account_name')"
+                )
+                const m: ReceiptMeta = {}
+                for (const row of rows as { key: string; value: string }[]) {
+                  try {
+                    const v = JSON.parse(row.value)
+                    if (row.key === 'pharmacy_name') m.pharmacyName = v
+                    if (row.key === 'branch_name' || row.key === 'branch_id_name') m.branchName = v
+                    if (row.key === 'account_name') m.branchName = m.branchName || v
+                  } catch { /* skip malformed row */ }
+                }
+                await exportReceiptPng(receipt, m)
+              }}
+              title={t('records.exportPng')}
+              className="p-2 rounded-lg hover:bg-primary/10 text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined">image</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-outline-variant transition-colors"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4">
