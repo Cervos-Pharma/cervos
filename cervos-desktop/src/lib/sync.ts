@@ -1147,14 +1147,15 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
       orderLineItems = liRes.data || []
     }
 
-    // Notifications for this pharmacy account (order approved/paid, low
-    // stock, etc.) — a simple bounded pull rather than a delta, since the
-    // volume per account is small and "read" state can flip without
-    // touching created_at.
+    // Notifications may target the whole pharmacy account or this exact
+    // branch (prediction alerts use the latter). Pull both scopes rather than
+    // silently dropping branch-targeted alerts after a device re-sync.
+    // This is bounded rather than incremental because read state can flip
+    // without changing created_at.
     const notifRes = await Ie
       .from('notifications')
       .select('*')
-      .eq('account_id', accountId)
+      .or(`account_id.eq.${accountId},branch_id.eq.${branchId}`)
       .order('created_at', { ascending: false })
       .limit(100)
     const notifications = notifRes.data || []

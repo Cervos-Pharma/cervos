@@ -31,6 +31,18 @@
  */
 import { queryDb, executeDb, generateId, nowIso } from './database'
 import { getSupabase } from './sync'
+import { t } from './i18n'
+
+/** Translate a prediction template like 'Selling ~{rate}/day' with values. */
+function ft(key: string, vars: Record<string, string | number>): string {
+  return Object.entries(vars).reduce(
+    // `replaceAll` is not available in the ES2020 target used by the desktop
+    // app. Splitting and joining replaces every placeholder just as safely.
+    (s, [k, v]) => s.split(`{${k}}`).join(String(v)),
+    t(key)
+  )
+}
+import { notifyDevice } from './device-notifications'
 
 const STOCKOUT_WINDOW_DAYS = 14
 const URGENT_COVER_DAYS = 2
@@ -75,6 +87,9 @@ async function emit(branchId: string, p: Prediction): Promise<void> {
      VALUES (?,?,?,?,?,?,0,0,?)`,
     [id, p.kind, p.title, p.body, p.route, null, now]
   )
+  // A persisted alert is the source of truth.  The OS toast is deliberately
+  // best-effort so a missing desktop permission cannot affect forecasting.
+  void notifyDevice(p.title, p.body)
 
   // Best-effort mirror so the web portal shows the same alert. Offline or
   // RLS-denied = fine, the local row is the source the POS user sees.
@@ -105,6 +120,7 @@ export async function predictStockouts(branchId: string): Promise<number> {
     FROM sale_items si
     JOIN sales s ON s.id = si.sale_id
     JOIN batches b ON b.id = si.batch_id
+    JOIN products p ON p.id = b.product_id
     WHERE b.branch_id = ? AND s.created_at >= ?
     GROUP BY p.id
   `,
@@ -119,7 +135,7 @@ export async function predictStockouts(branchId: string): Promise<number> {
            MIN(CASE WHEN b.quantity > 0 THEN b.expiry_date END) AS earliest_expiry
     FROM products p
     JOIN batches b ON b.product_id = p.id
-    WHERE b.branch_id = ? AND b.quantity > 0
+    WHERE b.branch_id = ?
     GROUP BY p.id
   `,
     [branchId]
@@ -128,7 +144,6 @@ export async function predictStockouts(branchId: string): Promise<number> {
   let fired = 0
   for (const row of stockRows) {
     const stock = Number(row.qty) || 0
-    if (stock <= 0) continue
     const sold = soldByProduct.get(row.product_id) ?? 0
     const dailyRate = sold / STOCKOUT_WINDOW_DAYS
 
@@ -137,8 +152,12 @@ export async function predictStockouts(branchId: string): Promise<number> {
       if (daysCover <= URGENT_COVER_DAYS) {
         await emit(branchId, {
           kind: 'urgent',
-          title: `Stockout imminent: ${row.generic_name}`,
-          body: `Selling ~${dailyRate.toFixed(1)}/day — only ${stock} units left (~${Math.round(daysCover)} day${Math.round(daysCover) === 1 ? '' : 's'} of cover). Reorder today.`,
+          title: ft('predict.stockoutUrgentTitle', { name: row.generic_name }),
+          body: ft('predict.stockoutUrgentBody', {
+            rate: dailyRate.toFixed(1),
+            stock,
+            days: Math.round(daysCover),
+          }),
           route: '/inventory',
           dedupeKey: `stockout-urgent:${branchId}:${row.product_id}`,
         })
@@ -146,8 +165,12 @@ export async function predictStockouts(branchId: string): Promise<number> {
       } else if (daysCover <= WARNING_COVER_DAYS) {
         await emit(branchId, {
           kind: 'warning',
-          title: `Low stock predicted: ${row.generic_name}`,
-          body: `Selling ~${dailyRate.toFixed(1)}/day — ${stock} units left (~${Math.round(daysCover)} days of cover). Consider reordering within the week.`,
+          title: ft('predict.stockoutWarnTitle', { name: row.generic_name }),
+          body: ft('predict.stockoutWarnBody', {
+            rate: dailyRate.toFixed(1),
+            stock,
+            days: Math.round(daysCover),
+          }),
           route: '/inventory',
           dedupeKey: `stockout-warn:${branchId}:${row.product_id}`,
         })
@@ -162,8 +185,12 @@ export async function predictStockouts(branchId: string): Promise<number> {
       if (daysToExpiry > 0 && daysToExpiry <= EXPIRY_WINDOW_DAYS) {
         await emit(branchId, {
           kind: 'warning',
-          title: `Expiring soon: ${row.generic_name}`,
-          body: `${stock} units expire ${daysToExpiry === 1 ? 'tomorrow' : `in ${daysToExpiry} days`} (${row.earliest_expiry}). Prioritise selling or returning the batch.`,
+          title: ft('predict.expiryTitle', { name: row.generic_name }),
+          body: ft('predict.expiryBody', {
+            stock,
+            days: daysToExpiry,
+            date: row.earliest_expiry,
+          }),
           route: '/inventory',
           dedupeKey: `expiry:${branchId}:${row.product_id}`,
         })
@@ -174,19 +201,28 @@ export async function predictStockouts(branchId: string): Promise<number> {
   return fired
 }
 
-/** Engine 2: week-over-week revenue trend. */
+/** Engine 2: week-over-week revenue trend.
+ *
+ * Windows are calendar-day aligned (7 COMPLETE days ending yesterday vs the
+ * 7 before that). The previous trailing-`Date.now()` window included today's
+ * partial morning revenue against a full prior week, which fired a bogus
+ * "Sales trending down ~99%" on every boot before opening time.
+ */
 export async function predictSalesTrend(branchId: string): Promise<number> {
-  const rev = async (from: Date, to: Date): Promise<number> => {
+  const rev = async (fromDay: Date, toDay: Date): Promise<number> => {
     const rows = (await queryDb(
       `SELECT COALESCE(SUM(total), 0) AS total FROM sales
        WHERE branch_id = ? AND created_at >= ? AND created_at < ?`,
-      [branchId, from.toISOString(), to.toISOString()]
+      [branchId, fromDay.toISOString(), toDay.toISOString()]
     )) as any[]
     return Number(rows[0]?.total) || 0
   }
-  const now = Date.now()
-  const current = await rev(new Date(now - 7 * 86400000), new Date(now))
-  const previous = await rev(new Date(now - 14 * 86400000), new Date(now - 7 * 86400000))
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const todayMidnight = startOfDay(new Date())
+  // Both windows are exactly 7 complete days and END at today's midnight —
+  // today's partial revenue is deliberately excluded from both sides.
+  const current = await rev(new Date(todayMidnight.getTime() - 7 * 86400000), todayMidnight)
+  const previous = await rev(new Date(todayMidnight.getTime() - 14 * 86400000), new Date(todayMidnight.getTime() - 7 * 86400000))
 
   if (previous < TREND_MIN_REVENUE) return 0 // not enough history for a trend
   const change = (current - previous) / previous
@@ -195,11 +231,10 @@ export async function predictSalesTrend(branchId: string): Promise<number> {
   const pct = Math.round(Math.abs(change) * 100)
   await emit(branchId, {
     kind: 'info',
-    title: change > 0 ? 'Sales trending up' : 'Sales trending down',
-    body:
-      change > 0
-        ? `Revenue is up ${pct}% vs the previous week (TZS ${Math.round(current).toLocaleString()} vs TZS ${Math.round(previous).toLocaleString()}).`
-        : `Revenue is down ${pct}% vs the previous week (TZS ${Math.round(current).toLocaleString()} vs TZS ${Math.round(previous).toLocaleString()}).`,
+    title: ft(change > 0 ? 'predict.trendUpTitle' : 'predict.trendDownTitle', {}),
+    body: ft(change > 0 ? 'predict.trendUpBody' : 'predict.trendDownBody', {
+      pct,
+    }),
     route: '/reports',
     dedupeKey: `trend:${branchId}:${new Date().toISOString().slice(0, 10)}`,
   })

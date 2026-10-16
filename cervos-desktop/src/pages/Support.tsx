@@ -133,6 +133,7 @@ export default function Support() {
             >
               <option value="">{t('support.chooseCategory')}</option>
               <option value="technical">{t('support.catTechnical')}</option>
+              <option value="billing">{t('support.catBilling')}</option>
               <option value="general">{t('support.catGeneral')}</option>
               <option value="other">{t('support.catOther')}</option>
             </select>
