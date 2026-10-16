@@ -69,9 +69,13 @@ export async function proxy(request: NextRequest) {
 
   // The desktop POS app calls these API routes from a Tauri webview (different origin).
   // Browsers require explicit CORS headers and OPTIONS preflight response.
+  // /api/support/tickets serves the desktop POS Support page too: without
+  // CORS the webview's OPTIONS preflight passed (the route 405s OPTIONS →
+  // Next's default), but the real POST was blocked by the browser.
   const isCorsRoute =
     pathname.startsWith("/api/marketplace") ||
-    pathname.startsWith("/api/subscription");
+    pathname.startsWith("/api/subscription") ||
+    pathname.startsWith("/api/support");
 
   if (isCorsRoute) {
     const cors = corsHeadersFor(request);

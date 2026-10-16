@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { queryDb, executeDb } from '../lib/database'
-import { getDashboardStats, signOut, unlinkDevice, runSyncCycle } from '../lib/sync'
+import { signOut, runSyncCycle, createLocalBranch } from '../lib/sync'
 import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
 import { fetchOperators, createOperator, deleteOperator } from '../lib/queries'
@@ -12,12 +12,10 @@ export default function Settings() {
   const { logout, currentOperator, isAdmin } = useAuthStore()
   const { locale, setLocale } = useI18nStore()
   const [pharmacyName, setPharmacyName] = useState('')
-  const [accountName, setAccountName] = useState('')
-  const [linkedBranchName, setLinkedBranchName] = useState('')
-  const [stats, setStats] = useState({ linked: false, pendingCount: 0, lastSyncedAt: null as string | null })
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [syncMessage, setSyncMessage] = useState('')
   const [operators, setOperators] = useState<Operator[]>([])
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([])
+  const [newBranchName, setNewBranchName] = useState('')
+  const [showAddBranch, setShowAddBranch] = useState(false)
   const [showAddOperator, setShowAddOperator] = useState(false)
   const [newOpName, setNewOpName] = useState('')
   const [newOpPin, setNewOpPin] = useState('')
@@ -52,12 +50,7 @@ export default function Settings() {
     if (branchResult.length > 0) {
       setBranchId(JSON.parse(branchResult[0].value))
     }
-    const accountResult = await queryDb("SELECT value FROM app_settings WHERE key = 'account_name'")
-    if (accountResult.length > 0) setAccountName(JSON.parse(accountResult[0].value))
-    const linkedBranchResult = await queryDb("SELECT value FROM app_settings WHERE key = 'centre_name'")
-    if (linkedBranchResult.length > 0) setLinkedBranchName(JSON.parse(linkedBranchResult[0].value))
-    const s = await getDashboardStats()
-    setStats(s)
+    setBranches(await queryDb('SELECT id, name FROM branches ORDER BY name'))
     const config = await queryDb("SELECT key, value FROM app_settings WHERE key IN ('tax_rate', 'low_stock_threshold', 'expiry_days_threshold')")
     for (const setting of config) {
       const value = JSON.parse(setting.value)
@@ -102,6 +95,19 @@ export default function Settings() {
     loadOperators()
   }
 
+  async function handleAddBranch(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newBranchName.trim()) return
+    try {
+      await createLocalBranch(newBranchName)
+      setNewBranchName('')
+      setShowAddBranch(false)
+      setBranches(await queryDb('SELECT id, name FROM branches ORDER BY name'))
+    } catch (err) {
+      console.error('Failed to add branch:', err)
+    }
+  }
+
   async function handleChangePin(e: React.FormEvent) {
     e.preventDefault()
     setPinError('')
@@ -144,42 +150,6 @@ export default function Settings() {
     }
   }
 
-  async function handleSync() {
-    setIsSyncing(true)
-    setSyncMessage('')
-    try {
-      const result = await runSyncCycle()
-      if (!result.ok) {
-        setSyncMessage(t('settings.syncFailed').replace('{error}', result.message || ''))
-      } else if (result.message?.startsWith('already syncing')) {
-        setSyncMessage(t('settings.syncAlreadyRunning'))
-      } else if (result.message?.startsWith('offline')) {
-        setSyncMessage(t('settings.offlineMsg'))
-      } else {
-        setSyncMessage(
-          t('settings.syncedAt')
-            .replace('{time}', new Date().toLocaleTimeString())
-            .replace('{pulled}', String(result.pulled ?? 0))
-            .replace('{pushed}', String(result.pushed ?? 0))
-        )
-      }
-    } catch (err: any) {
-      setSyncMessage(t('settings.syncFailed').replace('{error}', err.message))
-    } finally {
-      const s = await getDashboardStats()
-      setStats(s)
-      setIsSyncing(false)
-    }
-  }
-
-  async function handleUnlink() {
-    const confirmed = window.confirm(t('settings.unlinkConfirm'))
-    if (!confirmed) return
-    await unlinkDevice()
-    logout()
-    navigate('/onboarding')
-  }
-
   async function handleSignOut() {
     await signOut()
     logout()
@@ -199,17 +169,6 @@ export default function Settings() {
           </h2>
 
           <div className="space-y-4">
-            {(accountName || linkedBranchName) && (
-              <div className="flex items-start gap-2 rounded-lg bg-primary/5 border border-primary/15 p-3">
-                <span className="material-symbols-outlined text-primary">domain</span>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{t('settings.linkedAccount')}</p>
-                  <p className="text-sm font-medium text-on-surface">
-                    {accountName || 'Pharmacy account'}{linkedBranchName ? ` · ${t('settings.branchLabel')}: ${linkedBranchName}` : ''}
-                  </p>
-                </div>
-              </div>
-            )}
             <div>
               <label className="block text-xs font-semibold text-on-surface-variant mb-1">
                 {t('settings.pharmacyName')}
@@ -392,106 +351,32 @@ export default function Settings() {
           </div>
         )}
 
-        <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-          <h2 className="font-headline text-lg font-bold text-on-surface mb-4">
-            {t('settings.cloudSync')}
-          </h2>
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-sm">{t('settings.connectionStatus')}</p>
-                <p className="text-xs text-on-surface-variant">
-                  {stats.linked ? t('settings.connected') : t('settings.notLinked')}
-                </p>
-              </div>
-              <span
-                className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                  stats.linked
-                    ? 'bg-secondary/10 text-secondary'
-                    : 'bg-outline-variant text-on-surface-variant'
-                }`}
-              >
-                {stats.linked ? t('settings.linked') : t('settings.offline')}
-              </span>
+        {isAdmin && (
+          <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-headline text-lg font-bold text-on-surface">Branches</h2>
+              <button onClick={() => setShowAddBranch((show) => !show)} className="flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-semibold hover:opacity-90">
+                <span className="material-symbols-outlined text-sm">add</span>Add branch
+              </button>
             </div>
-
-            {stats.linked && (
-              <>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">{t('settings.pendingChanges')}</p>
-                    <p className="text-xs text-on-surface-variant">
-                      {stats.pendingCount} {t('settings.changesWaiting')}
-                    </p>
-                  </div>
-                  <span className="font-semibold">{stats.pendingCount}</span>
-                </div>
-
-                {stats.lastSyncedAt && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-sm">{t('settings.lastSynced')}</p>
-                      <p className="text-xs text-on-surface-variant">
-                        {new Date(stats.lastSyncedAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-md bg-primary text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {isSyncing ? (
-                      <>
-                        <span className="material-symbols-outlined animate-spin text-xl">
-                          progress_activity
-                        </span>
-                        {t('settings.syncing')}
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-xl">sync</span>
-                        {t('settings.syncNow')}
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleUnlink}
-                    className="px-4 py-2.5 rounded-md border border-error text-error font-semibold hover:bg-error/10 transition-colors"
-                  >
-                    {t('settings.unlink')}
-                  </button>
-                </div>
-
-                {syncMessage && (
-                  <p
-                    className={`text-sm ${
-                      syncMessage.includes('failed') ? 'text-error' : 'text-secondary'
-                    }`}
-                  >
-                    {syncMessage}
-                  </p>
-                )}
-              </>
+            <p className="text-xs text-on-surface-variant mb-4">Create and manage your pharmacy locations directly in the app.</p>
+            {showAddBranch && (
+              <form onSubmit={handleAddBranch} className="mb-4 flex gap-2">
+                <input autoFocus required value={newBranchName} onChange={(e) => setNewBranchName(e.target.value)} placeholder="Branch name" className="flex-1 px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm" />
+                <button type="submit" className="px-4 py-2 rounded-md bg-primary text-white text-sm font-semibold">Add</button>
+              </form>
             )}
-
-            {!stats.linked && (
-              <div className="pt-2">
-                <Link
-                  to="/onboarding?relink=1"
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-md border border-outline-variant text-on-surface font-medium hover:bg-outline-variant/30 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-xl">link</span>
-                  {t('settings.linkAccount')}
-                </Link>
-              </div>
-            )}
+            <div className="space-y-2">
+              {branches.map((branch) => (
+                <div key={branch.id} className="flex items-center gap-2 p-3 bg-surface rounded-lg border border-outline-variant">
+                  <span className="material-symbols-outlined text-primary text-lg">storefront</span>
+                  <p className="font-medium text-sm">{branch.name}</p>
+                  {branch.id === branchId && <span className="ml-auto text-[11px] font-semibold text-primary">Current terminal</span>}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
           <h2 className="font-headline text-lg font-bold text-on-surface mb-4">

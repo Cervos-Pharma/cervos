@@ -56,6 +56,12 @@ describe("Proxy CORS Handling", () => {
     expect(get.headers.get("access-control-allow-origin")).toBeNull();
   });
 
+  it("reflects an allowlisted origin for OPTIONS on /api/support/tickets (POS support page)", async () => {
+    const res = await proxy(optionsReq("/api/support/tickets", ALLOWED));
+    expect(res.status).toBe(204);
+    expect(res.headers.get("access-control-allow-origin")).toBe(ALLOWED);
+  });
+
   it("allows the production web origin and localhost dev server", async () => {
     for (const origin of ["https://cervos.online", "http://localhost:1420"]) {
       const res = await proxy(optionsReq("/api/subscription/status", origin));

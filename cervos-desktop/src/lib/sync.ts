@@ -35,6 +35,59 @@ export async function saveSetting(n: string, t: string): Promise<void> {
   )
 }
 
+/**
+ * Start a fully local workspace. This is intentionally separate from web
+ * registration: a pharmacist can create branches, admins and inventory on a
+ * phone or desktop without an email address, internet connection, or server
+ * account. Connecting to an existing web account remains an explicit
+ * onboarding choice.
+ */
+export async function createLocalWorkspace(params: {
+  pharmacyName: string
+  managerName: string
+  managerPin: string
+}): Promise<string> {
+  const branchId = generateId()
+  const operatorId = generateId()
+  const now = nowIso()
+  const pinHash = await hashPin(params.managerPin)
+  const pharmacyName = params.pharmacyName.trim()
+  const managerName = params.managerName.trim() || 'Manager'
+
+  await executeDb(
+    `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier, updated_at)
+     VALUES (?, NULL, ?, 'local', 'local', ?)`,
+    [branchId, pharmacyName, now]
+  )
+  await executeDb(
+    `INSERT INTO operators (id, branch_id, name, pin_hash, role, created_at)
+     VALUES (?, ?, ?, ?, 'admin', ?)`,
+    [operatorId, branchId, managerName, pinHash, now]
+  )
+  const settings: [string, string][] = [
+    ['workspace_mode', 'local'],
+    ['branch_id', branchId],
+    ['pharmacy_name', pharmacyName],
+    ['centre_name', pharmacyName],
+    ['centre_address', ''],
+  ]
+  for (const [key, value] of settings) await saveSetting(key, value)
+  return branchId
+}
+
+/** Add another branch to a local-first workspace. */
+export async function createLocalBranch(name: string): Promise<string> {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Branch name is required.')
+  const id = generateId()
+  await executeDb(
+    `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier, updated_at)
+     VALUES (?, NULL, ?, 'local', 'local', ?)`,
+    [id, trimmed, nowIso()]
+  )
+  return id
+}
+
 export async function getLastPullTimestamp(n: string): Promise<string | null> {
   const result = await queryDb(
     'SELECT value FROM app_settings WHERE key = ?',
@@ -752,6 +805,17 @@ export async function hashString(n: string): Promise<string> {
 }
 
 export async function queueForSync(tableName: string, rowId: string, operation: string, payload: any): Promise<void> {
+  // A local workspace has no server identity to push to. Keep its data
+  // private on the device rather than accumulating a queue that can never
+  // succeed (or later be sent to an unrelated web account).
+  const modeRows = await queryDb("SELECT value FROM app_settings WHERE key = 'workspace_mode'")
+  if (modeRows[0]?.value) {
+    try {
+      if (JSON.parse(modeRows[0].value) === 'local') return
+    } catch {
+      if (modeRows[0].value === 'local') return
+    }
+  }
   // Normalize: bulkPush matches lowercase operations ('insert'/'update'/...),
   // and a mixed-case caller (e.g. 'INSERT') would otherwise queue a job that
   // silently fails as 'unknown operation' on every sync cycle, forever.
@@ -857,9 +921,21 @@ async function bulkPush(): Promise<{ uploaded: number; failed: number }> {
     }
   }
 
+  // Cloud FKs require parents to exist before children. Queue arrival order
+  // doesn't guarantee that (POS queues batches → sale_items → sales, so
+  // sale_items reached Supabase before its sales row did and PostgREST
+  // rejected them with foreign-key 409s that only healed 5 minutes later on
+  // the next cycle). Commit in dependency order instead:
+  const DEPENDENCY_ORDER = ['products', 'batches', 'orders', 'order_line_items', 'sales', 'sale_items']
+  const rank = (table: string) => {
+    const at = DEPENDENCY_ORDER.indexOf(table)
+    return at === -1 ? DEPENDENCY_ORDER.length : at
+  }
+  const uploadOrder = Object.keys(groups).sort((a, b) => rank(a.split(':')[0]) - rank(b.split(':')[0]))
+
   let uploaded = 0
   let failed = 0
-  for (const key of Object.keys(groups)) {
+  for (const key of uploadOrder) {
     const [table_name, operationRaw] = key.split(':')
     // Some call sites pass 'INSERT'/'DELETE' (uppercase); normalize so a
     // casing mismatch never silently drops queued rows forever (they'd

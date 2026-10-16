@@ -7,7 +7,7 @@ import {
   forceClaimBranch,
   runSyncCycle,
   scaffoldAccount,
-  registerAndScaffoldPharmacy,
+  createLocalWorkspace,
   type RemoteBranch
 } from '../lib/sync'
 import { queryDb } from '../lib/database'
@@ -39,15 +39,13 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Standalone Registration State (Direct in APK)
+  // Standalone local workspace state. It deliberately needs no web account.
   const [pharmacyName, setPharmacyName] = useState('')
   const [ownerName, setOwnerName] = useState('')
-  const [regEmail, setRegEmail] = useState('')
-  const [regPassword, setRegPassword] = useState('')
-  const [showRegPassword, setShowRegPassword] = useState(false)
-  const [regPhone, setRegPhone] = useState('')
+  // Kept for the legacy confirmation panel while existing-account linking is
+  // being phased in; local workspace creation never asks for or stores it.
+  const [regEmail] = useState('')
   const [managerPin, setManagerPin] = useState('')
-  const [regStage, setRegStage] = useState<'account' | 'branch' | 'operator' | 'sync'>('account')
 
   // Existing Account Sign-in State
   const [signInEmail, setSignInEmail] = useState('')
@@ -91,14 +89,6 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
       setError(t('onboarding.pharmacyNameHint'))
       return
     }
-    if (!regEmail.trim() || !regPassword) {
-      setError('Please provide a valid email and password.')
-      return
-    }
-    if (regPassword.length < 6) {
-      setError('Password must be at least 6 characters.')
-      return
-    }
     setStep('set-pin')
   }
 
@@ -111,31 +101,15 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
 
     setIsLoading(true)
     setError(null)
-    setRegStage('account')
-
     try {
-      const res = await registerAndScaffoldPharmacy({
+      await createLocalWorkspace({
         pharmacyName: pharmacyName.trim(),
-        fullName: ownerName.trim() || 'Manager',
-        email: regEmail.trim(),
-        password: regPassword,
-        phone: regPhone.trim() || undefined,
+        managerName: ownerName.trim() || 'Manager',
         managerPin,
-        onProgress: (stage) => setRegStage(stage),
       })
-
-      if (res.requiresEmailConfirmation) {
-        setStep('confirm-email')
-        return
-      }
-
-      if (!res.success) {
-        throw new Error(res.error || 'Failed to setup pharmacy terminal.')
-      }
-
       await finishLink()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to register pharmacy terminal.')
+      setError(err instanceof Error ? err.message : 'Failed to create local workspace.')
       setStep('register-pharmacy')
     } finally {
       setIsLoading(false)
@@ -392,7 +366,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   </div>
 
                   <p className="text-xs text-on-surface-variant mb-5">
-                    {t('onboarding.welcomeHint')}
+                    Create an independent workspace on this device. You can add operators and branches without a web account.
                   </p>
 
                   <form onSubmit={handleRegisterStep1} className="space-y-3.5">
@@ -424,61 +398,9 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
-                        {t('onboarding.email')} *
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        placeholder="pharmacist@example.com"
-                        className={inputClass}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
-                        {t('onboarding.password')} *
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showRegPassword ? 'text' : 'password'}
-                          required
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          placeholder="Min. 6 characters"
-                          className={`${inputClass} pr-11`}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowRegPassword(!showRegPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-1"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">
-                            {showRegPassword ? 'visibility_off' : 'visibility'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-on-surface-variant mb-1.5">
-                        {t('onboarding.phone')}
-                      </label>
-                      <input
-                        type="tel"
-                        value={regPhone}
-                        onChange={(e) => setRegPhone(e.target.value)}
-                        placeholder={t('onboarding.phoneHint')}
-                        className={inputClass}
-                      />
-                    </div>
-
                     <button
                       type="submit"
-                      disabled={!pharmacyName.trim() || !regEmail.trim() || !regPassword}
+                      disabled={!pharmacyName.trim()}
                       className={`${btnClass} mt-5`}
                     >
                       <span>{t('onboarding.continue')}</span>
@@ -524,10 +446,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                           {t('onboarding.creatingAccount')}
                         </p>
                         <p className="text-xs text-on-surface-variant">
-                          {regStage === 'account' && t('onboarding.statusAccount')}
-                          {regStage === 'branch' && t('onboarding.statusBranch')}
-                          {regStage === 'operator' && t('onboarding.statusOperator')}
-                          {regStage === 'sync' && t('onboarding.statusSync')}
+                          Creating your private workspace on this device…
                         </p>
                       </div>
                     </div>

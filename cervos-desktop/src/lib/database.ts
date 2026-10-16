@@ -14,7 +14,13 @@ export async function initDb(): Promise<void> {
     const initSqlJs = (await import('sql.js')).default
 
     const locateWasm = (file: string) => {
-      if (file === 'sql-wasm.wasm') return sqlWasmUrl
+      // The browser glue (sql-wasm-browser.js, via the bundled package entry)
+      // may ask for 'sql-wasm.wasm' OR 'sql-wasm-browser.wasm' — always answer
+      // with the locally bundled wasm. The old CDN fallback not only breaks
+      // offline use, jsdelivr can serve a build whose import surface doesn't
+      // match this glue copy (observed: Wasm LinkError "Import #38 requires
+      // a callable").
+      if (file.endsWith('.wasm')) return sqlWasmUrl
       return `https://cdn.jsdelivr.net/npm/sql.js/dist/${file}`
     }
 
