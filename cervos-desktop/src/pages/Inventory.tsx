@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { queryDb, executeDb, generateId, nowIso } from "../lib/database";
-import { getLinkedBranchId, queueForSync, runSyncCycle } from "../lib/sync";
+import { getLinkedBranchId, queueForSync, runSyncCycle, userSyncMessage } from "../lib/sync";
 import { PHARMACY_CATEGORIES } from "../lib/branding";
 import { useAuthStore } from "../lib/store";
 import { useTranslation } from "../lib/i18n";
@@ -55,7 +55,7 @@ export default function Inventory() {
     // rather than only an old local cache. Offline use still falls back safely
     // to the last successful local pull.
     const sync = await runSyncCycle();
-    setSyncError(sync.ok ? null : (sync.message?.startsWith('offline') ? null : sync.message ?? t('inventory.errRefresh')));
+    setSyncError(userSyncMessage(sync.ok ? null : sync.message));
 
     const prods = await queryDb(
       `SELECT DISTINCT p.* FROM products p
@@ -263,7 +263,7 @@ export default function Inventory() {
             Inventory
           </h1>
           <p className="text-sm text-on-surface-variant mt-1">
-            {products.length} products Â· {batches.filter((b) => b.quantity > 0).length} batches in stock
+            {products.length} products · {batches.filter((b) => b.quantity > 0).length} batches in stock
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -298,7 +298,9 @@ export default function Inventory() {
 
       {syncError && (
         <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm">
-          {syncError} Displaying the latest data stored for this branch.
+          {syncError === 'Offline — data is saved on this device and will sync when the connection returns.'
+            ? syncError
+            : `${syncError} Showing the latest data saved on this device.`}
         </div>
       )}
 
@@ -348,6 +350,7 @@ export default function Inventory() {
       </div>
 
       <div className="bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-outline-variant/50">
             <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
@@ -442,6 +445,7 @@ export default function Inventory() {
             })}
           </tbody>
         </table>
+        </div>
 
         {filteredProducts.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
@@ -1241,7 +1245,7 @@ function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch, o
   const totalSales = sales.reduce((sum, s) => sum + (s.quantity || 0), 0);
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-headline text-xl font-bold text-on-surface">
@@ -1385,7 +1389,7 @@ function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch, o
         )}
 
         {confirmingDelete && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
             <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md p-6">
               <div className="flex items-center gap-3 mb-3">
                 <span className="material-symbols-outlined text-error text-2xl">warning</span>

@@ -324,6 +324,7 @@ export default function Records() {
 
       {tab === 'receipts' && (
       <div className="bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-outline-variant/50">
             <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
@@ -412,6 +413,7 @@ export default function Records() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
       )}
 
@@ -505,7 +507,7 @@ interface ReceiptModalProps {
 function ReceiptModal({ receipt, onClose }: ReceiptModalProps) {
   const { t } = useTranslation()
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-headline text-xl font-bold text-on-surface">

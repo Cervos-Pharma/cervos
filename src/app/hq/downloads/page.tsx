@@ -29,7 +29,7 @@ export default async function HQDownloadsPage() {
             </p>
             <h1 className="font-headline-lg text-headline-lg text-ink-deep">Downloads</h1>
             <p className="font-body-md text-body-md text-on-surface-variant mt-1">
-              Upload installer releases and manage which version is served to pharmacies.
+              Release drop zone: HQ Admin → Downloads. Add an installer below, then set the approved version as current.
             </p>
           </div>
 

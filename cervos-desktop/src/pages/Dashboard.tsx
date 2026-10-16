@@ -287,11 +287,12 @@ export default function Dashboard() {
           {data.dataWarning} {t('dashboard.dataWarningSuffix')}
         </div>
       )}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        {stats.map((stat) => (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+        {stats.map((stat, i) => (
           <div
             key={stat.label}
-            className="bg-surface-base border border-outline-variant rounded-xl p-4"
+            className="stagger-enter interactive-lift bg-surface-base border border-outline-variant rounded-xl p-4"
+            style={{ animationDelay: `${i * 40}ms` }}
           >
             <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
               {stat.label}
@@ -309,7 +310,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-surface-base border border-outline-variant rounded-xl p-5">
+        <div className="stagger-enter lg:col-span-2 bg-surface-base border border-outline-variant rounded-xl p-4 md:p-5" style={{ animationDelay: '160ms' }}>
           <h3 className="font-headline font-bold text-on-surface mb-4">
             {t('dashboard.revenue7days')}
           </h3>
@@ -337,37 +338,40 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
+        <div className="stagger-enter bg-surface-base border border-outline-variant rounded-xl p-4 md:p-5" style={{ animationDelay: '220ms' }}>
           <h3 className="font-headline font-bold text-on-surface mb-4">
             {t('dashboard.quickActions')}
           </h3>
           <div className="space-y-2">
             <Link
               to="/pos"
-              className="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-outline-variant/30 transition-colors"
+              className="group flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-outline-variant/30 active:scale-[0.99] transition-all duration-200 hover:border-primary/40"
             >
               <span className="material-symbols-outlined text-primary">
                 point_of_sale
               </span>
               <span className="text-sm font-medium">{t('dashboard.openPos')}</span>
+              <span className="material-symbols-outlined text-lg text-on-surface-variant ml-auto transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
             </Link>
             <Link
               to="/inventory"
-              className="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-outline-variant/30 transition-colors"
+              className="group flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-outline-variant/30 active:scale-[0.99] transition-all duration-200 hover:border-primary/40"
             >
               <span className="material-symbols-outlined text-primary">
                 inventory_2
               </span>
               <span className="text-sm font-medium">{t('dashboard.manageInventory')}</span>
+              <span className="material-symbols-outlined text-lg text-on-surface-variant ml-auto transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
             </Link>
             <Link
               to="/settings"
-              className="flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-outline-variant/30 transition-colors"
+              className="group flex items-center gap-3 p-3 rounded-lg border border-outline-variant hover:bg-outline-variant/30 active:scale-[0.99] transition-all duration-200 hover:border-primary/40"
             >
               <span className="material-symbols-outlined text-primary">
                 settings
               </span>
               <span className="text-sm font-medium">{t('dashboard.viewSettings')}</span>
+              <span className="material-symbols-outlined text-lg text-on-surface-variant ml-auto transition-transform duration-200 group-hover:translate-x-1">arrow_forward</span>
             </Link>
           </div>
         </div>

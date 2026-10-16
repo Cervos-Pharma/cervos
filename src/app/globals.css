@@ -122,6 +122,44 @@
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
+/* ── Public landing motion ────────────────────────────────────────────── */
+@keyframes landing-reveal {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes landing-image-settle {
+  from { transform: scale(1.06); }
+  to { transform: scale(1); }
+}
+
+@keyframes landing-stat-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.landing-reveal {
+  animation: landing-reveal 640ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.landing-reveal-1 { animation-delay: 60ms; }
+.landing-reveal-2 { animation-delay: 140ms; }
+.landing-reveal-3 { animation-delay: 220ms; }
+.landing-reveal-4 { animation-delay: 300ms; }
+.landing-hero-image { animation: landing-image-settle 1100ms ease-out both; }
+.landing-stat { animation: landing-stat-in 460ms ease-out both; }
+.landing-cta { box-shadow: 0 12px 30px rgba(16, 57, 185, 0.22); }
+.landing-panel { transition: transform 240ms ease, box-shadow 240ms ease; }
+@media (hover: hover) {
+  .landing-panel:hover { transform: translateY(-3px); box-shadow: 0 18px 36px rgba(26, 26, 46, 0.10); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-reveal,
+  .landing-hero-image,
+  .landing-stat { animation: none; }
+  .landing-panel { transition: none; }
+}
+
 /* Mobile drawer slide-in/out */
 @keyframes slideInLeft {
   from { transform: translateX(-100%); }

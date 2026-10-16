@@ -60,6 +60,7 @@ export default function Users() {
       </div>
 
       <div className="bg-surface-base border border-outline-variant rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead className="bg-outline-variant/50">
             <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
@@ -103,6 +104,7 @@ export default function Users() {
             ))}
           </tbody>
         </table>
+        </div>
         {operators.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
             <span className="material-symbols-outlined text-5xl">group</span>
@@ -156,7 +158,7 @@ function OperatorModal({ operator, onClose, onSave }: OperatorModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-surface-base rounded-2xl shadow-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="font-headline text-xl font-bold text-on-surface">

@@ -79,7 +79,7 @@ export default function Sidebar() {
     <>
       <div className="h-14 flex items-center px-4 border-b border-outline-variant gap-2 shrink-0">
         <LogoMark className="shrink-0" />
-        <span className="font-headline font-black text-lg text-on-surface">
+        <span className="font-headline font-black text-lg text-on-surface tracking-tight">
           Cervos
         </span>
       </div>
@@ -92,19 +92,19 @@ export default function Sidebar() {
             end={item.path === '/'}
             onClick={() => setSidebarOpen(false)}
             className={({ isActive }) =>
-              `w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
+              `w-full flex items-center gap-3 group px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 active:scale-[0.98] ${
                 isActive
-                  ? 'bg-primary text-on-primary'
-                  : 'text-on-surface-variant hover:bg-outline-variant/50'
+                  ? 'bg-primary text-on-primary shadow-sm shadow-primary/30'
+                  : 'text-on-surface-variant hover:bg-outline-variant/50 hover:text-on-surface'
               }`
             }
           >
-            <span className="material-symbols-outlined text-xl">
+            <span className="material-symbols-outlined text-xl transition-transform duration-200 group-hover:scale-110">
               {item.icon}
             </span>
             {t(item.key)}
             {item.path === '/alerts' && unread > 0 && (
-              <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-error text-on-primary text-[11px] font-bold flex items-center justify-center">
+              <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-error text-on-primary text-[11px] font-bold flex items-center justify-center animate-pulse">
                 {unread > 99 ? '99+' : unread}
               </span>
             )}
@@ -120,10 +120,10 @@ export default function Sidebar() {
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  `w-full flex items-center gap-3 group px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 active:scale-[0.98] ${
                     isActive
-                      ? 'bg-primary text-on-primary'
-                      : 'text-on-surface-variant hover:bg-outline-variant/50'
+                      ? 'bg-primary text-on-primary shadow-sm shadow-primary/30'
+                      : 'text-on-surface-variant hover:bg-outline-variant/50 hover:text-on-surface'
                   }`
                 }
               >

@@ -129,7 +129,6 @@ function AppRoutes() {
   const [dbReady, setDbReady] = useState(false)
   const [sessionRestored, setSessionRestored] = useState(false)
   const blocked = useSyncStore((s) => s.blocked)
-  const blockReason = useSyncStore((s) => s.blockReason)
 
   useEffect(() => {
     initDb()
@@ -219,14 +218,13 @@ function AppRoutes() {
           <div className="max-w-md w-full bg-surface-base rounded-2xl shadow-xl p-8 text-center">
             <span className="material-symbols-outlined text-5xl text-error">lock</span>
             <h2 className="mt-4 font-headline text-xl font-bold text-on-surface">
-              Terminal Locked
+              Workspace unavailable
             </h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              {blockReason || "This branch has been locked by HQ or its subscription is inactive."}
+              This workspace is currently unavailable.
             </p>
             <p className="mt-4 text-xs text-on-surface-variant">
-              Contact your administrator or HQ to resolve. The app will automatically
-              unlock once the status is cleared and a sync completes.
+              Contact your administrator for help. You can try again once access has been restored.
             </p>
           </div>
         </div>

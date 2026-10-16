@@ -1,54 +1,13 @@
-import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
-import { queryDb } from '../lib/database'
 import Logo from './Logo'
 import { useShell } from './Shell'
 
 export default function TopBar() {
   const navigate = useNavigate()
   const { currentOperator, logout } = useAuthStore()
-  const [subscriptionStatus, setSubscriptionStatus] = useState<string>('trial')
   const { setSidebarOpen, sidebarOpen } = useShell()
-
-  useEffect(() => {
-    async function loadSubscription() {
-      const result = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
-      if (result.length > 0) {
-        const bid = JSON.parse(result[0].value)
-        const branchResult = await queryDb('SELECT subscription_status FROM branches WHERE id = ?', [bid])
-        if (branchResult.length > 0) {
-          setSubscriptionStatus(branchResult[0].subscription_status || 'trial')
-        }
-      }
-    }
-    loadSubscription()
-    const interval = setInterval(loadSubscription, 30000)
-    return () => clearInterval(interval)
-  }, [])
-
-  function getStatusColor(status: string): string {
-    switch (status) {
-      case 'active': return 'bg-secondary'
-      case 'trial': return 'bg-primary animate-pulse'
-      case 'past_due': return 'bg-warning'
-      case 'inactive': return 'bg-error'
-      default: return 'bg-outline-variant'
-    }
-  }
-
-  function getStatusLabel(status: string): string {
-    switch (status) {
-      case 'active': return t('status.active')
-      case 'trial': return t('status.trial')
-      case 'grace': return t('status.grace')
-      case 'past_due': return t('status.past_due')
-      case 'inactive': return t('status.inactive')
-      case 'locked': return t('status.locked')
-      default: return status
-    }
-  }
 
   async function handleLock() {
     logout()
@@ -74,12 +33,7 @@ export default function TopBar() {
         <span className="font-headline font-semibold text-on-surface hidden sm:block">Cervos POS</span>
       </div>
 
-      <div className="flex items-center gap-3 sm:gap-4">
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${getStatusColor(subscriptionStatus)}`} />
-          <span className="text-xs text-on-surface-variant">{getStatusLabel(subscriptionStatus)}</span>
-        </div>
-
+      <div className="flex items-center gap-2 sm:gap-4">
         <button
           onClick={toggleLocale}
           title={locale === 'en' ? t('topbar.switch_sw') : t('topbar.switch_en')}

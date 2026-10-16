@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 
@@ -32,6 +32,10 @@ export function useShell() {
 
 export default function Shell() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Re-keying the content wrapper on each route makes the .page-enter
+  // animation replay — a light fade/slide that stops route changes feeling
+  // like an abrupt swap.
+  const location = useLocation()
 
   return (
     <SidebarContext.Provider value={{ sidebarOpen, setSidebarOpen }}>
@@ -43,7 +47,7 @@ export default function Shell() {
           <Sidebar />
           <main className="flex-1 flex flex-col overflow-hidden min-w-0">
             <TopBar />
-            <div className="flex-1 overflow-auto">
+            <div key={location.pathname} className="page-enter flex-1 overflow-auto">
               <Outlet />
             </div>
           </main>

@@ -27,38 +27,38 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="bg-surface-base text-on-surface font-body-md antialiased">
+    <div className="bg-surface-base text-on-surface font-body-md antialiased overflow-x-hidden">
       <PublicNav />
 
       {/* ── Hero ── */}
-      <section className="relative w-full min-h-[90vh] flex items-center pt-24 pb-24 overflow-hidden">
+      <section className="landing-hero relative w-full min-h-[min(760px,100svh)] flex items-center pt-28 pb-16 sm:pt-32 sm:pb-24 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <Image
             src="/pharmacist-1.png"
             alt="East African pharmacist using Cervos"
             fill
             sizes="100vw"
-            className="object-cover saturate-90"
+            className="landing-hero-image object-cover saturate-90"
             priority
           />
           <div className="absolute inset-0 bg-surface-base/60" />
         </div>
 
-        <div className="relative z-10 max-w-container-max mx-auto px-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8 flex flex-col justify-center">
-            <span className="text-primary font-label-md text-label-md uppercase tracking-wider mb-4 block">
+        <div className="relative z-10 max-w-container-max mx-auto px-5 sm:px-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-8 flex flex-col justify-center max-w-4xl">
+            <span className="landing-reveal landing-reveal-1 text-primary font-label-md text-label-md uppercase tracking-wider mb-4 block">
               {t("hero.tagline")}
             </span>
-            <h1 className="font-headline-xl font-bold text-ink-deep hero-headline mb-6">
+            <h1 className="landing-reveal landing-reveal-2 font-headline-xl font-bold text-ink-deep hero-headline mb-5 sm:mb-6">
               {t("hero.headline")}
             </h1>
-            <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mb-10">
+            <p className="landing-reveal landing-reveal-3 font-body-lg text-body-lg text-on-surface-variant max-w-2xl mb-8 sm:mb-10">
               {t("hero.body")}
             </p>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="landing-reveal landing-reveal-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:w-fit">
               <Link
                 href="/auth?tab=signup&type=pharmacy"
-                className="bg-primary text-on-primary font-label-md text-label-md px-8 py-4 rounded hover:scale-[1.02] active:scale-[0.98] transition-transform gaming-snap flex items-center justify-center gap-2"
+                className="landing-cta bg-primary text-on-primary font-label-md text-label-md px-7 sm:px-8 py-4 rounded hover:scale-[1.02] active:scale-[0.98] transition-transform gaming-snap flex items-center justify-center gap-2"
               >
                 {t("hero.cta.start")}
                 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
@@ -75,18 +75,19 @@ export default function LandingPage() {
       </section>
 
       {/* ── Stats bar ── */}
-      <section className="py-16 bg-surface-base border-y border-outline-variant/20" id="features">
-        <div className="max-w-container-max mx-auto px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <section className="py-12 sm:py-16 bg-surface-base border-y border-outline-variant/20" id="features">
+        <div className="max-w-container-max mx-auto px-5 sm:px-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
             {[
               { value: stats ? stats.pharmacies.toLocaleString() : "—", labelKey: "stats.pharmacies" },
               { value: stats ? stats.suppliers.toLocaleString() : "—",   labelKey: "stats.suppliers" },
               { value: stats ? stats.branches.toLocaleString() : "—",    labelKey: "stats.branches" },
               { value: stats ? stats.downloads.toLocaleString() : "—",   labelKey: "stats.downloads" },
-            ].map((stat) => (
+            ].map((stat, index) => (
               <div
                 key={stat.labelKey}
-                className="p-8 bg-surface-muted custom-notch border border-outline-variant/20 text-center hover:border-primary/30 transition-colors"
+                className="landing-stat p-5 sm:p-8 bg-surface-muted custom-notch border border-outline-variant/20 text-center hover:border-primary/30 transition-colors"
+                style={{ animationDelay: `${index * 90}ms` }}
               >
                 <div className="font-headline-xl text-headline-xl text-primary mb-2">{stat.value}</div>
                 <div className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest">
@@ -99,13 +100,13 @@ export default function LandingPage() {
       </section>
 
       {/* ── Core features ── */}
-      <section className="py-24 bg-surface-muted relative overflow-hidden">
-        <div className="max-w-container-max mx-auto px-8 relative z-10">
+      <section className="py-16 sm:py-24 bg-surface-muted relative overflow-hidden">
+        <div className="max-w-container-max mx-auto px-5 sm:px-8 relative z-10">
           <div className="text-center mb-16">
             <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-4">{t("features.title")}</h2>
             <p className="font-body-md text-on-surface-variant max-w-2xl mx-auto">{t("features.body")}</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
             {[
               { icon: "inventory_2", titleKey: "feat.inventory.title", bodyKey: "feat.inventory.body" },
               { icon: "smartphone",  titleKey: "feat.offline.title",   bodyKey: "feat.offline.body" },
@@ -113,7 +114,7 @@ export default function LandingPage() {
             ].map((f) => (
               <div
                 key={f.titleKey}
-                className="bg-surface-base border border-outline-variant/20 custom-notch p-8 relative group hover:shadow-[0_4px_12px_rgba(52,84,209,0.05)] transition-all duration-300"
+                className="landing-feature bg-surface-base border border-outline-variant/20 custom-notch p-6 sm:p-8 relative group hover:shadow-[0_8px_24px_rgba(52,84,209,0.10)] hover:-translate-y-1 transition-all duration-300"
               >
                 <div className="w-12 h-12 rounded bg-surface-container flex items-center justify-center mb-6 text-primary">
                   <span className="material-symbols-outlined text-[24px]">{f.icon}</span>
@@ -128,9 +129,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── FEFO deep-dive ── */}
-      <section className="py-32 bg-surface-base relative overflow-hidden">
-        <div className="max-w-container-max mx-auto px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center mb-32">
+      <section className="py-20 sm:py-32 bg-surface-base relative overflow-hidden">
+        <div className="max-w-container-max mx-auto px-5 sm:px-8 relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center mb-20 sm:mb-32">
             <div className="flex flex-col gap-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary font-label-md text-label-md rounded-full w-fit">
                 <span className="material-symbols-outlined text-[16px]">inventory_2</span>
@@ -163,7 +164,7 @@ export default function LandingPage() {
                 <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </Link>
             </div>
-            <div className="bg-surface-muted p-8 border border-outline-variant/20 shadow-lg custom-notch">
+            <div className="landing-panel bg-surface-muted p-4 sm:p-8 border border-outline-variant/20 shadow-lg custom-notch overflow-x-auto">
               <div className="space-y-4">
                 <div className="flex justify-between items-center pb-4 border-b border-outline-variant/20">
                   <span className="font-headline-md text-lg text-ink-deep">Amoxicillin 500mg</span>
@@ -191,13 +192,13 @@ export default function LandingPage() {
       </section>
 
       {/* ── Map section ── */}
-      <section className="py-16 bg-surface-muted border-t border-outline-variant/20">
-        <div className="max-w-container-max mx-auto px-8">
+      <section className="py-14 sm:py-16 bg-surface-muted border-t border-outline-variant/20">
+        <div className="max-w-container-max mx-auto px-5 sm:px-8">
           <div className="text-center mb-10">
             <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-3">{t("map.title")}</h2>
             <p className="font-body-md text-on-surface-variant">{t("map.body")}</p>
           </div>
-          <div className="custom-notch border border-outline-variant/20 overflow-hidden h-[400px]">
+          <div className="custom-notch border border-outline-variant/20 overflow-hidden h-[300px] sm:h-[400px]">
             <MapClientWrapper
               center={[-6.816, 39.2803]}
               zoom={11}
@@ -210,17 +211,17 @@ export default function LandingPage() {
                       { lat: -6.7667, lng: 39.25,   label: "Mikocheni Branch",status: "grace" },
                     ]
               }
-              className="h-[400px] w-full"
+              className="h-[300px] sm:h-[400px] w-full"
             />
           </div>
         </div>
       </section>
 
       {/* ── Testimonial ── */}
-      <section className="py-24 bg-surface-base relative overflow-hidden">
-        <div className="max-w-container-max mx-auto px-8 relative z-10">
+      <section className="py-16 sm:py-24 bg-surface-base relative overflow-hidden">
+        <div className="max-w-container-max mx-auto px-5 sm:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="relative custom-notch overflow-hidden border border-outline-variant/20 p-2 h-[500px]">
+            <div className="relative custom-notch overflow-hidden border border-outline-variant/20 p-2 h-[320px] sm:h-[500px]">
               <Image src="/pharmacist-2.png" alt="East African pharmacist" fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover saturate-90" />
             </div>
             <div className="flex flex-col justify-center">
@@ -232,9 +233,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── FAQ ── */}
-      <section className="py-24 bg-surface-muted border-t border-outline-variant/20">
-        <div className="max-w-3xl mx-auto px-8">
-          <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-12 text-center">{t("faq.title")}</h2>
+      <section className="py-16 sm:py-24 bg-surface-muted border-t border-outline-variant/20">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8">
+          <h2 className="font-headline-lg text-headline-lg text-ink-deep mb-8 sm:mb-12 text-center">{t("faq.title")}</h2>
           <div className="space-y-4">
             {(["1", "2", "3"] as const).map((n) => (
               <details
@@ -253,8 +254,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA band ── */}
-      <section className="py-20 bg-primary text-on-primary text-center">
-        <div className="max-w-2xl mx-auto px-8">
+      <section className="py-16 sm:py-20 bg-primary text-on-primary text-center">
+        <div className="max-w-2xl mx-auto px-5 sm:px-8">
           <h2 className="font-headline-lg text-headline-lg mb-4">{t("landing.cta.ready")}</h2>
           <p className="font-body-lg text-body-lg text-on-primary/80 mb-8">{t("landing.cta.join")}</p>
           <div className="flex gap-4 justify-center flex-wrap">
@@ -270,7 +271,7 @@ export default function LandingPage() {
 
       {/* ── Footer ── */}
       <footer className="bg-ink-deep w-full">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 px-8 py-16 max-w-container-max mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 px-5 sm:px-8 py-12 sm:py-16 max-w-container-max mx-auto">
           <div className="col-span-1 flex flex-col gap-4">
             <span className="font-headline-md text-headline-md font-black text-on-primary tracking-tight">CERVOS</span>
             <p className="font-body-sm text-body-sm text-surface-variant/70 mt-2">Pharmacy OS</p>

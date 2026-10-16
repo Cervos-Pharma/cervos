@@ -42,7 +42,57 @@ body {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes stagger-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Respect users who prefer no motion: kill all logo/entrance animation,
+   keep only opacity transitions (the pragmatic accessibility baseline). */
+@media (prefers-reduced-motion: reduce) {
+  .page-enter,
+  .stagger-enter {
+    animation: none !important;
+  }
+  .interactive-lift,
+  .interactive-lift:hover,
+  .interactive-lift:active {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
 @layer components {
+  /* ── Scroll & entrance motion ──────────────────────────────────────── */
+
+  /* Page fades/slides in when it mounts (one-shot, subtle). */
+  .page-enter {
+    animation: page-enter 0.28s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* Staggered card/row entrances — combine with inline animation-delay. */
+  .stagger-enter {
+    animation: stagger-enter 0.32s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  /* Global interactive polish: buttons/cards/inputs get an eased transform
+     so taps feel responsive. Applied via utility classes below. */
+  .interactive-lift {
+    transition: transform 0.18s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.18s ease;
+  }
+  .interactive-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 57, 185, 0.12);
+  }
+  .interactive-lift:active {
+    transform: translateY(0) scale(0.99);
+  }
+
   /* HUD glassmorphism panel for Onboarding & Authentication */
   .hud-panel {
     background: rgba(255, 255, 255, 0.92);

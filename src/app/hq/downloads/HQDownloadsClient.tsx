@@ -72,8 +72,7 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
     checkStorageBucket().then((result) => {
       if (result.error && !result.configured) {
         setBucketWarning(
-          "Storage bucket 'app-releases' is not configured. Upload will fail. " +
-          "Go to Supabase Storage > New bucket > Name: 'app-releases' > Set as Private."
+          "Release storage is not available. Please contact the technical team before uploading a new version."
         );
       }
     });
@@ -158,9 +157,9 @@ export default function HQDownloadsClient({ releases: initialReleases }: HQDownl
       if (!putRes.ok) {
         let errorDetail = `Storage upload failed (HTTP ${putRes.status}).`;
         if (putRes.status === 403) {
-          errorDetail += " This may indicate a CORS configuration issue or expired signed URL.";
+          errorDetail = "Upload access could not be verified. Please try again, or contact the technical team.";
         } else if (putRes.status === 404) {
-          errorDetail = "Storage bucket 'app-releases' not found. Please ensure it exists in Supabase Storage.";
+          errorDetail = "Release storage is unavailable. Please contact the technical team.";
         }
         setToast({ message: errorDetail, type: "error" });
         return;

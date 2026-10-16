@@ -1158,6 +1158,22 @@ let _cleanupAuto: (() => void) | null = null
 let _failStreak = 0
 let _syncing = false
 
+/**
+ * Internal sync status strings are for logs/diagnostics — never render them
+ * directly to operators. Map each to a user-safe sentence; unknown messages
+ * (e.g. raw server errors) collapse to a generic one.
+ */
+export function userSyncMessage(message: string | null | undefined): string | null {
+  if (!message) return null;
+  const m = message.toLowerCase();
+  if (m === 'not linked' || m === 'no linked branch' || m === 'no account')
+    return 'Connect setup is needed — showing data saved on this device.';
+  if (m === 'no window' || m === 'already syncing') return null;
+  if (m.startsWith('offline'))
+    return 'Offline — data is saved on this device and will sync when the connection returns.';
+  return 'Sync did not complete — your data is safe on this device and will retry automatically.';
+}
+
 export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pushed?: number; message?: string }> {
   if (typeof window === 'undefined') return { ok: false, message: 'no window' }
   if (_syncing) return { ok: true, message: 'already syncing' } // not an error — a sync is already in flight

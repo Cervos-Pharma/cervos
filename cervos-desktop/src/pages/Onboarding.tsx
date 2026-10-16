@@ -309,7 +309,7 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
               {step === 'welcome' && (
                 <div className="text-center">
                   <div className="w-16 h-16 mx-auto mb-5 p-3 bg-primary/10 rounded-2xl flex items-center justify-center shadow-inner">
-                    <img src="/logo.png" alt="Cervos" className="w-full h-full object-contain" />
+                    <Logo size="md" />
                   </div>
                   <h1 className="font-headline text-2xl font-bold text-on-surface mb-2">
                     {t('onboarding.welcome')}
