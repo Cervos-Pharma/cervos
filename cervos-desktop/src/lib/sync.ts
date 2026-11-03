@@ -259,7 +259,10 @@ export async function getLinkedBranchOverview(): Promise<LinkedBranchOverview> {
     .eq('account_id', accountId)
 
   if (error) {
-    return { branchId, branchName, branchCount: 1, subscriptionStatus: null, graceEndsAt: null, error: error.message }
+    // Raw server errors are diagnostics, not user-facing text — log and degrade to
+    // the normal offline message, since the local branch data stays usable.
+    console.warn('[overview] remote branch lookup failed:', error.message)
+    return { branchId, branchName, branchCount: 1, subscriptionStatus: null, graceEndsAt: null, error: 'Offline — showing local branch data.' }
   }
   const linkedBranch = (branches ?? []).find((branch: any) => branch.id === branchId)
   return {
@@ -480,6 +483,11 @@ export async function registerAndScaffoldPharmacy(
     `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ['centre_address', JSON.stringify(branch.address ?? '')]
   )
+  // This device is now a linked cloud terminal, not a standalone local
+  // workspace. Clear the local-mode flag — queueForSync() treats a device
+  // still marked 'local' as having no server identity and silently skips
+  // queuing, which would leave every sale/stock change local forever.
+  await executeDb("DELETE FROM app_settings WHERE key = 'workspace_mode'")
   await executeDb(
     `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier)
      VALUES (?, ?, ?, ?, ?)
@@ -650,6 +658,11 @@ export async function linkToExistingBranch(branchId: string): Promise<void> {
     `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ['centre_address', JSON.stringify(branch.address ?? '')]
   )
+  // This device is now a linked cloud terminal, not a standalone local
+  // workspace. Clear the local-mode flag — queueForSync() treats a device
+  // still marked 'local' as having no server identity and silently skips
+  // queuing, which would leave every sale/stock change local forever.
+  await executeDb("DELETE FROM app_settings WHERE key = 'workspace_mode'")
   await executeDb(
     `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier)
      VALUES (?, ?, ?, ?, ?)
@@ -712,6 +725,11 @@ export async function forceClaimBranch(branchId: string): Promise<void> {
     `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ['centre_address', JSON.stringify(branch.address ?? '')]
   )
+  // This device is now a linked cloud terminal, not a standalone local
+  // workspace. Clear the local-mode flag — queueForSync() treats a device
+  // still marked 'local' as having no server identity and silently skips
+  // queuing, which would leave every sale/stock change local forever.
+  await executeDb("DELETE FROM app_settings WHERE key = 'workspace_mode'")
   await executeDb(
     `INSERT INTO branches (id, account_id, name, subscription_status, subscription_tier)
      VALUES (?, ?, ?, ?, ?)
@@ -825,6 +843,9 @@ export async function queueForSync(tableName: string, rowId: string, operation: 
     `INSERT INTO sync_queue (id, table_name, row_id, operation, payload, created_at, attempts) VALUES (?,?,?,?,?,?,?)`,
     [id, tableName, rowId, op, JSON.stringify(payload), nowIso(), 0]
   )
+  // Don't leave the change sitting in the local queue until the next
+  // auto-sync tick — push it out within a couple of seconds.
+  schedulePromptSync()
 }
 
 export async function isPharmacyConfigured(): Promise<boolean> {
@@ -1151,6 +1172,128 @@ async function applyPulledData(data: any): Promise<void> {
   }
 }
 
+// ─── Syncable POS settings (per-branch, cross-device) ────────────────
+// app_settings keys that live in the Supabase database, not just on one
+// device. Changing any of these (Settings screen, wallet setup) is pushed
+// up to pos_settings by the next cycle and merged into every other device
+// of the same branch.
+
+const SYNCED_SETTING_KEYS = [
+  'pharmacy_name',
+  'tax_rate',
+  'low_stock_threshold',
+  'expiry_days_threshold',
+  'payme_wallet_number',
+] as const
+
+// Snapshot of the last successfully pushed value per key, stored locally so
+// pushPosSettings only uploads rows that actually changed.
+const POS_SETTINGS_SNAPSHOT_KEY = 'pos_settings_pushed'
+let _posSettingsWarned = false
+
+/** Deterministic cloud row id for one (branch, key) setting — identical on
+ * every device, so concurrent edits upsert onto the same row instead of
+ * racing into the UNIQUE(branch_id, key) constraint with different ids. */
+async function posSettingsRowId(branchId: string, key: string): Promise<string> {
+  const hex = await hashString(`pos_settings:${branchId}:${key}`)
+  // Shape the first 32 hex chars into a valid UUID (version 4, variant a).
+  const h = hex.slice(0, 32)
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`
+}
+
+function warnPosSettingsSetup(error: any): void {
+  if (_posSettingsWarned) return
+  _posSettingsWarned = true
+  console.warn(
+    '[settings-sync] pos_settings table unavailable — apply sql/migrations/pos_settings.sql in the Supabase SQL editor. Details:',
+    error?.message ?? error
+  )
+}
+
+/**
+ * Merge the branch's cloud settings into local app_settings. A local edit
+ * that is still queued for upload wins, so this device mid-edit is not
+ * clobbered by its own stale cloud copy.
+ */
+async function pullPosSettings(branchId: string): Promise<void> {
+  if (!Ie) return
+  try {
+    const { data, error } = await Ie.from('pos_settings').select('id, key, value').eq('branch_id', branchId)
+    if (error) throw error
+    for (const row of data ?? []) {
+      if (!(SYNCED_SETTING_KEYS as readonly string[]).includes(row.key)) continue
+      const pending = await queryDb(
+        "SELECT 1 FROM sync_queue WHERE table_name = 'pos_settings' AND row_id = ? LIMIT 1",
+        [row.id]
+      )
+      if (pending.length > 0) continue
+      const incoming = JSON.stringify(row.value)
+      const current = await queryDb('SELECT value FROM app_settings WHERE key = ?', [row.key])
+      const currentRaw = current.length ? (current[0].value ?? null) : null
+      if (currentRaw !== incoming) {
+        await executeDb(
+          `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+          [row.key, incoming]
+        )
+      }
+    }
+  } catch (err) {
+    warnPosSettingsSetup(err)
+  }
+}
+
+/**
+ * Push local settings that changed since the last successful push. Direct
+ * upsert (not the sync queue) and only rows whose value differs from the
+ * snapshot, so this stays a couple of small request(s) per changed setting.
+ * On failure the snapshot is left untouched — the change is retried every
+ * following cycle until it succeeds.
+ */
+async function pushPosSettings(branchId: string): Promise<void> {
+  if (!Ie) return
+  const snapshotRows = await queryDb('SELECT value FROM app_settings WHERE key = ?', [POS_SETTINGS_SNAPSHOT_KEY])
+  let snapshot: Record<string, string> = {}
+  try {
+    snapshot = snapshotRows.length && snapshotRows[0].value ? JSON.parse(snapshotRows[0].value) : {}
+  } catch {
+    snapshot = {}
+  }
+
+  let changedSnapshot = false
+  for (const key of SYNCED_SETTING_KEYS) {
+    const rows = await queryDb('SELECT value FROM app_settings WHERE key = ?', [key])
+    const raw = rows.length ? (rows[0].value ?? null) : null
+    if (raw === null || snapshot[key] === raw) continue
+
+    let value: any
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      value = String(raw)
+    }
+
+    try {
+      const { error } = await Ie.from('pos_settings').upsert(
+        { id: await posSettingsRowId(branchId, key), branch_id: branchId, key, value, updated_at: new Date().toISOString() },
+        { onConflict: 'id' }
+      )
+      if (error) throw error
+      snapshot[key] = raw
+      changedSnapshot = true
+    } catch (err) {
+      warnPosSettingsSetup(err)
+      console.warn('[settings-sync] failed to push setting:', key, err)
+    }
+  }
+
+  if (changedSnapshot) {
+    await executeDb(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [POS_SETTINGS_SNAPSHOT_KEY, JSON.stringify(snapshot)]
+    )
+  }
+}
+
 // ─── Full sync cycle (pull + push + subscription + commands) ─────────────────
 
 let _autoTimer: any = null
@@ -1271,6 +1414,12 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
       await saveSetting('locked_reason', JSON.stringify(branch.locked_reason ?? null))
     }
 
+    // Settings replicate too: merge the branch's latest cloud settings down
+    // (local queued edits win), then push local changes up, so a change made
+    // here appears in the database and on every other device of the branch.
+    await pullPosSettings(branchId)
+    await pushPosSettings(branchId)
+
     const pushed = await bulkPush()
 
     const nowIso = new Date().toISOString()
@@ -1303,6 +1452,35 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
 const NORMAL_INTERVAL = 3 * 60 * 1000
 const RETRY_INTERVALS = [2500, 5000, 10000, 20000, 45000, 90000]
 const FIRST_DELAY = 1200
+
+/** Prompt-push delay after a write, trailing-debounced so an upload burst
+ * (receipt printing, bulk stock edits) causes at most one extra cycle. */
+const PROMPT_SYNC_DELAY = 2500
+let _pushTimer: any = null
+
+/**
+ * Push queued local changes to Supabase shortly after they are made, so they
+ * are stored in the database and updated there immediately rather than
+ * sitting local for up to NORMAL_INTERVAL. The regular auto-sync loop keeps
+ * running independently; overlapping is harmless (_syncing guard).
+ */
+export function schedulePromptSync(delayMs: number = PROMPT_SYNC_DELAY): void {
+  if (typeof window === 'undefined') return
+  if (_pushTimer) clearTimeout(_pushTimer)
+  _pushTimer = setTimeout(async () => {
+    _pushTimer = null
+    if (_syncing) {
+      // A cycle is already in flight; try just after it settles.
+      schedulePromptSync(delayMs)
+      return
+    }
+    try {
+      await runSyncCycle()
+    } catch {
+      /* failures are handled by the auto-sync backoff loop */
+    }
+  }, delayMs)
+}
 
 export function startAutoSync(): void {
   if (_autoTimer) return

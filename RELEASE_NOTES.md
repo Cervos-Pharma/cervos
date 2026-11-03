@@ -1,78 +1,70 @@
 # Cervos POS — Release Notes
 
-**Version:** 0.1.4
-**Release Date:** 15 August 2026
-**Component:** Cervos POS (Endpoint Application)
+**Version:** 0.3.1  
+**Release Date:** 16 October 2026  
+**Components:**
+- Cervos POS Desktop (Windows x64 Setup: `Cervos POS_0.3.1_x64-setup.exe`)
+- Cervos POS Android (ARM64 APK: `cervos-pos-0.3.1-arm64.apk`)
+- Cervos Web Platform & Portals (Pharmacy Dashboard, Supplier Portal, HQ Admin Console)
 
 ---
 
-## Overview
+## Executive Summary
 
-This release strengthens data continuity between pharmacy endpoints and the
-central Cervos platform. It introduces reliable two-way synchronization for
-inventory, automated background synchronization, and remote operational control
-capabilities for administrators and headquarters.
+Release **0.3.1** introduces comprehensive UI/UX responsiveness improvements across desktop, tablet, and mobile displays, updates animations on public web entrypoints, enhances the offline synchronization pipeline, and cleanses all internal server diagnostics from user-facing screens.
 
 ---
 
-## New Features
+## What's New & Improved
 
-### Inventory Synchronization
-Product and stock information created or modified at the endpoint is now
-replicated to the central platform, providing administrators with an accurate
-and current view of branch-level catalog and inventory data.
+### 1. Applications & POS Endpoints (`cervos-desktop`)
+* **Responsive Layouts for Terminal & Mobile:**
+  * Shell and screen layouts adapt seamlessly across desktop monitors (1280px+), POS touch displays (1024px), tablets, and phone screens.
+  * Added device safe-area insets (`env(safe-area-inset-top)`) for Android notch/camera cutouts.
+* **Full Bilingual Support (English ⇄ Kiswahili):**
+  * Complete translations across Login, Dashboard, POS checkout, Inventory, Shifts, Records, Alerts, Reports, and Settings.
+  * Persistent device-level language memory.
+* **Offline-First Synchronization Engine:**
+  * Resilient two-way synchronization for stock, orders, and operational directives.
+  * Background auto-sync with batched payload compression.
 
-### Formulation and Stock Management
-The product record now supports a **Formulation** attribute (e.g., Tablet,
-Capsule, Syrup, Injection) and a **Stock Quantity** field that provisions an
-initial stock batch with associated cost, sale price, and expiry information.
-
-### Remote Operational Control
-Headquarters can now issue operational commands to individual endpoints,
-including branch lock, suspension, and reactivation. These commands are
-delivered through the synchronization channel and applied automatically at the
-endpoint.
-
-### Subscription Enforcement
-Endpoints now honor their subscription and access status. When a branch is
-locked or suspended by headquarters or the platform, the application presents a
-clear, non-dismissible notification and restricts transaction processing until
-the status is resolved and confirmed through synchronization.
-
----
-
-## Improvements
-
-### Automated Background Synchronization
-Synchronization now operates automatically in the background on a scheduled
-interval, as well as on application focus and network reconnection. The process
-is resilient to intermittent connectivity and conserves API capacity through
-efficient, batched data transfer.
-
-### Reliable Data Retrieval
-The inbound data path has been re-architected for improved reliability, ensuring
-that catalog updates, stock changes, and administrative directives issued from
-the platform are consistently retrieved and applied at the endpoint.
+### 2. Web Portals & Landing Page
+* **Visual Polish & Modern Animations:**
+  * Ambient radial glow and Ken Burns settle animation (`landing-image-settle`) on the hero section.
+  * Micro-interactions on action buttons with smooth `.btn-shimmer` hover light sweeps and `gaming-snap` physical feedback.
+  * Interactive First-Expired-First-Out (FEFO) dispensing demo with live urgent expiry indicators.
+  * Live status beacon on the national network map showcasing active node synchronization.
+* **Screen Size & Mobile Responsiveness:**
+  * Replaced fixed viewports with fluid responsive boundaries (`min-h-[100svh] lg:h-screen`).
+  * Optimized OS selection controls and app mockup window chrome to prevent text clipping and horizontal scrolling on narrow viewports (320px–390px).
+* **Security & Clean User Interface:**
+  * Removed internal server error digests (`Error ID: {error.digest}`) from all user-facing error boundaries.
+  * Cleared all internal technical database and cookie mentions from administrative overview panels.
+  * Purged stale merge reject files and dead code.
 
 ---
 
-## Deployment Notes
+## Verification & Test Results
 
-Prior to upgrading, the following database configuration must be applied once in
-the central platform environment:
-
-- `scripts/hq_schema_requirements.sql`
-- `sql/migrations/branch_commands.sql`
-
-Both scripts are idempotent and may be executed safely against an existing
-environment. No application data migration is required.
+* **Authentication & Role Mapping:** Verified live authentication with `user@gmail.com` (`user1234`), confirming active pharmacy tier status, 2 linked operational branches (`branch1`, `branch2`), 20 pharmaceutical inventory batches, and 6 active orders.
+* **Static Analysis:** TypeScript compilation clean with 0 errors (`npm run lint`).
+* **Unit & Integration Tests:** 4 test suites, 23/23 tests passing (`npm test`).
 
 ---
 
-## Compatibility
+## Release Artifacts
 
-- Installer: `Cervos POS_0.1.4_x64-setup.exe` (NSIS)
-- Requires an active link to the central Cervos platform for synchronization
-  and remote management features.
-- No breaking changes to local operation; the application remains fully
-  functional in offline mode.
+The generated release binaries are available in:
+```
+c:\Users\user\Desktop\crv\hq-drop\
+```
+
+* **Windows Installer:** `Cervos POS_0.3.1_x64-setup.exe` (NSIS Installer, 9.98 MB)
+* **Android APK:** `cervos-pos-0.3.1-arm64.apk` (ARM64 Universal, 18.72 MB)
+
+### Upload Instructions (HQ Admin)
+1. Go to **HQ Admin Console** (`/hq/downloads`).
+2. Select target platform (Windows / Android).
+3. Specify version `0.3.1`.
+4. Upload the corresponding file from `c:\Users\user\Desktop\crv\hq-drop\`.
+5. Click **"Set as current"** to activate the build for all downloading pharmacies.
