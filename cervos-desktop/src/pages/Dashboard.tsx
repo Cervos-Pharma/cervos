@@ -284,7 +284,7 @@ export default function Dashboard() {
     <div className="p-6 flex flex-col gap-4">
       {data.dataWarning && (
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-sm">
-          {data.dataWarning} {t('dashboard.dataWarningSuffix')}
+          {data.dataWarning}
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">

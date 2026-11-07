@@ -1,0 +1,15 @@
+# =============================================================================
+# Cervos Pharmacy OS — Docker Compose for Tauri Android Build
+# =============================================================================
+version: "3.9"
+
+services:
+  cervos-build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Run in detached mode; APK and dist left on container filesystem
+    # Volumes can be mounted here to pull files out
+    # ports: []  # no ports needed for headless build
+    # environment: {}  # no env vars needed
+    # runtime: nvidia  # only if GPU acceleration needed for emulator

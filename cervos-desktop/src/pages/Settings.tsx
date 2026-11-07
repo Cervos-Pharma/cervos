@@ -9,7 +9,8 @@ import type { Operator } from '../types'
 
 export default function Settings() {
   const navigate = useNavigate()
-  const { logout, currentOperator, isAdmin } = useAuthStore()
+  const { logout, currentOperator, isAdmin, permissions } = useAuthStore()
+  const canEditSettings = isAdmin || permissions.canEditSettings
   const { locale, setLocale } = useI18nStore()
   const [pharmacyName, setPharmacyName] = useState('')
   const [operators, setOperators] = useState<Operator[]>([])
@@ -131,6 +132,7 @@ export default function Settings() {
   }
 
   async function handleSaveName() {
+    if (!canEditSettings) return
     await executeDb(
       `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
       ['pharmacy_name', JSON.stringify(pharmacyName)]
@@ -177,30 +179,33 @@ export default function Settings() {
                 <input
                   type="text"
                   value={pharmacyName}
+                  disabled={!canEditSettings}
                   onChange={(e) => setPharmacyName(e.target.value)}
-                  className="flex-1 px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  className="flex-1 px-3 py-2.5 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
                   placeholder={t('settings.pharmacyName')}
                 />
-                <button
-                  onClick={handleSaveName}
-                  className="px-4 py-2.5 rounded-md bg-primary text-white font-semibold hover:opacity-90 transition-opacity"
-                >
-                  {t('settings.save')}
-                </button>
+                {canEditSettings && (
+                  <button
+                    onClick={handleSaveName}
+                    className="px-4 py-2.5 rounded-md bg-primary text-white font-semibold hover:opacity-90 transition-opacity"
+                  >
+                    {t('settings.save')}
+                  </button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
               <label className="text-xs font-semibold text-on-surface-variant">
                 {t('settings.taxRate')}
-                <input type="number" min="0" max="100" step="0.1" value={taxRate} onChange={(e) => setTaxRate(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm" />
+                <input type="number" min="0" max="100" step="0.1" value={taxRate} disabled={!canEditSettings} onChange={(e) => setTaxRate(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm disabled:opacity-60 disabled:cursor-not-allowed" />
               </label>
               <label className="text-xs font-semibold text-on-surface-variant">
                 {t('settings.lowStock')}
-                <input type="number" min="0" step="1" value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm" />
+                <input type="number" min="0" step="1" value={lowStockThreshold} disabled={!canEditSettings} onChange={(e) => setLowStockThreshold(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm disabled:opacity-60 disabled:cursor-not-allowed" />
               </label>
               <label className="text-xs font-semibold text-on-surface-variant">
                 {t('settings.expiryWarning')}
-                <input type="number" min="0" step="1" value={expiryDaysThreshold} onChange={(e) => setExpiryDaysThreshold(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm" />
+                <input type="number" min="0" step="1" value={expiryDaysThreshold} disabled={!canEditSettings} onChange={(e) => setExpiryDaysThreshold(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm disabled:opacity-60 disabled:cursor-not-allowed" />
               </label>
             </div>
           </div>

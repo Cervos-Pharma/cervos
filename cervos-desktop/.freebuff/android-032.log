@@ -1,0 +1,370 @@
+npm warn "aarch64" is being parsed as a normal command line argument.
+npm warn Unknown cli config "--target". This will stop working in the next major version of npm.
+
+> cervos-desktop@0.3.2 android:build:debug
+> tauri android build --debug --target aarch64 aarch64
+
+        Info Using Android Studio's default Java installation: C:\Program Files\Android\Android Studio\jbr
+        Info ANDROID_HOME not set, trying to locate Android SDK...
+        Info Using installed Android SDK: C:\Users\user\AppData\Local\Android/Sdk
+        Info Using installed NDK: C:\Users\user\AppData\Local\Android/Sdk\ndk\30.0.16248370
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+npm warn Unknown env config "target". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> cervos-desktop@0.3.2 build
+> tsc && vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 1290 modules transformed.
+rendering chunks...
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/user/Desktop/crv/cervos-desktop/src/lib/queries.ts is dynamically imported by C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Settings.tsx but also statically imported by C:/Users/user/Desktop/crv/cervos-desktop/src/lib/hooks.ts, C:/Users/user/Desktop/crv/cervos-desktop/src/lib/sync.ts, C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Login.tsx, C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Settings.tsx, C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Users.tsx, dynamic import will not move module into another chunk.
+[39m
+computing gzip size...
+[2mdist/[22m[32mindex.html                          [39m[1m[2m  1.07 kB[22m[1m[22m[2m │ gzip:   0.56 kB[22m
+[2mdist/[22m[35massets/index-C4b8_2qS.css           [39m[1m[2m 33.28 kB[22m[1m[22m[2m │ gzip:   6.68 kB[22m
+[2mdist/[22m[36massets/purify.es-BwoZCkIS.js        [39m[1m[2m 22.03 kB[22m[1m[22m[2m │ gzip:   8.77 kB[22m
+[2mdist/[22m[36massets/database-DnE5zr8C.js         [39m[1m[2m 40.42 kB[22m[1m[22m[2m │ gzip:  14.57 kB[22m
+[2mdist/[22m[36massets/index.es-CzmZMFJy.js         [39m[1m[2m150.87 kB[22m[1m[22m[2m │ gzip:  51.62 kB[22m
+[2mdist/[22m[36massets/vendor-DtFUbeMN.js           [39m[1m[2m164.05 kB[22m[1m[22m[2m │ gzip:  53.55 kB[22m
+[2mdist/[22m[36massets/html2canvas.esm-BfxBtG_O.js  [39m[1m[2m201.41 kB[22m[1m[22m[2m │ gzip:  48.03 kB[22m
+[2mdist/[22m[36massets/charts-Cufuyyw5.js           [39m[1m[2m410.97 kB[22m[1m[22m[2m │ gzip: 110.75 kB[22m
+[2mdist/[22m[36massets/index-DIwklcn4.js            [39m[1m[2m921.73 kB[22m[1m[22m[2m │ gzip: 256.88 kB[22m
+[32m✓ built in 16.94s[39m
+[1m[92m   Compiling[0m proc-macro2 v1.0.107
+[1m[92m   Compiling[0m unicode-ident v1.0.24
+[1m[92m   Compiling[0m quote v1.0.47
+[1m[92m   Compiling[0m libc v0.2.189
+[1m[92m   Compiling[0m serde_core v1.0.229
+[1m[92m   Compiling[0m siphasher v1.0.3
+[1m[92m   Compiling[0m fastrand v2.5.0
+[1m[92m   Compiling[0m icu_normalizer_data v2.3.0
+[1m[92m   Compiling[0m icu_properties_data v2.3.0
+[1m[92m   Compiling[0m cfg-if v1.0.4
+[1m[92m   Compiling[0m zmij v1.0.23
+[1m[92m   Compiling[0m stable_deref_trait v1.2.1
+[1m[92m   Compiling[0m parking_lot_core v0.9.12
+[1m[92m   Compiling[0m serde v1.0.229
+[1m[92m   Compiling[0m smallvec v1.15.2
+[1m[92m   Compiling[0m winnow v1.0.4
+[1m[92m   Compiling[0m thiserror v1.0.69
+[1m[92m   Compiling[0m windows-link v0.2.1
+[1m[92m   Compiling[0m phf_shared v0.13.1
+[1m[92m   Compiling[0m num-conv v0.2.2
+[1m[92m   Compiling[0m time-core v0.1.9
+[1m[92m   Compiling[0m memchr v2.8.3
+[1m[92m   Compiling[0m typeid v1.0.3
+[1m[92m   Compiling[0m phf_generator v0.13.1
+[1m[92m   Compiling[0m equivalent v1.0.2
+[1m[92m   Compiling[0m hashbrown v0.17.1
+[1m[92m   Compiling[0m itoa v1.0.18
+[1m[92m   Compiling[0m phf_codegen v0.13.1
+[1m[92m   Compiling[0m litemap v0.8.3
+[1m[92m   Compiling[0m ident_case v1.0.1
+[1m[92m   Compiling[0m erased-serde v0.4.10
+[1m[92m   Compiling[0m strsim v0.11.1
+[1m[92m   Compiling[0m thiserror v2.0.20
+[1m[92m   Compiling[0m writeable v0.6.4
+[1m[92m   Compiling[0m shlex v2.0.1
+[1m[92m   Compiling[0m find-msvc-tools v0.1.11
+[1m[92m   Compiling[0m selectors v0.36.1
+[1m[92m   Compiling[0m utf8_iter v1.0.4
+[1m[92m   Compiling[0m scopeguard v1.2.0
+[1m[92m   Compiling[0m anyhow v1.0.104
+[1m[92m   Compiling[0m new_debug_unreachable v1.0.6
+[1m[92m   Compiling[0m indexmap v2.14.0
+[1m[92m   Compiling[0m lock_api v0.4.14
+[1m[92m   Compiling[0m cc v1.4.3
+[1m[92m   Compiling[0m precomputed-hash v0.1.1
+[1m[92m   Compiling[0m serde_json v1.0.151
+[1m[92m   Compiling[0m version_check v0.9.5
+[1m[92m   Compiling[0m getrandom v0.4.3
+[1m[92m   Compiling[0m syn v2.0.119
+[1m[92m   Compiling[0m syn v3.0.3
+[1m[92m   Compiling[0m string_cache_codegen v0.6.1
+[1m[92m   Compiling[0m toml_parser v1.1.3+spec-1.1.0
+[1m[92m   Compiling[0m parking_lot v0.12.5
+[1m[92m   Compiling[0m windows-sys v0.61.2
+[1m[92m   Compiling[0m toml_writer v1.1.2+spec-1.1.0
+[1m[92m   Compiling[0m ctor-proc-macro v0.0.7
+[1m[92m   Compiling[0m string_cache v0.9.0
+[1m[92m   Compiling[0m web_atoms v0.2.6
+[1m[92m   Compiling[0m log v0.4.33
+[1m[92m   Compiling[0m autocfg v1.5.1
+[1m[92m   Compiling[0m dtoa v1.0.11
+[1m[92m   Compiling[0m percent-encoding v2.3.2
+[1m[92m   Compiling[0m dtoa-short v0.3.5
+[1m[92m   Compiling[0m form_urlencoded v1.2.2
+[1m[92m   Compiling[0m tendril v0.5.1
+[1m[92m   Compiling[0m aho-corasick v1.1.5
+[1m[92m   Compiling[0m byteorder v1.5.0
+[1m[92m   Compiling[0m camino v1.2.5
+[1m[92m   Compiling[0m regex-syntax v0.8.11
+[1m[92m   Compiling[0m unic-char-range v0.9.0
+[1m[92m   Compiling[0m indexmap v1.9.3
+[1m[92m   Compiling[0m unic-common v0.9.0
+[1m[92m   Compiling[0m alloc-no-stdlib v2.0.4
+[1m[92m   Compiling[0m unic-ucd-version v0.9.0
+[1m[92m   Compiling[0m unic-char-property v0.9.0
+[1m[92m   Compiling[0m alloc-stdlib v0.2.4
+[1m[92m   Compiling[0m servo_arc v0.4.3
+[1m[92m   Compiling[0m fnv v1.0.7
+[1m[92m   Compiling[0m powerfmt v0.2.0
+[1m[92m   Compiling[0m bit-vec v0.8.0
+[1m[92m   Compiling[0m rustc-hash v2.1.3
+[1m[92m   Compiling[0m hashbrown v0.12.3
+[1m[92m   Compiling[0m deranged v0.5.8
+[1m[92m   Compiling[0m bitflags v2.13.1
+[1m[92m   Compiling[0m schemars v0.8.22
+[1m[92m   Compiling[0m brotli-decompressor v5.0.3
+[1m[92m   Compiling[0m bit-set v0.8.0
+[1m[92m   Compiling[0m toml_datetime v1.1.1+spec-1.1.0
+[1m[92m   Compiling[0m serde_spanned v1.1.1
+[1m[92m   Compiling[0m semver v1.0.28
+[1m[92m   Compiling[0m uuid v1.24.1
+[1m[92m   Compiling[0m winapi-util v0.1.11
+[1m[92m   Compiling[0m toml v1.1.4+spec-1.1.0
+[1m[92m   Compiling[0m unic-ucd-ident v0.9.0
+[1m[92m   Compiling[0m cfb v0.7.3
+[1m[92m   Compiling[0m same-file v1.0.6
+[1m[92m   Compiling[0m quick-xml v0.41.0
+[1m[92m   Compiling[0m base64 v0.22.1
+[1m[92m   Compiling[0m dyn-clone v1.0.20
+[1m[92m   Compiling[0m dunce v1.0.5
+[1m[92m   Compiling[0m bytes v1.12.1
+[1m[92m   Compiling[0m foldhash v0.2.0
+[1m[92m   Compiling[0m time v0.3.55
+[1m[92m   Compiling[0m brotli v8.0.4
+[1m[92m   Compiling[0m serde-untagged v0.1.9
+[1m[92m   Compiling[0m walkdir v2.5.0
+[1m[92m   Compiling[0m infer v0.19.0
+[1m[92m   Compiling[0m ctor v0.8.0
+[1m[92m   Compiling[0m glob v0.3.4
+[1m[92m   Compiling[0m http v1.5.0
+[1m[92m   Compiling[0m generic-array v0.14.7
+[1m[92m   Compiling[0m windows_x86_64_msvc v0.52.6
+[1m[92m   Compiling[0m once_cell v1.21.4
+[1m[92m   Compiling[0m vswhom-sys v0.1.3
+[1m[92m   Compiling[0m pin-project-lite v0.2.17
+[1m[92m   Compiling[0m futures-core v0.3.34
+[1m[92m   Compiling[0m regex-automata v0.4.18
+[1m[92m   Compiling[0m windows-targets v0.52.6
+[1m[92m   Compiling[0m rustc_version v0.4.1
+[1m[92m   Compiling[0m windows-sys v0.59.0
+[1m[92m   Compiling[0m toml_datetime v0.7.5+spec-1.1.0
+[1m[92m   Compiling[0m socket2 v0.6.5
+[1m[92m   Compiling[0m mio v1.2.2
+[1m[92m   Compiling[0m option-ext v0.2.0
+[1m[92m   Compiling[0m winnow v0.7.15
+[1m[92m   Compiling[0m dirs-sys v0.5.0
+[1m[92m   Compiling[0m heck v0.5.0
+[1m[92m   Compiling[0m dirs v6.0.0
+[1m[92m   Compiling[0m vswhom v0.1.0
+[1m[92m   Compiling[0m time-macros v0.2.32
+[1m[92m   Compiling[0m synstructure v0.13.2
+[1m[92m   Compiling[0m darling_core v0.23.0
+[1m[92m   Compiling[0m serde_derive_internals v0.29.1
+[1m[92m   Compiling[0m jni-sys v0.3.1
+[1m[92m   Compiling[0m slab v0.4.12
+[1m[92m   Compiling[0m tracing-core v0.1.36
+[1m[92m   Compiling[0m toml_edit v0.25.13+spec-1.1.0
+[1m[92m   Compiling[0m cookie v0.18.2
+[1m[92m   Compiling[0m typenum v1.20.1
+[1m[92m   Compiling[0m httparse v1.10.1
+[1m[92m   Compiling[0m crc32fast v1.5.0
+[1m[92m   Compiling[0m toml v0.9.12+spec-1.1.0
+[1m[92m   Compiling[0m rustversion v1.0.23
+[1m[92m   Compiling[0m regex v1.13.1
+[1m[92m   Compiling[0m simd-adler32 v0.3.10
+[1m[92m   Compiling[0m serde_derive v1.0.229
+[1m[92m   Compiling[0m zerovec-derive v0.11.4
+[1m[92m   Compiling[0m displaydoc v0.2.7
+[1m[92m   Compiling[0m thiserror-impl v2.0.20
+[1m[92m   Compiling[0m tokio-macros v2.7.2
+[1m[92m   Compiling[0m futures-task v0.3.34
+[1m[92m   Compiling[0m futures-sink v0.3.34
+[1m[92m   Compiling[0m zerofrom-derive v0.1.7
+[1m[92m   Compiling[0m yoke-derive v0.8.2
+[1m[92m   Compiling[0m phf_macros v0.13.1
+[1m[92m   Compiling[0m thiserror-impl v1.0.69
+[1m[92m   Compiling[0m cssparser-macros v0.6.1
+[1m[92m   Compiling[0m derive_more-impl v2.1.1
+[1m[92m   Compiling[0m schemars_derive v0.8.22
+[1m[92m   Compiling[0m winreg v0.55.0
+[1m[92m   Compiling[0m embed-resource v3.0.11
+[1m[92m   Compiling[0m jni-sys-macros v0.4.1
+[1m[92m   Compiling[0m phf v0.13.1
+[1m[92m   Compiling[0m tauri-winres v0.3.6
+[1m[92m   Compiling[0m cssparser v0.36.0
+[1m[92m   Compiling[0m futures-util v0.3.34
+[1m[92m   Compiling[0m jni-sys v0.4.1
+[1m[92m   Compiling[0m derive_more v2.1.1
+[1m[92m   Compiling[0m zerofrom v0.1.8
+[1m[92m   Compiling[0m markup5ever v0.38.0
+[1m[92m   Compiling[0m yoke v0.8.3
+[1m[92m   Compiling[0m html5ever v0.38.0
+[1m[92m   Compiling[0m proc-macro-crate v3.5.0
+[1m[92m   Compiling[0m darling_macro v0.23.0
+[1m[92m   Compiling[0m tracing v0.1.44
+[1m[92m   Compiling[0m zerovec v0.11.7
+[1m[92m   Compiling[0m zerotrie v0.2.5
+[1m[92m   Compiling[0m adler2 v2.0.1
+[1m[92m   Compiling[0m darling v0.23.0
+[1m[92m   Compiling[0m tower-service v0.3.3
+[1m[92m   Compiling[0m atomic-waker v1.1.2
+[1m[92m   Compiling[0m try-lock v0.2.5
+[1m[92m   Compiling[0m crossbeam-utils v0.8.22
+[1m[92m   Compiling[0m want v0.3.1
+[1m[92m   Compiling[0m num_enum_derive v0.7.6
+[1m[92m   Compiling[0m miniz_oxide v0.8.9
+[1m[92m   Compiling[0m serde_with_macros v3.22.0
+[1m[92m   Compiling[0m futures-channel v0.3.34
+[1m[92m   Compiling[0m tinystr v0.8.4
+[1m[92m   Compiling[0m potential_utf v0.1.6
+[1m[92m   Compiling[0m dom_query v0.27.0
+[1m[92m   Compiling[0m icu_collections v2.3.0
+[1m[92m   Compiling[0m icu_locale_core v2.3.0
+[1m[92m   Compiling[0m cesu8 v1.1.0
+[1m[92m   Compiling[0m raw-window-handle v0.6.2
+[1m[92m   Compiling[0m getrandom v0.3.4
+[1m[92m   Compiling[0m num_enum v0.7.6
+[1m[92m   Compiling[0m serde_with v3.22.0
+[1m[92m   Compiling[0m flate2 v1.1.9
+[1m[92m   Compiling[0m crypto-common v0.1.7
+[1m[92m   Compiling[0m block-buffer v0.10.4
+[1m[92m   Compiling[0m ndk-sys v0.6.0+11769913
+[1m[92m   Compiling[0m fdeflate v0.3.7
+[1m[92m   Compiling[0m sync_wrapper v1.0.2
+[1m[92m   Compiling[0m dpi v0.1.2
+[1m[92m   Compiling[0m jsonptr v0.6.3
+[1m[92m   Compiling[0m cargo-platform v0.1.9
+[1m[92m   Compiling[0m plist v1.10.0
+[1m[92m   Compiling[0m cargo_metadata v0.19.2
+[1m[92m   Compiling[0m cargo_toml v0.22.3
+[1m[92m   Compiling[0m icu_provider v2.3.0
+[1m[92m   Compiling[0m json-patch v3.0.1
+[1m[92m   Compiling[0m tokio v1.53.1
+[1m[92m   Compiling[0m combine v4.6.7
+[1m[92m   Compiling[0m ring v0.17.14
+[1m[92m   Compiling[0m icu_normalizer v2.3.0
+[1m[92m   Compiling[0m icu_properties v2.3.0
+[1m[92m   Compiling[0m bitflags v1.3.2
+[1m[92m   Compiling[0m http-body v1.1.0
+[1m[92m   Compiling[0m ipnet v2.12.1
+[1m[92m   Compiling[0m tower-layer v0.3.3
+[1m[92m   Compiling[0m png v0.17.16
+[1m[92m   Compiling[0m ndk v0.9.0
+[1m[92m   Compiling[0m digest v0.10.7
+[1m[92m   Compiling[0m idna_adapter v1.2.2
+[1m[92m   Compiling[0m crossbeam-channel v0.5.16
+[1m[92m   Compiling[0m idna v1.1.0
+[1m[92m   Compiling[0m url v2.5.8
+[1m[92m   Compiling[0m tao-macros v0.1.4
+[1m[92m   Compiling[0m cpufeatures v0.2.17
+[1m[92m   Compiling[0m zeroize v1.9.0
+[1m[92m   Compiling[0m tauri-runtime v2.11.3
+[1m[92m   Compiling[0m wry v0.55.1
+[1m[92m   Compiling[0m urlpattern v0.3.0
+[1m[92m   Compiling[0m rustls-pki-types v1.15.1
+[1m[92m   Compiling[0m sha2 v0.10.9
+[1m[92m   Compiling[0m ico v0.5.0
+[1m[92m   Compiling[0m http-body-util v0.1.5
+[1m[92m   Compiling[0m getrandom v0.2.17
+[1m[92m   Compiling[0m tauri-runtime-wry v2.11.4
+[1m[92m   Compiling[0m untrusted v0.9.0
+[1m[92m   Compiling[0m serialize-to-javascript-impl v0.1.2
+[1m[92m   Compiling[0m mime v0.3.17
+[1m[92m   Compiling[0m rustls v0.23.43
+[1m[92m   Compiling[0m zerocopy v0.8.56
+[1m[92m   Compiling[0m serde_repr v0.1.21
+[1m[92m   Compiling[0m serialize-to-javascript v0.1.2
+[1m[92m   Compiling[0m errno v0.3.14
+[1m[92m   Compiling[0m subtle v2.6.1
+[1m[92m   Compiling[0m tauri-utils v2.9.3
+[1m[92m   Compiling[0m signal-hook v0.3.18
+[1m[92m   Compiling[0m signal-hook-registry v1.4.8
+[1m[92m   Compiling[0m psl-types v2.0.11
+[1m[92m   Compiling[0m litrs v1.0.0
+[1m[92m   Compiling[0m webpki-roots v1.0.9
+[1m[92m   Compiling[0m rand_core v0.9.5
+[1m[92m   Compiling[0m is-docker v0.2.0
+[1m[92m   Compiling[0m publicsuffix v2.3.0
+[1m[92m   Compiling[0m os_pipe v1.2.3
+[1m[92m   Compiling[0m encoding_rs v0.8.35
+[1m[92m   Compiling[0m utf8parse v0.2.2
+[1m[92m   Compiling[0m ryu v1.0.23
+[1m[92m   Compiling[0m anstyle-parse v1.0.0
+[1m[92m   Compiling[0m is-wsl v0.4.0
+[1m[92m   Compiling[0m sigchld v0.2.4
+[1m[92m   Compiling[0m anstyle-query v1.1.5
+[1m[92m   Compiling[0m anstyle v1.0.14
+[1m[92m   Compiling[0m is_terminal_polyfill v1.70.2
+[1m[92m   Compiling[0m colorchoice v1.0.5
+[1m[92m   Compiling[0m serde_urlencoded v0.7.1
+[1m[92m   Compiling[0m jiff-core v0.1.0
+[1m[92m   Compiling[0m shared_child v1.1.1
+[1m[92m   Compiling[0m open v5.4.1
+[1m[92m   Compiling[0m env_filter v2.0.0
+[1m[92m   Compiling[0m document-features v0.2.12
+[1m[92m   Compiling[0m anstream v1.0.0
+[1m[92m   Compiling[0m data-url v0.3.2
+[1m[92m   Compiling[0m jni v0.21.1
+[1m[92m   Compiling[0m cookie_store v0.22.1
+[1m[92m   Compiling[0m jiff v0.2.35
+[1m[92m   Compiling[0m rustls-webpki v0.103.14
+[1m[92m   Compiling[0m tao v0.35.3
+[1m[92m   Compiling[0m tokio-util v0.7.19
+[1m[92m   Compiling[0m tower v0.5.3
+[1m[92m   Compiling[0m ppv-lite86 v0.2.21
+[1m[92m   Compiling[0m rand_chacha v0.9.0
+[1m[92m   Compiling[0m rand v0.9.5
+[1m[92m   Compiling[0m env_logger v0.11.11
+[1m[92m   Compiling[0m tower-http v0.6.11
+[1m[92m   Compiling[0m h2 v0.4.15
+[1m[92m   Compiling[0m tauri-plugin v2.6.3
+[1m[92m   Compiling[0m tauri-build v2.6.3
+[1m[92m   Compiling[0m tauri-codegen v2.6.3
+[1m[92m   Compiling[0m tokio-rustls v0.26.4
+[1m[92m   Compiling[0m hyper v1.11.0
+[1m[92m   Compiling[0m hyper-util v0.1.20
+[1m[92m   Compiling[0m tauri v2.11.5
+[1m[92m   Compiling[0m tauri-plugin-fs v2.5.1
+[1m[92m   Compiling[0m tauri-macros v2.6.3
+[1m[92m   Compiling[0m tauri-plugin-http v2.5.9
+[1m[92m   Compiling[0m tauri-plugin-shell v2.3.5
+[1m[92m   Compiling[0m tauri-plugin-notification v2.3.3
+[1m[92m   Compiling[0m cervos-pos v0.3.2 (C:\Users\user\Desktop\crv\cervos-desktop\src-tauri)
+[1m[92m   Compiling[0m reqwest v0.13.4
+[1m[92m   Compiling[0m hyper-rustls v0.27.9
+[1m[92m   Compiling[0m reqwest v0.12.28
+[1m[92m    Finished[0m `dev` profile [unoptimized] target(s) in 2m 59s
+        Info symlinking lib "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so" in jniLibs dir "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\app/src/main/jniLibs/arm64-v8a"
+        Info "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so" requires shared lib "libandroid.so"
+        Info "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so" requires shared lib "libdl.so"
+        Info "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so" requires shared lib "liblog.so"
+        Info "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so" requires shared lib "libm.so"
+        Info "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so" requires shared lib "libc.so"
+        Info symlink at "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\app/src/main/jniLibs/arm64-v8a\\libcervos_desktop_lib.so" points to "C:\\Users\\user\\cargo-target\\aarch64-linux-android\\debug\\libcervos_desktop_lib.so"
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/user/.gradle/wrapper/dists/gradle-8.14.3-bin/cv11ve7ro1n3o1j4so8xd9n66/gradle-8.14.3/lib/native-platform-0.22-milestone-28.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+BUG! exception in phase 'semantic analysis' in source unit '_BuildScript_' Unsupported class file major version 69
+> Unsupported class file major version 69
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 8s
+failed to build APK: Failed to assemble APK with Io(BeforeSpawn(<closure>), Io(StderrFile(OwnedHandle { handle: 0x3d0 }), Io(StdoutFile(OwnedHandle { handle: 0x5c }), Io(StdinFile(OwnedHandle { handle: 0x3cc }), Io(Env("PATHEXT", ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW"), Io(Env("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\aarch64-linux-android24-clang.cmd"), Io(Env("PATH", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\node_modules\\.bin;C:\\Users\\user\\Desktop\\crv\\node_modules\\.bin;C:\\Users\\user\\Desktop\\node_modules\\.bin;C:\\Users\\user\\node_modules\\.bin;C:\\Users\\node_modules\\.bin;C:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;C:\\Program Files\\Git\\mingw64\\bin;C:\\Program Files\\Git\\usr\\bin;C:\\Users\\user\\bin;C:\\Python314\\Scripts;C:\\Python314;C:\\Program Files\\Common Files\\Oracle\\Java\\javapath;C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.2.10-hotspot\\bin;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0;C:\\WINDOWS\\System32\\OpenSSH;C:\\Program Files\\Git\\cmd;C:\\arduino-cli;C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin;C:\\Program Files\\dotnet;C:\\Program Files\\nodejs;C:\\ProgramData\\chocolatey\\bin;C:\\Program Files\\Cloudflare\\Cloudflare WARP;C:\\Users\\user\\.cargo\\bin;C:\\Users\\user\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\user\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\user\\AppData\\Local\\Python\\bin;C:\\msys64\\ucrt64\\bin;C:\\arduino-cli;C:\\Users\\user\\AppData\\Roaming\\npm;C:\\Users\\user\\AppData\\Local\\Programs\\Ollama;C:\\Users\\user\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin;C:\\Users\\user\\AppData\\Local\\GitHubDesktop\\bin;C:\\Users\\user\\.dotnet\\tools"), Io(Env("CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("WRY_ANDROID_LIBRARY", "cervos_desktop_lib"), Io(Env("TAURI_CLI_VERBOSITY", "0"), Io(Env("RUST_LOG_STYLE", "always"), Io(Env("WRY_ANDROID_KOTLIN_FILES_OUT_DIR", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\app/src/main\\java/com/cervos/pos\\generated"), Io(Env("USERPROFILE", "C:\\Users\\user"), Io(Env("NDK_HOME", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370"), Io(Env("ANDROID_HOME", "C:\\Users\\user\\AppData\\Local\\Android/Sdk"), Io(Env("CARGO_TARGET_I686_LINUX_ANDROID_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("TERM", "xterm-256color"), Io(Env("CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\armv7a-linux-androideabi24-clang.cmd"), Io(Env("TMP", "C:\\Users\\user\\AppData\\Local\\Temp"), Io(Env("TAURI_SHELL_PLUGIN_CONFIG", "{\"open\":true}"), Io(Env("TAURI_ANDROID_PROJECT_PATH", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android"), Io(Env("ProgramData", "C:\\ProgramData"), Io(Env("SystemRoot", "C:\\WINDOWS"), Io(Env("TEMP", "C:\\Users\\user\\AppData\\Local\\Temp"), Io(Env("WRY_ANDROID_PACKAGE", "com.cervos.pos"), Io(Env("TAURI_ANDROID_PACKAGE_UNESCAPED", "com.cervos.pos"), Io(Env("CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\x86_64-linux-android24-clang.cmd"), Io(Env("CARGO_TARGET_X86_64_LINUX_ANDROID_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("CARGO_TARGET_I686_LINUX_ANDROID_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\i686-linux-android24-clang.cmd"), Cmd(["C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\gradlew.bat", "--project-dir", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android"]))))))))))))))))))))))))))))))): command ["C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\gradlew.bat", "--project-dir", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android"] exited with code 1
+       Error failed to build APK: Failed to assemble APK with Io(BeforeSpawn(<closure>), Io(StderrFile(OwnedHandle { handle: 0x3d0 }), Io(StdoutFile(OwnedHandle { handle: 0x5c }), Io(StdinFile(OwnedHandle { handle: 0x3cc }), Io(Env("PATHEXT", ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC;.PY;.PYW"), Io(Env("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\aarch64-linux-android24-clang.cmd"), Io(Env("PATH", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\node_modules\\.bin;C:\\Users\\user\\Desktop\\crv\\node_modules\\.bin;C:\\Users\\user\\Desktop\\node_modules\\.bin;C:\\Users\\user\\node_modules\\.bin;C:\\Users\\node_modules\\.bin;C:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;C:\\Program Files\\Git\\mingw64\\bin;C:\\Program Files\\Git\\usr\\bin;C:\\Users\\user\\bin;C:\\Python314\\Scripts;C:\\Python314;C:\\Program Files\\Common Files\\Oracle\\Java\\javapath;C:\\Program Files\\Eclipse Adoptium\\jdk-25.0.2.10-hotspot\\bin;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0;C:\\WINDOWS\\System32\\OpenSSH;C:\\Program Files\\Git\\cmd;C:\\arduino-cli;C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin;C:\\Program Files\\dotnet;C:\\Program Files\\nodejs;C:\\ProgramData\\chocolatey\\bin;C:\\Program Files\\Cloudflare\\Cloudflare WARP;C:\\Users\\user\\.cargo\\bin;C:\\Users\\user\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\user\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\user\\AppData\\Local\\Python\\bin;C:\\msys64\\ucrt64\\bin;C:\\arduino-cli;C:\\Users\\user\\AppData\\Roaming\\npm;C:\\Users\\user\\AppData\\Local\\Programs\\Ollama;C:\\Users\\user\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin;C:\\Users\\user\\AppData\\Local\\GitHubDesktop\\bin;C:\\Users\\user\\.dotnet\\tools"), Io(Env("CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("WRY_ANDROID_LIBRARY", "cervos_desktop_lib"), Io(Env("TAURI_CLI_VERBOSITY", "0"), Io(Env("RUST_LOG_STYLE", "always"), Io(Env("WRY_ANDROID_KOTLIN_FILES_OUT_DIR", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\app/src/main\\java/com/cervos/pos\\generated"), Io(Env("USERPROFILE", "C:\\Users\\user"), Io(Env("NDK_HOME", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370"), Io(Env("ANDROID_HOME", "C:\\Users\\user\\AppData\\Local\\Android/Sdk"), Io(Env("CARGO_TARGET_I686_LINUX_ANDROID_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("TERM", "xterm-256color"), Io(Env("CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\armv7a-linux-androideabi24-clang.cmd"), Io(Env("TMP", "C:\\Users\\user\\AppData\\Local\\Temp"), Io(Env("TAURI_SHELL_PLUGIN_CONFIG", "{\"open\":true}"), Io(Env("TAURI_ANDROID_PROJECT_PATH", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android"), Io(Env("ProgramData", "C:\\ProgramData"), Io(Env("SystemRoot", "C:\\WINDOWS"), Io(Env("TEMP", "C:\\Users\\user\\AppData\\Local\\Temp"), Io(Env("WRY_ANDROID_PACKAGE", "com.cervos.pos"), Io(Env("TAURI_ANDROID_PACKAGE_UNESCAPED", "com.cervos.pos"), Io(Env("CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\x86_64-linux-android24-clang.cmd"), Io(Env("CARGO_TARGET_X86_64_LINUX_ANDROID_RUSTFLAGS", "-Clink-arg=-landroid -Clink-arg=-llog -Clink-arg=-lOpenSLES"), Io(Env("CARGO_TARGET_I686_LINUX_ANDROID_LINKER", "C:\\Users\\user\\AppData\\Local\\Android/Sdk\\ndk\\30.0.16248370\\toolchains/llvm/prebuilt/windows-x86_64\\bin\\i686-linux-android24-clang.cmd"), Cmd(["C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\gradlew.bat", "--project-dir", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android"]))))))))))))))))))))))))))))))): command ["C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android\\gradlew.bat", "--project-dir", "C:\\Users\\user\\Desktop\\crv\\cervos-desktop\\src-tauri\\gen/android"] exited with code 1

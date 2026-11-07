@@ -37,7 +37,7 @@ function computePermissions(operator: Operator | null): Permissions {
     canViewManage: isAdmin,
     canViewReceipts: isAdmin,
     canEditSettings: isAdmin,
-    canViewMarket: isAuthenticated,
+    canViewMarket: isAdmin,
     canViewAlerts: isAuthenticated,
     canViewInventoryDetail: isAuthenticated,
   }
@@ -89,7 +89,10 @@ export const useAuthStore = create<AuthState>()(
         isAdmin: state.isAdmin,
       }),
       onRehydrateStorage: () => (state) => {
-        state?.setHasHydrated(true)
+        if (state) {
+          state.permissions = computePermissions(state.currentOperator)
+          state.setHasHydrated(true)
+        }
       },
     }
   )

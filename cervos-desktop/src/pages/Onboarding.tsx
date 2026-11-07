@@ -4,13 +4,13 @@ import {
   signIn,
   getLinkStatus,
   linkToExistingBranch,
-  forceClaimBranch,
+  getLinkedBranchId,
   runSyncCycle,
-  scaffoldAccount,
   createLocalWorkspace,
   type RemoteBranch
 } from '../lib/sync'
 import { queryDb } from '../lib/database'
+import { createOperator } from '../lib/queries'
 import { useTranslation, useI18nStore } from '../lib/i18n'
 import Logo from '../components/Logo'
 
@@ -55,7 +55,6 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
   // Branches & Terminal Linking State
   const [branches, setBranches] = useState<RemoteBranch[]>([])
   const [linkedBranch, setLinkedBranch] = useState<{ name: string; address: string } | null>(null)
-  const [forceClaimBranchId, setForceClaimBranchId] = useState<string | null>(null)
 
   // Empty Account Fallback State
   const [newBranchName, setNewBranchName] = useState('')
@@ -163,7 +162,6 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
   async function handleSelectBranch(branchId: string) {
     setIsLoading(true)
     setError(null)
-    setForceClaimBranchId(null)
     try {
       await linkToExistingBranch(branchId)
       const sync = await runSyncCycle()
@@ -172,28 +170,8 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
       }
       await finishLink()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to link this branch'
-      setError(msg)
-      if (msg.includes('already has an activated POS device')) {
-        setForceClaimBranchId(branchId)
-      }
+      setError(err instanceof Error ? err.message : 'Failed to link this branch')
     } finally {
-      setIsLoading(false)
-    }
-  }
-
-  async function handleForceClaim() {
-    if (!forceClaimBranchId) return
-    setIsLoading(true)
-    setError(null)
-    try {
-      await forceClaimBranch(forceClaimBranchId)
-      await runSyncCycle()
-      await finishLink()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to force-claim this branch')
-    } finally {
-      setForceClaimBranchId(null)
       setIsLoading(false)
     }
   }
@@ -208,13 +186,22 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
     setIsLoading(true)
     setError(null)
     try {
-      const newBranchId = await scaffoldAccount(newBranchName, newOperatorPin, ownerName || 'Manager')
-      await linkToExistingBranch(newBranchId)
+      // The branch is already linked by this point — this device only needs its
+      // first local admin so the terminal is usable, and so that admin can
+      // create further operators from the Users page without touching the
+      // portal. Never create a second account/branch here.
+      const branchId = await getLinkedBranchId()
+      if (!branchId) throw new Error('This terminal is not linked to a branch yet.')
+      await createOperator({
+        branch_id: branchId,
+        name: ownerName.trim() || 'Admin',
+        pin: newOperatorPin,
+        role: 'admin',
+      })
       await runSyncCycle()
       await finishLink()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to configure terminal.')
-      setStep('create-branch')
+      setError(err instanceof Error ? err.message : 'Failed to create the admin operator.')
     } finally {
       setIsLoading(false)
     }
@@ -634,33 +621,6 @@ export default function Onboarding({ onComplete, relinking = false }: Onboarding
                   <p className="text-xs text-on-surface-variant mb-4">
                     {t('onboarding.selectBranchHint')}
                   </p>
-
-                  {forceClaimBranchId && (
-                    <div className="p-4 mb-4 bg-warning/10 border border-warning/30 rounded-xl flex flex-col gap-2.5">
-                      <div className="flex items-start gap-2">
-                        <span className="material-symbols-outlined text-warning text-xl mt-0.5">
-                          warning
-                        </span>
-                        <div>
-                          <p className="font-bold text-on-surface text-xs">
-                            {t('onboarding.branchActivated')}
-                          </p>
-                          <p className="text-[11px] text-on-surface-variant mt-0.5">
-                            {t('onboarding.branchActivatedHint')}
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={isLoading}
-                        onClick={handleForceClaim}
-                        className="w-full h-10 bg-warning text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-warning/90 transition-all disabled:opacity-60"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">device_reset</span>
-                        {isLoading ? t('onboarding.claiming') : t('onboarding.forceClaim')}
-                      </button>
-                    </div>
-                  )}
 
                   <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
                     {branches.map((b) => (

@@ -12,7 +12,7 @@ export default function Login() {
   const { t } = useTranslation()
   const { setOperator } = useAuth()
   const [operators, setOperators] = useState<Operator[]>([])
-  const [selectedRole, setSelectedRole] = useState<OperatorRole>('operator')
+  const [selectedRole, setSelectedRole] = useState<OperatorRole | null>(null)
   const [selectedOperator, setSelectedOperator] = useState<Operator | null>(null)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
@@ -27,8 +27,20 @@ export default function Login() {
   async function loadOperators() {
     const centreResult = await queryDb("SELECT value FROM app_settings WHERE key = 'centre_name'")
     if (centreResult.length === 0) {
-      navigate('/onboarding')
-      return
+      // Check if branch has >=1 admin or >=1 worker; if not route to onboarding
+      const branchResult = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
+      if (branchResult.length === 0) {
+        navigate('/onboarding')
+        return
+      }
+      const bid = JSON.parse(branchResult[0].value)
+      const ops = await fetchOperators(bid)
+      const hasAdmin = ops.some((o: any) => o.role === 'admin')
+      const hasWorker = ops.some((o: any) => o.role === 'operator')
+      if (!hasAdmin && !hasWorker) {
+        navigate('/onboarding')
+        return
+      }
     }
 
     const result = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
@@ -45,7 +57,9 @@ export default function Login() {
     setOperators(ops)
   }
 
-  const filteredOperators = operators.filter((o) => o.role === selectedRole)
+  const filteredOperators = selectedRole
+    ? operators.filter((o) => o.role === selectedRole)
+    : operators
 
   async function handlePinSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -182,7 +196,7 @@ export default function Login() {
               {filteredOperators.length === 0 ? (
                 <div className="text-center py-6 text-on-surface-variant text-sm">
                   <span className="material-symbols-outlined text-3xl mb-2 text-on-surface-variant/70">person_off</span>
-                  <p>{t('login.noProfiles').replace('profiles', selectedRole === 'admin' ? 'Admin' : 'Operator')}</p>
+                  <p>{t('login.noProfiles').replace('profiles', selectedRole ?? 'operator')}</p>
                   <p className="text-xs text-on-surface-variant/70 mt-1">
                     Manage operators in the web dashboard or switch role above.
                   </p>

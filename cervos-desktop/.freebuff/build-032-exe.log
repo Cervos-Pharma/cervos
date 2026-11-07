@@ -1,0 +1,46 @@
+
+> cervos-desktop@0.3.2 tauri:build
+> tauri build
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+
+> cervos-desktop@0.3.2 build
+> tsc && vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 1290 modules transformed.
+rendering chunks...
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/user/Desktop/crv/cervos-desktop/src/lib/queries.ts is dynamically imported by C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Settings.tsx but also statically imported by C:/Users/user/Desktop/crv/cervos-desktop/src/lib/hooks.ts, C:/Users/user/Desktop/crv/cervos-desktop/src/lib/sync.ts, C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Login.tsx, C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Settings.tsx, C:/Users/user/Desktop/crv/cervos-desktop/src/pages/Users.tsx, dynamic import will not move module into another chunk.
+[39m
+computing gzip size...
+[2mdist/[22m[32mindex.html                          [39m[1m[2m  1.07 kB[22m[1m[22m[2m │ gzip:   0.56 kB[22m
+[2mdist/[22m[35massets/index-C4b8_2qS.css           [39m[1m[2m 33.28 kB[22m[1m[22m[2m │ gzip:   6.68 kB[22m
+[2mdist/[22m[36massets/purify.es-BwoZCkIS.js        [39m[1m[2m 22.03 kB[22m[1m[22m[2m │ gzip:   8.77 kB[22m
+[2mdist/[22m[36massets/database-DnE5zr8C.js         [39m[1m[2m 40.42 kB[22m[1m[22m[2m │ gzip:  14.57 kB[22m
+[2mdist/[22m[36massets/index.es-CzmZMFJy.js         [39m[1m[2m150.87 kB[22m[1m[22m[2m │ gzip:  51.62 kB[22m
+[2mdist/[22m[36massets/vendor-DtFUbeMN.js           [39m[1m[2m164.05 kB[22m[1m[22m[2m │ gzip:  53.55 kB[22m
+[2mdist/[22m[36massets/html2canvas.esm-BfxBtG_O.js  [39m[1m[2m201.41 kB[22m[1m[22m[2m │ gzip:  48.03 kB[22m
+[2mdist/[22m[36massets/charts-Cufuyyw5.js           [39m[1m[2m410.97 kB[22m[1m[22m[2m │ gzip: 110.75 kB[22m
+[2mdist/[22m[36massets/index-DIwklcn4.js            [39m[1m[2m921.73 kB[22m[1m[22m[2m │ gzip: 256.88 kB[22m
+[32m✓ built in 17.50s[39m
+   Compiling cervos-pos v0.3.2 (C:\Users\user\Desktop\crv\cervos-desktop\src-tauri)
+warning: unused variable: `main_window`
+  --> src\lib.rs:20:17
+   |
+20 |             let main_window = app.get_webview_window("main").expect("main window not found");
+   |                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_main_window`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `cervos-pos` (lib) generated 1 warning (run `cargo fix --lib -p cervos-pos` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 5m 22s
+       Built application at: C:\Users\user\cargo-target\release\cervos-pos.exe
+        Info Patching C:\Users\user\cargo-target\release\cervos-pos.exe with bundle type information: nsis
+        Info Target: x64
+     Running makensis to produce C:\Users\user\cargo-target\release\bundle\nsis\Cervos POS_0.3.2_x64-setup.exe
+    Finished 1 bundle at:
+        C:\Users\user\cargo-target\release\bundle\nsis\Cervos POS_0.3.2_x64-setup.exe
+

@@ -208,9 +208,9 @@ function AppRoutes() {
           <Route path="shifts" element={<Shifts />} />
           <Route path="alerts" element={<Alerts />} />
           <Route path="support" element={<Support />} />
-          <Route path="marketplace" element={<Marketplace />} />
+          <Route path="marketplace" element={<AdminRoute><Marketplace /></AdminRoute>} />
           <Route path="orders" element={<AdminRoute><Orders /></AdminRoute>} />
-          <Route path="subscription" element={<Subscription />} />
+          <Route path="subscription" element={<AdminRoute><Subscription /></AdminRoute>} />
         </Route>
       </Routes>
       {blocked && (
