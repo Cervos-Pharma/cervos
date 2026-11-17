@@ -22,7 +22,10 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Cervos Pharma",
     description:
       "Precision logistics for the modern pharmacy. Secure, offline-first, FEFO-optimised.",
-    start_url: "/",
+    // Launch straight into the workspace, NOT the marketing landing:
+    // /app is the real app and bounces unauthenticated users to
+    // /auth?mode=signin, so the installed PWA always opens on proper login.
+    start_url: "/app",
     scope: "/",
     display: "standalone",
     // Falls back to a browser UI rather than a bare document if the OS
