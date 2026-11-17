@@ -35,8 +35,48 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Build installable Android APK (EAS preview profile)
-        run: eas build --platform android --profile preview --non-interactive --no-wait
+        # No --no-wait: we need EAS to finish and drop the .apk into the
+        # working directory so it can be published for direct download.
+        run: eas build --platform android --profile preview --non-interactive
         env:
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://cervos.online' }}
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Stage APK with stable name
+        run: |
+          apk=$(ls -t *.apk 2>/dev/null | head -1)
+          if [ -z "$apk" ]; then echo "No APK produced"; exit 1; fi
+          cp "$apk" Cervos-Pharma.apk
+          ls -la Cervos-Pharma.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cervos-android-apk
+          path: apps/mobile/Cervos-Pharma.apk
+          if-no-files-found: error
+
+  # Same rolling "installers" release the desktop workflow publishes to, so
+  # the site's download buttons hit one stable URL per file.
+  release-apk:
+    needs: build-android-apk
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cervos-android-apk
+
+      - name: Publish / update rolling release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view installers >/dev/null 2>&1 || \
+            gh release create installers \
+              --title "Cervos Installers" \
+              --notes "Latest installers, rebuilt automatically from main." || true
+          gh release upload installers Cervos-Pharma.apk --clobber
