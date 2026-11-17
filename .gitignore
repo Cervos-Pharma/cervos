@@ -56,3 +56,4 @@ releases.manifest.json
 .local-workspace-db.json
 *.log
 
+.env*
