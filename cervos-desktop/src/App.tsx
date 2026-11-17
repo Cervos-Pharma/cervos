@@ -1,242 +1,79 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import { useAuth } from './lib/hooks'
-import Shell from './components/Shell'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Pos from './pages/Pos'
-import Inventory from './pages/Inventory'
-import Settings from './pages/Settings'
-import Shifts from './pages/Shifts'
-import Reports from './pages/Reports'
-import Users from './pages/Users'
-import Marketplace from './pages/Marketplace'
-import Orders from './pages/Orders'
-import Subscription from './pages/Subscription'
-import Onboarding from './pages/Onboarding'
-import Records from './pages/Records'
-import Alerts from './pages/Alerts'
-import Support from './pages/Support'
-import { initDb } from './lib/database'
-import { queryDb } from './lib/database'
-import { startAutoSync, stopAutoSync, checkSubscriptionBlocked, ensureLinked, getLinkedBranchId } from './lib/sync'
-import { runPredictionEngine } from './lib/predict'
-import { flushPendingTickets } from './lib/support'
-import { useSyncStore } from './lib/store'
-
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
-
-  if (isLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-
-  return <>{children}</>
-}
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { currentOperator, isAuthenticated, isLoading } = useAuth()
-
-  if (isLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-
-  if (currentOperator?.role !== 'admin') {
-    return <Navigate to="/" replace />
-  }
-
-  return <>{children}</>
-}
-
-function OnboardingRoute() {
-  const [isOnboarded, setIsOnboarded] = useState<boolean | null>(null)
-  const navigate = useNavigate()
-  const location = useLocation()
-  const isRelinking = new URLSearchParams(location.search).get('relink') === '1'
-
-  useEffect(() => {
-    const check = async () => {
-      try {
-        await initDb()
-
-        // Check if centre_name exists AND there's at least one operator
-        const centreResult = await queryDb("SELECT value FROM app_settings WHERE key = 'centre_name'")
-        if (centreResult.length === 0) {
-          setIsOnboarded(false)
-          return
-        }
-
-        // Centre exists - check if there's a branch_id with operators
-        const branchResult = await queryDb("SELECT value FROM app_settings WHERE key = 'branch_id'")
-        if (branchResult.length > 0) {
-          const branchId = JSON.parse(branchResult[0].value)
-          const ops = await queryDb('SELECT id FROM operators WHERE branch_id = ?', [branchId])
-          if (ops.length > 0) {
-            // Centre configured AND has operators - go to login
-            setIsOnboarded(true)
-            return
-          }
-        }
-
-        // Centre exists but no operators - show onboarding to create admin
-        setIsOnboarded(false)
-      } catch (err) {
-        console.error('OnboardingRoute check failed:', err)
-        setIsOnboarded(false)
-      }
-    }
-    check()
-  }, [])
-
-  if (isOnboarded === null) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary">Loading...</div>
-      </div>
-    )
-  }
-
-  // Settings can deliberately re-open the cloud-account linking flow for an
-  // established POS. Do not bounce that explicit request back to local login.
-  if (isOnboarded && !isRelinking) {
-    return <Navigate to="/login" replace />
-  }
-
-  return <Onboarding
-    relinking={isRelinking}
-    onComplete={() => navigate(isRelinking ? '/' : '/login')}
-  />
-}
-
-function AppRoutes() {
-  const { isAuthenticated, isLoading } = useAuth()
-  const [dbReady, setDbReady] = useState(false)
-  const [sessionRestored, setSessionRestored] = useState(false)
-  const blocked = useSyncStore((s) => s.blocked)
-
-  useEffect(() => {
-    initDb()
-      .then(() => setDbReady(true))
-      .catch((err) => {
-        console.error("Database init failed:", err);
-        setDbReady(true);
-      });
-  }, [])
-
-  useEffect(() => {
-    if (!dbReady) return
-    let disposed = false
-
-    const initializeSync = () => {
-      // Marketplace, Orders, and Subscription read the Supabase SDK directly
-      // when they mount, so we restore the session in the background.
-      // We no longer block the UI here because if the device is offline,
-      // refreshSession() can block for 60s+ waiting for network timeout.
-      setSessionRestored(true)
-      
-      // Start the background auto-sync & reconnect runner immediately.
-      // Even if offline on initial APK boot, its fast reconnect loop will
-      // hook into the network the moment connectivity becomes available.
-      startAutoSync()
-
-      ensureLinked().then(() => {
-        if (disposed) return
-        checkSubscriptionBlocked()
-          .then((b) => useSyncStore.getState().setBlocked(b.blocked, b.reason ?? null))
-          .catch(() => {})
-      }).catch(() => {})
-    }
-
-    initializeSync()
-
-    // Prediction engine: generate stockout / sales-trend / expiry notifications
-    // from local data at boot, then refresh after each sync completes so new
-    // sale data changes the forecast. Every 30 min as a floor.
-    let predictTimer: ReturnType<typeof setInterval> | null = null
-    ensureLinked().then(async () => {
-      const branchId = await getLinkedBranchId()
-      if (!branchId || disposed) return
-      runPredictionEngine(branchId)
-      flushPendingTickets()
-      predictTimer = setInterval(() => runPredictionEngine(branchId), 30 * 60 * 1000)
-    }).catch(() => {})
-
-    return () => {
-      disposed = true
-      stopAutoSync()
-      if (predictTimer) clearInterval(predictTimer)
-    }
-  }, [dbReady])
-
-  if (!dbReady || !sessionRestored || isLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary">Loading...</div>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <Routes>
-        <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/onboarding" element={<OnboardingRoute />} />
-        <Route path="/" element={<ProtectedRoute><Shell /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
-          <Route path="pos" element={<Pos />} />
-          <Route path="inventory" element={<Inventory />} />
-          <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
-          <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
-          <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
-          <Route path="records" element={<AdminRoute><Records /></AdminRoute>} />
-          <Route path="shifts" element={<Shifts />} />
-          <Route path="alerts" element={<Alerts />} />
-          <Route path="support" element={<Support />} />
-          <Route path="marketplace" element={<AdminRoute><Marketplace /></AdminRoute>} />
-          <Route path="orders" element={<AdminRoute><Orders /></AdminRoute>} />
-          <Route path="subscription" element={<AdminRoute><Subscription /></AdminRoute>} />
-        </Route>
-      </Routes>
-      {blocked && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-6">
-          <div className="max-w-md w-full bg-surface-base rounded-2xl shadow-xl p-8 text-center">
-            <span className="material-symbols-outlined text-5xl text-error">lock</span>
-            <h2 className="mt-4 font-headline text-xl font-bold text-on-surface">
-              Workspace unavailable
-            </h2>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              This workspace is currently unavailable.
-            </p>
-            <p className="mt-4 text-xs text-on-surface-variant">
-              Contact your administrator for help. You can try again once access has been restored.
-            </p>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
+import { useEffect, useState } from "react";
+import { WEB_URL } from "./lib/web";
 
 export default function App() {
+  const [offline, setOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    // If online, navigate immediately to the Cervos online workspace
+    if (navigator.onLine) {
+      window.location.replace(`${WEB_URL}/app`);
+    }
+
+    const handleOnline = () => {
+      setOffline(false);
+      window.location.replace(`${WEB_URL}/app`);
+    };
+    const handleOffline = () => setOffline(true);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  )
+    <div className="min-h-screen bg-[#0B0F17] text-white flex flex-col items-center justify-center p-6 select-none font-sans">
+      <div className="max-w-md w-full text-center space-y-6">
+        <div className="relative inline-block mx-auto">
+          <div className="w-24 h-24 rounded-full bg-blue-500/10 border border-[#1039B9]/30 flex items-center justify-center mx-auto shadow-2xl backdrop-blur-md">
+            <img
+              src="/cervos-company-logo-circular.svg"
+              alt="Cervos Logo"
+              className="w-16 h-16 object-contain animate-pulse"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "/logo.png";
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <h1 className="text-xl font-bold tracking-tight text-slate-100">Cervos Pharmacy OS</h1>
+          <p className="text-xs text-slate-400">
+            {offline
+              ? "You are currently offline. Check your network connection to access your live pharmacy database."
+              : "Launching Cervos POS workspace..."}
+          </p>
+        </div>
+
+        {offline ? (
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={() => {
+                if (navigator.onLine) {
+                  window.location.replace(`${WEB_URL}/app`);
+                } else {
+                  window.location.reload();
+                }
+              }}
+              className="w-full py-3 px-4 rounded-xl bg-[#1039B9] hover:bg-[#0c2d8a] text-white text-xs font-semibold tracking-wide transition-all shadow-lg cursor-pointer"
+            >
+              Retry Connection
+            </button>
+            <p className="text-[11px] text-slate-500">
+              Offline sales made on POS will sync automatically when your connection is restored.
+            </p>
+          </div>
+        ) : (
+          <div className="flex justify-center items-center gap-2 text-xs text-[#38BDF8]">
+            <div className="w-2 h-2 rounded-full bg-[#38BDF8] animate-ping" />
+            <span>Connecting to live cloud workspace...</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

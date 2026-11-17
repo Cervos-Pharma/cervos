@@ -47,8 +47,8 @@ jobs:
         shell: bash
         run: |
           cat > .env <<EOF
-          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           VITE_WEB_URL=${{ vars.VITE_WEB_URL || 'https://cervos.online' }}
           VITE_APP_URL=${{ vars.VITE_APP_URL || 'https://cervos.online' }}
           EOF
@@ -91,8 +91,8 @@ jobs:
         shell: bash
         run: |
           cat > .env <<EOF
-          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           VITE_WEB_URL=${{ vars.VITE_WEB_URL || 'https://cervos.online' }}
           VITE_APP_URL=${{ vars.VITE_APP_URL || 'https://cervos.online' }}
           EOF

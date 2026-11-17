@@ -4,7 +4,9 @@ export const APP_SHORT_NAME = "Cervos POS";
 export const DEFAULT_LOGO = "pharmacy";
 
 export const COLORS = {
-  primary: "#6366f1",
+  primary: "#1039B9",
+  primaryDark: "#0C2D8A",
+  accent: "#38BDF8",
   secondary: "#10b981",
   error: "#ef4444",
   warning: "#f59e0b",
