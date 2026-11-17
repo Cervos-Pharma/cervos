@@ -3528,203 +3528,203 @@ export default function PharmacyDashboard({
                     </span>
                   </div>
 
-            {selectedTrailItem && (
-              <div className={`p-4 rounded-2xl border space-y-3 ring-2 animate-stage-pop text-xs ${chipCls}`} style={{ borderColor: accent }}>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
-                      {selectedTrailItem.kind === "join"
-                        ? isSw ? "OMBI LA KUJIUNGA" : "STAFF REQUEST"
-                        : selectedTrailItem.kind === "hq"
-                          ? "HQ NOTICE"
-                          : selectedTrailItem.kind === "escrow"
-                            ? "ORDER HELD"
-                            : selectedTrailItem.log.category}
-                    </div>
-                    <div className="font-bold text-sm mt-0.5">
-                      {selectedTrailItem.kind === "join"
-                        ? `${selectedTrailItem.req.requesterFullName} (@${selectedTrailItem.req.requesterUsername})`
-                        : selectedTrailItem.kind === "hq"
-                          ? isSw ? selectedTrailItem.msg.swTitle : selectedTrailItem.msg.title
-                          : selectedTrailItem.kind === "escrow"
-                            ? `${selectedTrailItem.order.orderReference} · ${selectedTrailItem.order.supplierName}`
-                            : selectedTrailItem.log.action}
-                    </div>
-                  </div>
-                  <button type="button" onClick={() => setSelectedTrailItem(null)} className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer ${cardCls}`}>
-                    &times;
-                  </button>
-                </div>
-
-                {selectedTrailItem.kind === "join" && (
-                  <div className="space-y-2.5">
-                    <div className={`text-[11px] ${mutedCls}`}>
-                      {selectedTrailItem.req.requesterRegion}
-                      {selectedTrailItem.req.requestedRoleLabel ? ` · ${selectedTrailItem.req.requestedRoleLabel}` : ""}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <select value={allocCentreId} onChange={(e) => setAllocCentreId(e.target.value)} className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}>
-                        {centres.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                      <select
-                        value={allocRole}
-                        onChange={(e) => {
-                          const nextRole = e.target.value as WorkspaceProfileRole;
-                          setAllocRole(nextRole);
-                          setAllocCaps(clampProfileCapabilities(nextRole));
-                        }}
-                        className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}
-                      >
-                        <option value="superintendent_pharmacist">Pharmacist</option>
-                        <option value="pos_cashier">Cashier</option>
-                        <option value="warehouse_dispatcher">Dispatcher</option>
-                        <option value="pharmacy_owner">Branch Admin</option>
-                      </select>
-                      <input type="text" maxLength={6} value={allocPin} onChange={(e) => setAllocPin(e.target.value.replace(/\D/g, ""))} placeholder="PIN" className={`px-2.5 py-2 rounded-xl border font-mono text-xs ${inputCls}`} />
-                    </div>
-                    {(() => {
-                      const rKey = (allocRole as WorkspaceProfileRole) in ROLE_PERMISSION_RULES ? (allocRole as WorkspaceProfileRole) : "pos_cashier";
-                      const rule = ROLE_PERMISSION_RULES[rKey];
-                      return (
-                        <div className="flex flex-wrap gap-1.5">
-                          {PERMISSION_METADATA.map((pm) => {
-                            const lOn = rule.immutableTrue.includes(pm.key);
-                            const lOff = rule.immutableFalse.includes(pm.key);
-                            const val = lOn ? true : lOff ? false : Boolean(allocCaps[pm.key]);
-                            return (
-                              <label key={pm.key} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] cursor-pointer ${cardCls}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={val}
-                                  disabled={lOn || lOff}
-                                  onChange={(e) => setAllocCaps((prev) => ({ ...prev, [pm.key]: e.target.checked }))}
-                                />
-                                <span>{isSw ? pm.swLabel : pm.label}</span>
-                              </label>
-                            );
-                          })}
+                  {selectedTrailItem && (
+                    <div className={`p-4 rounded-2xl border space-y-3 ring-2 animate-stage-pop text-xs ${chipCls}`} style={{ borderColor: accent }}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
+                            {selectedTrailItem.kind === "join"
+                              ? isSw ? "OMBI LA KUJIUNGA" : "STAFF REQUEST"
+                              : selectedTrailItem.kind === "hq"
+                                ? "HQ NOTICE"
+                                : selectedTrailItem.kind === "escrow"
+                                  ? "ORDER HELD"
+                                  : selectedTrailItem.log.category}
+                          </div>
+                          <div className="font-bold text-sm mt-0.5">
+                            {selectedTrailItem.kind === "join"
+                              ? `${selectedTrailItem.req.requesterFullName} (@${selectedTrailItem.req.requesterUsername})`
+                              : selectedTrailItem.kind === "hq"
+                                ? isSw ? selectedTrailItem.msg.swTitle : selectedTrailItem.msg.title
+                                : selectedTrailItem.kind === "escrow"
+                                  ? `${selectedTrailItem.order.orderReference} · ${selectedTrailItem.order.supplierName}`
+                                  : selectedTrailItem.log.action}
+                          </div>
                         </div>
-                      );
-                    })()}
-                    <div className="flex justify-end gap-2">
-                      <button type="button" onClick={() => handleReviewJoinRequest(selectedTrailItem.req.id, "decline")} className="px-3.5 py-2 rounded-full border border-rose-500/40 text-rose-500 text-xs font-semibold cursor-pointer min-h-[40px]">
-                        Decline
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await handleReviewJoinRequest(selectedTrailItem.req.id, "approve");
-                          setSelectedTrailItem(null);
-                        }}
-                        className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer min-h-[40px]"
-                        style={{ backgroundColor: accent }}
-                      >
-                        Approve &rarr;
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {selectedTrailItem.kind === "hq" && (
-                  <div className="space-y-2.5">
-                    <p className={`text-xs leading-relaxed ${mutedCls}`}>
-                      {isSw ? selectedTrailItem.msg.swBody : selectedTrailItem.msg.body}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {selectedTrailItem.msg.ctaTarget && selectedTrailItem.msg.ctaTarget !== "download" && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const t = selectedTrailItem.msg.ctaTarget;
-                            setSelectedTrailItem(null);
-                            if (t === "reports") openReport("brief");
-                            else if (t === "billing" || t === "network" || t === "team") setTab(t);
-                          }}
-                          className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
-                          style={{ backgroundColor: accent }}
-                        >
-                          {selectedTrailItem.msg.ctaLabel} &rarr;
+                        <button type="button" onClick={() => setSelectedTrailItem(null)} className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer ${cardCls}`}>
+                          &times;
                         </button>
+                      </div>
+
+                      {selectedTrailItem.kind === "join" && (
+                        <div className="space-y-2.5">
+                          <div className={`text-[11px] ${mutedCls}`}>
+                            {selectedTrailItem.req.requesterRegion}
+                            {selectedTrailItem.req.requestedRoleLabel ? ` · ${selectedTrailItem.req.requestedRoleLabel}` : ""}
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <select value={allocCentreId} onChange={(e) => setAllocCentreId(e.target.value)} className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}>
+                              {centres.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <select
+                              value={allocRole}
+                              onChange={(e) => {
+                                const nextRole = e.target.value as WorkspaceProfileRole;
+                                setAllocRole(nextRole);
+                                setAllocCaps(clampProfileCapabilities(nextRole));
+                              }}
+                              className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}
+                            >
+                              <option value="superintendent_pharmacist">Pharmacist</option>
+                              <option value="pos_cashier">Cashier</option>
+                              <option value="warehouse_dispatcher">Dispatcher</option>
+                              <option value="pharmacy_owner">Branch Admin</option>
+                            </select>
+                            <input type="text" maxLength={6} value={allocPin} onChange={(e) => setAllocPin(e.target.value.replace(/\D/g, ""))} placeholder="PIN" className={`px-2.5 py-2 rounded-xl border font-mono text-xs ${inputCls}`} />
+                          </div>
+                          {(() => {
+                            const rKey = (allocRole as WorkspaceProfileRole) in ROLE_PERMISSION_RULES ? (allocRole as WorkspaceProfileRole) : "pos_cashier";
+                            const rule = ROLE_PERMISSION_RULES[rKey];
+                            return (
+                              <div className="flex flex-wrap gap-1.5">
+                                {PERMISSION_METADATA.map((pm) => {
+                                  const lOn = rule.immutableTrue.includes(pm.key);
+                                  const lOff = rule.immutableFalse.includes(pm.key);
+                                  const val = lOn ? true : lOff ? false : Boolean(allocCaps[pm.key]);
+                                  return (
+                                    <label key={pm.key} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] cursor-pointer ${cardCls}`}>
+                                      <input
+                                        type="checkbox"
+                                        checked={val}
+                                        disabled={lOn || lOff}
+                                        onChange={(e) => setAllocCaps((prev) => ({ ...prev, [pm.key]: e.target.checked }))}
+                                      />
+                                      <span>{isSw ? pm.swLabel : pm.label}</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                          <div className="flex justify-end gap-2">
+                            <button type="button" onClick={() => handleReviewJoinRequest(selectedTrailItem.req.id, "decline")} className="px-3.5 py-2 rounded-full border border-rose-500/40 text-rose-500 text-xs font-semibold cursor-pointer min-h-[40px]">
+                              Decline
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await handleReviewJoinRequest(selectedTrailItem.req.id, "approve");
+                                setSelectedTrailItem(null);
+                              }}
+                              className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer min-h-[40px]"
+                              style={{ backgroundColor: accent }}
+                            >
+                              Approve &rarr;
+                            </button>
+                          </div>
+                        </div>
                       )}
-                      <button type="button" onClick={() => handleAckHqMessage(selectedTrailItem.msg.id)} className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${cardCls}`}>
-                        {isSw ? "Sawa" : "Done"}
-                      </button>
+
+                      {selectedTrailItem.kind === "hq" && (
+                        <div className="space-y-2.5">
+                          <p className={`text-xs leading-relaxed ${mutedCls}`}>
+                            {isSw ? selectedTrailItem.msg.swBody : selectedTrailItem.msg.body}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {selectedTrailItem.msg.ctaTarget && selectedTrailItem.msg.ctaTarget !== "download" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const t = selectedTrailItem.msg.ctaTarget;
+                                  setSelectedTrailItem(null);
+                                  if (t === "reports") openReport("brief");
+                                  else if (t === "billing" || t === "network" || t === "team") setTab(t);
+                                }}
+                                className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
+                                style={{ backgroundColor: accent }}
+                              >
+                                {selectedTrailItem.msg.ctaLabel} &rarr;
+                              </button>
+                            )}
+                            <button type="button" onClick={() => handleAckHqMessage(selectedTrailItem.msg.id)} className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${cardCls}`}>
+                              {isSw ? "Sawa" : "Done"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedTrailItem.kind === "escrow" && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={mutedCls}>
+                            {selectedTrailItem.order.productName} &middot; {formatTzs(selectedTrailItem.order.totalTzs)}
+                          </span>
+                          <button type="button" onClick={() => setTab("network")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
+                            Open Orders &rarr;
+                          </button>
+                        </div>
+                      )}
+
+                      {selectedTrailItem.kind === "audit" && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={mutedCls}>{selectedTrailItem.log.actor} &middot; {selectedTrailItem.log.createdAt.slice(0, 16).replace("T", " ")}</span>
+                          <button type="button" onClick={() => openReport("brief")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
+                            View Report &rarr;
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {selectedTrailItem.kind === "escrow" && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={mutedCls}>
-                      {selectedTrailItem.order.productName} &middot; {formatTzs(selectedTrailItem.order.totalTzs)}
-                    </span>
-                    <button type="button" onClick={() => setTab("network")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
-                      Open Orders &rarr;
-                    </button>
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 text-xs">
+                    {pendingJoinRequests.map((rq) => (
+                      <button
+                        key={rq.id}
+                        type="button"
+                        onClick={() => setSelectedTrailItem({ kind: "join", req: rq })}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer hover:border-amber-400 transition-colors min-h-[42px] ${chipCls}`}
+                      >
+                        <span className="truncate font-semibold">
+                          <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-2" />
+                          @{rq.requesterUsername} &middot; {rq.requesterFullName}
+                        </span>
+                        <span className="text-[11px] font-bold text-amber-600 shrink-0">Review &rarr;</span>
+                      </button>
+                    ))}
+                    {hqMessages.filter((m) => !m.acknowledged).slice(0, 3).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedTrailItem({ kind: "hq", msg: m })}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer hover:border-blue-400 transition-colors min-h-[42px] ${chipCls}`}
+                      >
+                        <span className="truncate font-medium">
+                          <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] font-mono text-[9px] font-bold mr-2">
+                            HQ
+                          </span>
+                          {isSw ? m.swTitle : m.title}
+                        </span>
+                        <span className="text-[10px] opacity-70 shrink-0">{m.createdAt.slice(5, 10)}</span>
+                      </button>
+                    ))}
+                    {filteredLogs.slice(0, 4).map((entry) => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => setSelectedTrailItem({ kind: "audit", log: entry })}
+                        className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer hover:border-blue-400 transition-colors min-h-[42px] ${chipCls}`}
+                      >
+                        <span className="truncate">
+                          <span className="font-mono text-[9px] font-bold opacity-70 mr-2">{entry.category}</span>
+                          {entry.action}
+                        </span>
+                        <span className="font-mono text-[10px] opacity-65 shrink-0">{entry.createdAt.slice(11, 16)}</span>
+                      </button>
+                    ))}
                   </div>
-                )}
-
-                {selectedTrailItem.kind === "audit" && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={mutedCls}>{selectedTrailItem.log.actor} &middot; {selectedTrailItem.log.createdAt.slice(0, 16).replace("T", " ")}</span>
-                    <button type="button" onClick={() => openReport("brief")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
-                      View Report &rarr;
-                    </button>
-                  </div>
-                )}
+                </div>
               </div>
-            )}
 
-          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 text-xs">
-            {pendingJoinRequests.map((rq) => (
-              <button
-                key={rq.id}
-                type="button"
-                onClick={() => setSelectedTrailItem({ kind: "join", req: rq })}
-                className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer hover:border-amber-400 transition-colors min-h-[42px] ${chipCls}`}
-              >
-                <span className="truncate font-semibold">
-                  <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-2" />
-                  @{rq.requesterUsername} &middot; {rq.requesterFullName}
-                </span>
-                <span className="text-[11px] font-bold text-amber-600 shrink-0">Review &rarr;</span>
-              </button>
-            ))}
-            {hqMessages.filter((m) => !m.acknowledged).slice(0, 3).map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setSelectedTrailItem({ kind: "hq", msg: m })}
-                className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer hover:border-blue-400 transition-colors min-h-[42px] ${chipCls}`}
-              >
-                <span className="truncate font-medium">
-                  <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] font-mono text-[9px] font-bold mr-2">
-                    HQ
-                  </span>
-                  {isSw ? m.swTitle : m.title}
-                </span>
-                <span className="text-[10px] opacity-70 shrink-0">{m.createdAt.slice(5, 10)}</span>
-              </button>
-            ))}
-            {filteredLogs.slice(0, 4).map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                onClick={() => setSelectedTrailItem({ kind: "audit", log: entry })}
-                className={`w-full px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer hover:border-blue-400 transition-colors min-h-[42px] ${chipCls}`}
-              >
-                <span className="truncate">
-                  <span className="font-mono text-[9px] font-bold opacity-70 mr-2">{entry.category}</span>
-                  {entry.action}
-                </span>
-                <span className="font-mono text-[10px] opacity-65 shrink-0">{entry.createdAt.slice(11, 16)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-    </div>
-
-              {/* BELOW: Clean Branch Cards + "+ Add Branch" Slot */ }
+              {/* BELOW: Clean Branch Cards + "+ Add Branch" Slot */}
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold">
@@ -3811,724 +3811,724 @@ export default function PharmacyDashboard({
                 </div>
               </div >
 
-    {/* Friendly Guided New Branch Setup Modal */ }
-  {
-    addBranchOpen && (
-      <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setAddBranchOpen(false)}>
-        <form
-          onSubmit={handleAddBranch}
-          onClick={(e) => e.stopPropagation()}
-          className={`w-full max-w-lg rounded-[28px] border p-6 sm:p-7 space-y-4 shadow-2xl animate-stage-pop ${cardCls}`}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                {isSw ? "USAJILI WA TAWI JIPYA" : "FRIENDLY BRANCH SETUP"}
-              </div>
-              <h3 className="text-lg font-bold mt-0.5">{isSw ? "Ongeza Tawi Kwenye Mtandao Wako" : "Launch a New Pharmacy Branch"}</h3>
-            </div>
-            <button type="button" onClick={() => setAddBranchOpen(false)} className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
-              &times;
-            </button>
-          </div>
+              {/* Friendly Guided New Branch Setup Modal */}
+              {
+                addBranchOpen && (
+                  <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setAddBranchOpen(false)}>
+                    <form
+                      onSubmit={handleAddBranch}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`w-full max-w-lg rounded-[28px] border p-6 sm:p-7 space-y-4 shadow-2xl animate-stage-pop ${cardCls}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                            {isSw ? "USAJILI WA TAWI JIPYA" : "FRIENDLY BRANCH SETUP"}
+                          </div>
+                          <h3 className="text-lg font-bold mt-0.5">{isSw ? "Ongeza Tawi Kwenye Mtandao Wako" : "Launch a New Pharmacy Branch"}</h3>
+                        </div>
+                        <button type="button" onClick={() => setAddBranchOpen(false)} className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
+                          &times;
+                        </button>
+                      </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Branch Name *</label>
-              <input type="text" required value={branchNameInput} onChange={(e) => setBranchNameInput(e.target.value)} placeholder="e.g. Sinza Corner Dispensary" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
-            </div>
-            <div>
-              <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Region / City *</label>
-              <input type="text" required value={branchRegionInput} onChange={(e) => setBranchRegionInput(e.target.value)} placeholder="Dar es Salaam" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
-            </div>
-            <div>
-              <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Street Address *</label>
-              <input type="text" required value={branchAddrInput} onChange={(e) => setBranchAddrInput(e.target.value)} placeholder="Plot 14, Shekilango Rd" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
-            </div>
-            <div>
-              <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Station Phone</label>
-              <input type="tel" value={branchPhoneInput} onChange={(e) => setBranchPhoneInput(e.target.value)} placeholder="+255 712 000 000" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
-            </div>
-          </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Branch Name *</label>
+                          <input type="text" required value={branchNameInput} onChange={(e) => setBranchNameInput(e.target.value)} placeholder="e.g. Sinza Corner Dispensary" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Region / City *</label>
+                          <input type="text" required value={branchRegionInput} onChange={(e) => setBranchRegionInput(e.target.value)} placeholder="Dar es Salaam" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Street Address *</label>
+                          <input type="text" required value={branchAddrInput} onChange={(e) => setBranchAddrInput(e.target.value)} placeholder="Plot 14, Shekilango Rd" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
+                        </div>
+                        <div>
+                          <label className={`block text-[10px] font-bold uppercase mb-1 ${mutedCls}`}>Station Phone</label>
+                          <input type="tel" value={branchPhoneInput} onChange={(e) => setBranchPhoneInput(e.target.value)} placeholder="+255 712 000 000" className={`w-full px-3 py-2.5 rounded-xl border ${inputCls}`} />
+                        </div>
+                      </div>
 
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className={`text-[10px] font-bold uppercase ${mutedCls}`}>
-                {isSw ? "Bonyeza Ramani Kuweka Mahali" : "Tap Live Map to Pin Branch GPS"} ({branchLat.toFixed(4)}, {branchLng.toFixed(4)})
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  if (typeof navigator !== "undefined" && navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                      setBranchLat(Number(pos.coords.latitude.toFixed(5)));
-                      setBranchLng(Number(pos.coords.longitude.toFixed(5)));
-                    });
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer ${chipCls}`}
-              >
-                {isSw ? "Tumia GPS Yangu" : "Use My GPS"}
-              </button>
-            </div>
-            <div className="rounded-2xl border overflow-hidden border-slate-500/25 h-36">
-              <CervosMap
-                center={[branchLat, branchLng]}
-                zoom={12}
-                defaultStyle={isDark ? "dark" : "light"}
-                fitBoundsOnUpdate={false}
-                showControls={false}
-                onMapClick={(loc) => {
-                  setBranchLat(Number(loc.lat.toFixed(5)));
-                  setBranchLng(Number(loc.lng.toFixed(5)));
-                }}
-                markers={[
-                  {
-                    id: "new-branch-pin",
-                    lat: branchLat,
-                    lng: branchLng,
-                    label: branchNameInput || "New Branch Location",
-                    region: branchRegionInput,
-                    kind: "branch",
-                    status: "active",
-                  },
-                ]}
-                className="h-36 w-full"
-              />
-            </div>
-          </div>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-bold uppercase ${mutedCls}`}>
+                            {isSw ? "Bonyeza Ramani Kuweka Mahali" : "Tap Live Map to Pin Branch GPS"} ({branchLat.toFixed(4)}, {branchLng.toFixed(4)})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (typeof navigator !== "undefined" && navigator.geolocation) {
+                                navigator.geolocation.getCurrentPosition((pos) => {
+                                  setBranchLat(Number(pos.coords.latitude.toFixed(5)));
+                                  setBranchLng(Number(pos.coords.longitude.toFixed(5)));
+                                });
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                          >
+                            {isSw ? "Tumia GPS Yangu" : "Use My GPS"}
+                          </button>
+                        </div>
+                        <div className="rounded-2xl border overflow-hidden border-slate-500/25 h-36">
+                          <CervosMap
+                            center={[branchLat, branchLng]}
+                            zoom={12}
+                            defaultStyle={isDark ? "dark" : "light"}
+                            fitBoundsOnUpdate={false}
+                            showControls={false}
+                            onMapClick={(loc) => {
+                              setBranchLat(Number(loc.lat.toFixed(5)));
+                              setBranchLng(Number(loc.lng.toFixed(5)));
+                            }}
+                            markers={[
+                              {
+                                id: "new-branch-pin",
+                                lat: branchLat,
+                                lng: branchLng,
+                                label: branchNameInput || "New Branch Location",
+                                region: branchRegionInput,
+                                kind: "branch",
+                                status: "active",
+                              },
+                            ]}
+                            className="h-36 w-full"
+                          />
+                        </div>
+                      </div>
 
-          <div className={`p-3.5 rounded-2xl border space-y-2 text-xs ${chipCls}`}>
-            <div className="font-bold text-[11px]">
-              {isSw ? "Hamisha Wafanyakazi Waliopo (Hiari)" : "Assign / Shift Existing Staff to This Branch (Optional)"}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {profiles
-                .filter((p) => !p.isMasterAdmin)
-                .map((p) => {
-                  const checked = branchAssignIds.includes(p.id);
-                  return (
-                    <label key={p.id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] cursor-pointer ${cardCls}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) =>
-                          setBranchAssignIds((prev) =>
-                            e.target.checked ? [...prev, p.id] : prev.filter((id) => id !== p.id)
-                          )
-                        }
-                      />
-                      <span>{p.displayName}</span>
-                    </label>
-                  );
-                })}
-            </div>
-          </div>
+                      <div className={`p-3.5 rounded-2xl border space-y-2 text-xs ${chipCls}`}>
+                        <div className="font-bold text-[11px]">
+                          {isSw ? "Hamisha Wafanyakazi Waliopo (Hiari)" : "Assign / Shift Existing Staff to This Branch (Optional)"}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {profiles
+                            .filter((p) => !p.isMasterAdmin)
+                            .map((p) => {
+                              const checked = branchAssignIds.includes(p.id);
+                              return (
+                                <label key={p.id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] cursor-pointer ${cardCls}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) =>
+                                      setBranchAssignIds((prev) =>
+                                        e.target.checked ? [...prev, p.id] : prev.filter((id) => id !== p.id)
+                                      )
+                                    }
+                                  />
+                                  <span>{p.displayName}</span>
+                                </label>
+                              );
+                            })}
+                        </div>
+                      </div>
 
-          <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={() => setAddBranchOpen(false)} className={`px-4 py-2.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
-              Cancel
-            </button>
-            <button type="submit" disabled={branchBusy} className="px-5 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
-              {branchBusy ? "Creating..." : "Create Branch & Sync ->"}
-            </button>
-          </div>
-        </form>
-      </div>
-    )
-  }
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button type="button" onClick={() => setAddBranchOpen(false)} className={`px-4 py-2.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
+                          Cancel
+                        </button>
+                        <button type="submit" disabled={branchBusy} className="px-5 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
+                          {branchBusy ? "Creating..." : "Create Branch & Sync ->"}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )
+              }
 
-  {
-    hqUpdates.length > 0 && (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {hqUpdates.map((u) => (
-          <div key={u.id} className={`p-4 rounded-2xl border flex flex-col justify-between gap-2 text-xs ${cardCls}`}>
-            <div className="space-y-1">
-              <span className="px-2 py-0.5 rounded bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] text-[9px] font-bold">
-                {u.tag}
-              </span>
-              <div className="font-bold leading-snug">{isSw ? u.swTitle : u.title}</div>
-              <p className={`text-[11px] ${mutedCls}`}>{isSw ? u.swSummary : u.summary}</p>
-            </div>
-            {u.ctaTarget === "download" ? (
-              <Link href="/app/download" className="text-[11px] font-semibold hover:underline" style={{ color: accent }}>
-                {u.ctaLabel} &rarr;
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() =>
-                  u.ctaTarget === "reports"
-                    ? openReport("brief")
-                    : u.ctaTarget === "billing"
-                      ? setTab("billing")
-                      : setTab("network")
-                }
-                className="text-left text-[11px] font-semibold hover:underline cursor-pointer"
-                style={{ color: accent }}
-              >
-                {u.ctaLabel} &rarr;
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
-    )
-  }
-                                                                          </div >
-                                                                        )
-}
+              {
+                hqUpdates.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {hqUpdates.map((u) => (
+                      <div key={u.id} className={`p-4 rounded-2xl border flex flex-col justify-between gap-2 text-xs ${cardCls}`}>
+                        <div className="space-y-1">
+                          <span className="px-2 py-0.5 rounded bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] text-[9px] font-bold">
+                            {u.tag}
+                          </span>
+                          <div className="font-bold leading-snug">{isSw ? u.swTitle : u.title}</div>
+                          <p className={`text-[11px] ${mutedCls}`}>{isSw ? u.swSummary : u.summary}</p>
+                        </div>
+                        {u.ctaTarget === "download" ? (
+                          <Link href="/app/download" className="text-[11px] font-semibold hover:underline" style={{ color: accent }}>
+                            {u.ctaLabel} &rarr;
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              u.ctaTarget === "reports"
+                                ? openReport("brief")
+                                : u.ctaTarget === "billing"
+                                  ? setTab("billing")
+                                  : setTab("network")
+                            }
+                            className="text-left text-[11px] font-semibold hover:underline cursor-pointer"
+                            style={{ color: accent }}
+                          >
+                            {u.ctaLabel} &rarr;
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )
+              }
+            </div >
+          )
+          }
 
-{
-  (!canManageAdmin || orgScope === "branch") && (
-    <>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch animate-stage-pop">
-        {layoutType !== "focus" && (
-          <div
-            className={`lg:col-span-4 min-h-[400px] rounded-[24px] border p-6 flex flex-col justify-between gap-4 relative overflow-hidden transition-all duration-300 ${isDark
-              ? "border-slate-800 bg-[#0D111A] text-white"
-              : "border-[#DCE3EC] bg-[#DFE6F0] text-[#111317] shadow-[0_8px_28px_rgba(15,23,42,0.04)]"
-              }`}
-          >
-            {/* Edge-to-Edge Full-Bleed Morphing Spotlight (No card-in-card border) */}
-            <StationSpotlightMedia
-              brandLogoUrl={account.customization?.brandLogoUrl}
-              orgName={account.orgName}
-              centreName={activeCentre?.name || account.orgName}
-              profileName={activeProfileName || account.fullName}
-              address={activeCentre?.address}
-              region={activeCentre?.region || account.region}
-              lat={activeCentre?.lat}
-              lng={activeCentre?.lng}
-              todaySalesTzs={todaySalesTzs}
-              validLotsCount={validLotsCount}
-              nearExpiryCount={stockAlerts.nearExpiryCount}
-              escrowHeldTzs={escrowHeldTzs}
-              accent={accent}
-              isDark={isDark}
-              isSw={isSw}
-            />
-
-            <div className="flex items-center justify-between relative z-20">
-              <span
-                className={`px-3 py-1 rounded-full text-[11px] font-semibold backdrop-blur-md ${isDark ? "bg-slate-900/75 text-white border border-slate-700" : "bg-white/85 text-[#111317]"
-                  }`}
-              >
-                {spotlightState.eyebrow}
-              </span>
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold shadow-xs ${spotlightState.badgeTone}`}>
-                {spotlightState.badge}
-              </span>
-            </div>
-
-            <div className="space-y-3 relative z-20 pt-36">
-              <div>
-                <div className="text-sm font-semibold">{spotlightState.title}</div>
-                <div className={`text-[11px] mt-0.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-                  {spotlightState.desc}
-                </div>
-              </div>
-
-              {spotlightState.href ? (
-                <Link
-                  href={spotlightState.href}
-                  className="mx-auto flex items-center gap-3 pl-5 pr-1.5 py-1.5 rounded-full bg-white text-[#111317] hover:bg-slate-50 text-xs font-semibold shadow-sm w-fit"
-                >
-                  <span>{spotlightState.ctaLabel}</span>
-                  <span className="w-7 h-7 rounded-full bg-[#111317] text-white flex items-center justify-center text-xs">
-                    &#8599;
-                  </span>
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={spotlightState.onClick}
-                  className="mx-auto flex items-center gap-3 pl-5 pr-1.5 py-1.5 rounded-full bg-white text-[#111317] hover:bg-slate-50 text-xs font-semibold shadow-sm cursor-pointer"
-                >
-                  <span>{spotlightState.ctaLabel}</span>
-                  <span className="w-7 h-7 rounded-full bg-[#111317] text-white flex items-center justify-center text-xs">
-                    &#8599;
-                  </span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className={`${layoutType === "focus" ? "lg:col-span-12" : "lg:col-span-8"} flex flex-col gap-4`}>
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* Clickable Dispense Activity Card -> Opens Deep Sales & Heatmap Report */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => openReport("sales")}
-              onKeyDown={(e) => e.key === "Enter" && openReport("sales")}
-              className={`md:col-span-5 rounded-[24px] border p-5 flex flex-col justify-between gap-4 cursor-pointer text-left ${cardCls}`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-[14px] font-medium">{isSw ? "Shughuli & Utabiri" : "Dispense Activity"}</div>
-                  <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{isSw ? "Fungua ripoti ya mauzo" : "Sales, heatmap & 7d forecast"}</div>
-                </div>
-                <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] ${chipCls}`}>
-                  &#8599;
-                </span>
-              </div>
-
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="text-3xl font-normal tracking-tight tabular-nums" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                  {sales.length}
-                  <span className={`text-lg ml-1 ${mutedCls}`}>tx</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setTab("operations");
-                  }}
-                  className="text-[11px] font-semibold hover:underline cursor-pointer"
-                  style={{ color: accent }}
-                >
-                  Open POS &rarr;
-                </button>
-              </div>
-
-              <div className="grid grid-cols-7 gap-1.5 items-end h-28 pt-5">
-                {weekActivity.map((col, idx) => (
-                  <div
-                    key={col.day}
-                    onMouseEnter={() => setHoveredWeekIdx(idx)}
-                    onMouseLeave={() => setHoveredWeekIdx(null)}
-                    className="group flex flex-col items-center gap-1.5 h-full justify-end relative"
-                  >
-                    {(col.highlight || hoveredWeekIdx === idx) && (
-                      <span className="px-2 py-0.5 rounded-full bg-[#E2F575] text-[#111317] text-[9px] font-bold whitespace-nowrap shadow-2xs">
-                        {col.badge}
-                      </span>
-                    )}
+          {
+            (!canManageAdmin || orgScope === "branch") && (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch animate-stage-pop">
+                  {layoutType !== "focus" && (
                     <div
-                      className="w-full rounded-[10px] transition-all duration-300"
-                      style={{
-                        height: `${col.heightPct}%`,
-                        backgroundColor:
-                          hoveredWeekIdx === idx
-                            ? accent
-                            : col.highlight
-                              ? "#E2F575"
-                              : isDark
-                                ? "rgba(148, 163, 184, 0.16)"
-                                : "#F1F3F5",
-                      }}
-                    />
-                    <span className={`text-[10px] ${mutedCls}`}>{col.day}</span>
+                      className={`lg:col-span-4 min-h-[400px] rounded-[24px] border p-6 flex flex-col justify-between gap-4 relative overflow-hidden transition-all duration-300 ${isDark
+                        ? "border-slate-800 bg-[#0D111A] text-white"
+                        : "border-[#DCE3EC] bg-[#DFE6F0] text-[#111317] shadow-[0_8px_28px_rgba(15,23,42,0.04)]"
+                        }`}
+                    >
+                      {/* Edge-to-Edge Full-Bleed Morphing Spotlight (No card-in-card border) */}
+                      <StationSpotlightMedia
+                        brandLogoUrl={account.customization?.brandLogoUrl}
+                        orgName={account.orgName}
+                        centreName={activeCentre?.name || account.orgName}
+                        profileName={activeProfileName || account.fullName}
+                        address={activeCentre?.address}
+                        region={activeCentre?.region || account.region}
+                        lat={activeCentre?.lat}
+                        lng={activeCentre?.lng}
+                        todaySalesTzs={todaySalesTzs}
+                        validLotsCount={validLotsCount}
+                        nearExpiryCount={stockAlerts.nearExpiryCount}
+                        escrowHeldTzs={escrowHeldTzs}
+                        accent={accent}
+                        isDark={isDark}
+                        isSw={isSw}
+                      />
+
+                      <div className="flex items-center justify-between relative z-20">
+                        <span
+                          className={`px-3 py-1 rounded-full text-[11px] font-semibold backdrop-blur-md ${isDark ? "bg-slate-900/75 text-white border border-slate-700" : "bg-white/85 text-[#111317]"
+                            }`}
+                        >
+                          {spotlightState.eyebrow}
+                        </span>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold shadow-xs ${spotlightState.badgeTone}`}>
+                          {spotlightState.badge}
+                        </span>
+                      </div>
+
+                      <div className="space-y-3 relative z-20 pt-36">
+                        <div>
+                          <div className="text-sm font-semibold">{spotlightState.title}</div>
+                          <div className={`text-[11px] mt-0.5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                            {spotlightState.desc}
+                          </div>
+                        </div>
+
+                        {spotlightState.href ? (
+                          <Link
+                            href={spotlightState.href}
+                            className="mx-auto flex items-center gap-3 pl-5 pr-1.5 py-1.5 rounded-full bg-white text-[#111317] hover:bg-slate-50 text-xs font-semibold shadow-sm w-fit"
+                          >
+                            <span>{spotlightState.ctaLabel}</span>
+                            <span className="w-7 h-7 rounded-full bg-[#111317] text-white flex items-center justify-center text-xs">
+                              &#8599;
+                            </span>
+                          </Link>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={spotlightState.onClick}
+                            className="mx-auto flex items-center gap-3 pl-5 pr-1.5 py-1.5 rounded-full bg-white text-[#111317] hover:bg-slate-50 text-xs font-semibold shadow-sm cursor-pointer"
+                          >
+                            <span>{spotlightState.ctaLabel}</span>
+                            <span className="w-7 h-7 rounded-full bg-[#111317] text-white flex items-center justify-center text-xs">
+                              &#8599;
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={`${layoutType === "focus" ? "lg:col-span-12" : "lg:col-span-8"} flex flex-col gap-4`}>
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      {/* Clickable Dispense Activity Card -> Opens Deep Sales & Heatmap Report */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openReport("sales")}
+                        onKeyDown={(e) => e.key === "Enter" && openReport("sales")}
+                        className={`md:col-span-5 rounded-[24px] border p-5 flex flex-col justify-between gap-4 cursor-pointer text-left ${cardCls}`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-[14px] font-medium">{isSw ? "Shughuli & Utabiri" : "Dispense Activity"}</div>
+                            <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{isSw ? "Fungua ripoti ya mauzo" : "Sales, heatmap & 7d forecast"}</div>
+                          </div>
+                          <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] ${chipCls}`}>
+                            &#8599;
+                          </span>
+                        </div>
+
+                        <div className="flex items-baseline justify-between gap-2">
+                          <div className="text-3xl font-normal tracking-tight tabular-nums" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                            {sales.length}
+                            <span className={`text-lg ml-1 ${mutedCls}`}>tx</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTab("operations");
+                            }}
+                            className="text-[11px] font-semibold hover:underline cursor-pointer"
+                            style={{ color: accent }}
+                          >
+                            Open POS &rarr;
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1.5 items-end h-28 pt-5">
+                          {weekActivity.map((col, idx) => (
+                            <div
+                              key={col.day}
+                              onMouseEnter={() => setHoveredWeekIdx(idx)}
+                              onMouseLeave={() => setHoveredWeekIdx(null)}
+                              className="group flex flex-col items-center gap-1.5 h-full justify-end relative"
+                            >
+                              {(col.highlight || hoveredWeekIdx === idx) && (
+                                <span className="px-2 py-0.5 rounded-full bg-[#E2F575] text-[#111317] text-[9px] font-bold whitespace-nowrap shadow-2xs">
+                                  {col.badge}
+                                </span>
+                              )}
+                              <div
+                                className="w-full rounded-[10px] transition-all duration-300"
+                                style={{
+                                  height: `${col.heightPct}%`,
+                                  backgroundColor:
+                                    hoveredWeekIdx === idx
+                                      ? accent
+                                      : col.highlight
+                                        ? "#E2F575"
+                                        : isDark
+                                          ? "rgba(148, 163, 184, 0.16)"
+                                          : "#F1F3F5",
+                                }}
+                              />
+                              <span className={`text-[10px] ${mutedCls}`}>{col.day}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {hoveredWeekIdx !== null && weekActivity[hoveredWeekIdx] && (
+                          <div className={`text-[11px] px-3 py-1.5 rounded-xl border mt-1 ${chipCls}`}>
+                            <strong>{weekActivity[hoveredWeekIdx].day}:</strong> {weekActivity[hoveredWeekIdx].count}{" "}
+                            {isSw ? "pakiti" : "packs"} &middot; {weekActivity[hoveredWeekIdx].txCount} tx &middot;{" "}
+                            {formatTzs(weekActivity[hoveredWeekIdx].revenueTzs)}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Clickable Settlement -> Billing & P&L / Kasri Card */}
+                      <div className={`md:col-span-7 rounded-[24px] border p-5 grid grid-cols-1 sm:grid-cols-12 gap-4 relative ${cardCls}`}>
+                        <button
+                          type="button"
+                          onClick={() => (canManageAdmin ? setTab("billing") : openReport("sales"))}
+                          className="sm:col-span-7 flex flex-col justify-between gap-4 text-left cursor-pointer"
+                        >
+                          <div>
+                            <div className="text-[14px] font-medium">{isSw ? "Fedha, P&L & Malipo" : "Counter Settlement & P&L"}</div>
+                            <div className={`text-[11px] mt-2 ${mutedCls}`}>{isSw ? "Mauzo ya siku 30" : "30-day revenue (Click for P&L)"}</div>
+                            <div className="text-2xl sm:text-[26px] font-normal tracking-tight tabular-nums mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                              {formatTzs(grossSalesTzs)}
+                            </div>
+                            <div className="text-[11px] font-medium text-emerald-500 mt-0.5">
+                              Net Profit: {formatTzs(pnlSummary.netProfit)} ({pnlSummary.grossMarginPct}% GM)
+                            </div>
+                          </div>
+
+                          <div className="space-y-2.5 w-full">
+                            <div className="flex items-center gap-2.5 text-[11px]">
+                              <span className={`w-16 shrink-0 ${mutedCls}`}>Mobile</span>
+                              <div className={`flex-1 h-7 rounded-xl overflow-hidden flex items-center px-3 ${isDark ? "bg-slate-800" : "bg-[#F3F4F6]"}`}>
+                                <span className="font-semibold text-[11px]">{mobileSharePct}%</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2.5 text-[11px]">
+                              <span className={`w-16 shrink-0 ${mutedCls}`}>Cash</span>
+                              <div className={`w-28 h-7 rounded-xl flex items-center px-3 ${isDark ? "bg-slate-800/70" : "bg-[#F3F4F6]"}`}>
+                                <span className="font-semibold text-[11px]">{cashSharePct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="sm:col-span-5 relative flex">
+                          <button
+                            type="button"
+                            onClick={() => setTab("network")}
+                            aria-label="Inspect Kasri escrow orders"
+                            className={`hidden sm:flex absolute -left-5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full border items-center justify-center text-xs shadow-md cursor-pointer transition-transform hover:scale-110 ${isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-[#EAECF0] text-[#111317]"
+                              }`}
+                          >
+                            &#8599;
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTab("network")}
+                            className={`w-full rounded-[20px] p-5 flex flex-col justify-between min-h-[180px] text-left cursor-pointer transition-transform hover:scale-[1.01] ${isDark ? "bg-[#152E23] text-emerald-50" : "bg-[#D5E4D6] text-[#111317]"
+                              }`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <span className="text-[10px] font-semibold opacity-75">Kasri&#8482; Escrow</span>
+                              <span className="text-xs font-extrabold tracking-tight">KASRI</span>
+                            </div>
+                            <div className="text-xl sm:text-2xl font-normal tracking-tight tabular-nums my-2" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                              TZS {escrowHeldTzs.toLocaleString("en-US")}
+                            </div>
+                            <div className="flex items-center justify-between w-full text-[10px] font-mono opacity-80">
+                              <span>{wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length} Held</span>
+                              <span>Open GRN &rarr;</span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      {/* Clickable Shelf & Batch Guard Card -> Opens Expiry Write-Off Risk Subpage */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openReport("stock")}
+                        onKeyDown={(e) => e.key === "Enter" && openReport("stock")}
+                        className={`md:col-span-7 rounded-[24px] border p-5 flex flex-col justify-between gap-4 cursor-pointer text-left ${cardCls}`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <div className="text-[14px] font-medium">{isSw ? "Usalama wa Rafu (FEFO)" : "Shelf & Expiry Risk"}</div>
+                            <div className={`text-[11px] mt-1 ${mutedCls}`}>{isSw ? "Utabiri wa hasara za muda" : "FEFO sell-through & write-off report"}</div>
+                            <div className="text-2xl font-normal tracking-tight tabular-nums mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                              {productsSummary.length} SKUs
+                            </div>
+                            <div className="text-[11px] font-medium text-amber-600 mt-0.5">
+                              {stockAlerts.nearExpiryCount} expiring &le; 30d &middot; {stockAlerts.expiredCount} blocked
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5 items-end">
+                            <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] mb-1 ${chipCls}`}>
+                              &#8599;
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTab("inventory");
+                              }}
+                              className={`px-3 py-1 rounded-xl border text-[11px] font-semibold cursor-pointer ${chipCls}`}
+                            >
+                              Edit <strong>{validLotsCount}</strong> Lots &rarr;
+                            </button>
+                            <div className={`px-3 py-1 rounded-xl border text-[11px] ${chipCls}`}>
+                              <strong>{stockAlerts.lowStockCount}</strong> Low Stock
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="relative h-24 w-full pt-1">
+                          <svg viewBox="0 0 360 80" className="w-full h-full overflow-visible" aria-hidden="true">
+                            <defs>
+                              <linearGradient id="pharmaSplineFill" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={isDark ? "#38BDF8" : "#94A3B8"} stopOpacity="0.22" />
+                                <stop offset="100%" stopColor={isDark ? "#38BDF8" : "#94A3B8"} stopOpacity="0.0" />
+                              </linearGradient>
+                            </defs>
+                            <path
+                              d="M 10 64 C 48 68, 70 42, 112 50 C 154 58, 168 28, 206 32 C 244 36, 282 14, 350 18 L 350 76 L 10 76 Z"
+                              fill="url(#pharmaSplineFill)"
+                            />
+                            <path
+                              d="M 10 64 C 48 68, 70 42, 112 50 C 154 58, 168 28, 206 32 C 244 36, 282 14, 350 18"
+                              fill="none"
+                              stroke={isDark ? "#94A3B8" : "#475569"}
+                              strokeWidth="1.5"
+                            />
+                            {[
+                              { x: 112, y: 50, idx: 0, label: "Healthy Safe" },
+                              { x: 206, y: 32, idx: 1, label: "30d FEFO Risk" },
+                              { x: 350, y: 18, idx: 2, label: "Blocked / Low" },
+                            ].map((pt) => (
+                              <circle
+                                key={pt.label}
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={hoveredRiskNode === pt.idx ? 6 : 4}
+                                fill={hoveredRiskNode === pt.idx ? accent : "#111317"}
+                                stroke="#FFFFFF"
+                                strokeWidth="1.5"
+                                className="cursor-pointer"
+                                onMouseEnter={(e) => {
+                                  e.stopPropagation();
+                                  setHoveredRiskNode(pt.idx);
+                                }}
+                                onMouseLeave={() => setHoveredRiskNode(null)}
+                              />
+                            ))}
+                            <rect x="174" y="6" width="64" height="18" rx="9" fill="#E2F575" />
+                            <text x="206" y="17.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111317">
+                              FEFO Risk
+                            </text>
+                          </svg>
+                        </div>
+                        {hoveredRiskNode !== null && (
+                          <div className={`text-[11px] px-3 py-1.5 rounded-xl border ${chipCls}`}>
+                            {hoveredRiskNode === 0
+                              ? isSw
+                                ? `Makundi ${validLotsCount} yapo salama kwa mauzo ya FEFO.`
+                                : `${validLotsCount} verified lots are safe for immediate counter dispense.`
+                              : hoveredRiskNode === 1
+                                ? isSw
+                                  ? `Makundi ${stockAlerts.nearExpiryCount} yataisha muda ndani ya siku 30.`
+                                  : `${stockAlerts.nearExpiryCount} batch(es) enter the 30-day FEFO clearance window.`
+                                : isSw
+                                  ? `Makundi ${stockAlerts.expiredCount} yamezuiwa · ${stockAlerts.lowStockCount} chini ya kizingiti.`
+                                  : `${stockAlerts.expiredCount} expired blocked · ${stockAlerts.lowStockCount} low stock alerts.`}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Clickable Inventory Mix Card -> Opens Product ABC & Margin Intelligence */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openReport("products")}
+                        onKeyDown={(e) => e.key === "Enter" && openReport("products")}
+                        className={`md:col-span-5 rounded-[24px] border p-5 flex flex-col justify-between gap-4 cursor-pointer text-left ${cardCls}`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-[14px] font-medium block">{isSw ? "ABC & Faida ya Rafu" : "Inventory Mix & ABC"}</span>
+                            <span className={`text-[10px] ${mutedCls}`}>{isSw ? "Fungua jedwali la faida" : "Product margins & cover"}</span>
+                          </div>
+                          <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] ${chipCls}`}>
+                            &#8599;
+                          </span>
+                        </div>
+
+                        <div className="relative h-28 flex items-center justify-center group">
+                          <div
+                            className="w-24 h-24 rounded-full flex items-center justify-center text-xl font-normal transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
+                            style={{
+                              fontFamily: "Outfit, Inter, sans-serif",
+                              background: isDark
+                                ? "radial-gradient(circle at 30% 30%, rgba(56,189,248,0.38), rgba(14,116,144,0.22))"
+                                : "radial-gradient(circle at 30% 30%, #B8E7EE, #7BCAD8)",
+                              color: isDark ? "#E0F2FE" : "#111317",
+                            }}
+                          >
+                            {categoryMix.rxPct}%
+                          </div>
+                          <div
+                            className="w-12 h-12 rounded-full flex items-center justify-center text-xs font-medium -ml-3 -mt-12 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-1 group-hover:-translate-y-1"
+                            style={{
+                              background: isDark
+                                ? "radial-gradient(circle at 30% 30%, rgba(96,165,250,0.4), rgba(37,99,235,0.22))"
+                                : "radial-gradient(circle at 30% 30%, #DCEBFD, #B9D8FB)",
+                              color: isDark ? "#EFF6FF" : "#111317",
+                            }}
+                          >
+                            {categoryMix.otcPct}%
+                          </div>
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-medium -ml-16 mt-16 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-1 group-hover:translate-y-1"
+                            style={{
+                              background: isDark
+                                ? "radial-gradient(circle at 30% 30%, rgba(110,231,183,0.4), rgba(5,150,105,0.22))"
+                                : "radial-gradient(circle at 30% 30%, #D9F5EC, #B7E9D9)",
+                              color: isDark ? "#ECFDF5" : "#111317",
+                            }}
+                          >
+                            {categoryMix.carePct}%
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                          <div>
+                            <div className="text-base font-medium tabular-nums">{categoryMix.rxUnits}</div>
+                            <div className={`text-[10px] ${mutedCls}`}>Rx Units</div>
+                          </div>
+                          <div>
+                            <div className="text-base font-medium tabular-nums">{categoryMix.otcUnits}</div>
+                            <div className={`text-[10px] ${mutedCls}`}>OTC</div>
+                          </div>
+                          <div>
+                            <div className="text-base font-medium tabular-nums">{categoryMix.rehydUnits}</div>
+                            <div className={`text-[10px] ${mutedCls}`}>Care/ORS</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Row: Live Audit Trail + Clickable Centres & Operators Roster */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                  <section className={`lg:col-span-7 rounded-[24px] border overflow-hidden ${cardCls}`}>
+                    <div
+                      className={`px-6 py-4 border-b flex items-center justify-between ${isDark ? "border-slate-800" : "border-[#EAECF0]"
+                        }`}
+                    >
+                      <div>
+                        <h2 className="text-sm font-medium">{isSw ? "Kumbukumbu za Matukio" : "Audit Trail"}</h2>
+                        <p className={`text-[11px] ${mutedCls}`}>Recent major workspace actions</p>
+                      </div>
+                      <span className="font-mono text-[10px] uppercase tracking-wider font-semibold" style={{ color: accent }}>
+                        {filteredLogs.length} events
+                      </span>
+                    </div>
+
+                    <div className={`divide-y ${isDark ? "divide-slate-800/80" : "divide-slate-100"}`}>
+                      {filteredLogs.length === 0 ? (
+                        <div className={`p-6 text-xs text-center ${mutedCls}`}>No matching audit events found.</div>
+                      ) : (
+                        filteredLogs.slice(0, 6).map((entry) => (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() =>
+                              setInspectedListing({
+                                title: entry.action,
+                                badge: entry.category,
+                                explanation: isSw
+                                  ? `Tukio hili lilirekodiwa moja kwa moja na ${entry.actor} na haliwezi kufutwa.`
+                                  : `Immutable audit record logged by ${entry.actor}.`,
+                                fields: [
+                                  { label: "Actor", value: entry.actor },
+                                  { label: "Category", value: entry.category },
+                                  { label: "Timestamp", value: entry.createdAt.slice(0, 19).replace("T", " ") },
+                                ],
+                              })
+                            }
+                            className="w-full px-6 py-3 flex items-start justify-between gap-3 text-xs text-left hover:bg-slate-500/5 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <span
+                                className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold shrink-0 mt-0.5 ${isDark ? "bg-slate-800 text-[#38BDF8]" : "bg-[#F3F4F6] text-[#111317]"
+                                  }`}
+                              >
+                                {entry.category}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="font-medium truncate">{entry.action}</div>
+                                <div className={`text-[11px] ${mutedCls}`}>{entry.actor}</div>
+                              </div>
+                            </div>
+                            <span className={`font-mono text-[10px] shrink-0 pt-0.5 ${mutedCls}`}>
+                              {entry.createdAt.slice(11, 16)}
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  <section className={`lg:col-span-5 rounded-[24px] border p-6 space-y-3.5 ${cardCls}`}>
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-sm font-medium">{isSw ? "Vituo & Timu" : "Centres & Operators"}</h2>
+                      <button
+                        type="button"
+                        onClick={() => setTab("team")}
+                        className="text-xs font-semibold hover:underline cursor-pointer"
+                        style={{ color: accent }}
+                      >
+                        Edit Team &rarr;
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {centres.map((c) => {
+                        const isActive = c.id === activeCentre?.id;
+                        return (
+                          <div key={c.id} className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
+                            <div>
+                              <div className="font-semibold">{c.name}</div>
+                              <div className={`text-[11px] ${mutedCls}`}>
+                                {c.address} &middot; {c.region}
+                              </div>
+                            </div>
+                            {isActive ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-[#E2F575] text-[#111317] text-[10px] font-bold">
+                                Synced
+                              </span>
+                            ) : canManageAdmin && onSwitchCentre ? (
+                              <button
+                                type="button"
+                                onClick={() => onSwitchCentre(c.id)}
+                                className="px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer hover:opacity-80"
+                                style={{ borderColor: accent, color: accent }}
+                              >
+                                Inspect &rarr;
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className={`pt-2 border-t text-[11px] flex items-center justify-between ${isDark ? "border-slate-800" : "border-slate-100"} ${mutedCls}`}>
+                      <button
+                        type="button"
+                        onClick={() => openReport("people")}
+                        className="hover:underline cursor-pointer"
+                      >
+                        {profiles.length} staff &middot; View League &rarr;
+                      </button>
+                      <button type="button" onClick={onOpenChat} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
+                        Open Branch Chat &rarr;
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              </>
+            )
+          }
+        </>
+      )}
+
+      {/* Clean Listing Focus Card Inspector Modal (Expenses, Audit Events, etc.) */}
+      {
+        inspectedListing && (
+          <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setInspectedListing(null)}>
+            <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-[26px] border p-6 space-y-4 shadow-2xl animate-stage-pop ${cardCls}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] font-mono text-[10px] font-bold">
+                    {inspectedListing.badge}
+                  </span>
+                  <h3 className="text-base font-bold mt-1.5">{inspectedListing.title}</h3>
+                </div>
+                <button type="button" onClick={() => setInspectedListing(null)} className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
+                  &times;
+                </button>
+              </div>
+              <p className={`text-xs leading-relaxed ${mutedCls}`}>{inspectedListing.explanation}</p>
+              <div className="space-y-2 text-xs">
+                {inspectedListing.fields.map((f) => (
+                  <div key={f.label} className={`p-3 rounded-xl border flex justify-between ${chipCls}`}>
+                    <span className={mutedCls}>{f.label}</span>
+                    <span className="font-bold">{f.value}</span>
                   </div>
                 ))}
               </div>
-              {hoveredWeekIdx !== null && weekActivity[hoveredWeekIdx] && (
-                <div className={`text-[11px] px-3 py-1.5 rounded-xl border mt-1 ${chipCls}`}>
-                  <strong>{weekActivity[hoveredWeekIdx].day}:</strong> {weekActivity[hoveredWeekIdx].count}{" "}
-                  {isSw ? "pakiti" : "packs"} &middot; {weekActivity[hoveredWeekIdx].txCount} tx &middot;{" "}
-                  {formatTzs(weekActivity[hoveredWeekIdx].revenueTzs)}
-                </div>
-              )}
-            </div>
-
-            {/* Clickable Settlement -> Billing & P&L / Kasri Card */}
-            <div className={`md:col-span-7 rounded-[24px] border p-5 grid grid-cols-1 sm:grid-cols-12 gap-4 relative ${cardCls}`}>
-              <button
-                type="button"
-                onClick={() => (canManageAdmin ? setTab("billing") : openReport("sales"))}
-                className="sm:col-span-7 flex flex-col justify-between gap-4 text-left cursor-pointer"
-              >
-                <div>
-                  <div className="text-[14px] font-medium">{isSw ? "Fedha, P&L & Malipo" : "Counter Settlement & P&L"}</div>
-                  <div className={`text-[11px] mt-2 ${mutedCls}`}>{isSw ? "Mauzo ya siku 30" : "30-day revenue (Click for P&L)"}</div>
-                  <div className="text-2xl sm:text-[26px] font-normal tracking-tight tabular-nums mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                    {formatTzs(grossSalesTzs)}
-                  </div>
-                  <div className="text-[11px] font-medium text-emerald-500 mt-0.5">
-                    Net Profit: {formatTzs(pnlSummary.netProfit)} ({pnlSummary.grossMarginPct}% GM)
-                  </div>
-                </div>
-
-                <div className="space-y-2.5 w-full">
-                  <div className="flex items-center gap-2.5 text-[11px]">
-                    <span className={`w-16 shrink-0 ${mutedCls}`}>Mobile</span>
-                    <div className={`flex-1 h-7 rounded-xl overflow-hidden flex items-center px-3 ${isDark ? "bg-slate-800" : "bg-[#F3F4F6]"}`}>
-                      <span className="font-semibold text-[11px]">{mobileSharePct}%</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-[11px]">
-                    <span className={`w-16 shrink-0 ${mutedCls}`}>Cash</span>
-                    <div className={`w-28 h-7 rounded-xl flex items-center px-3 ${isDark ? "bg-slate-800/70" : "bg-[#F3F4F6]"}`}>
-                      <span className="font-semibold text-[11px]">{cashSharePct}%</span>
-                    </div>
-                  </div>
-                </div>
-              </button>
-
-              <div className="sm:col-span-5 relative flex">
-                <button
-                  type="button"
-                  onClick={() => setTab("network")}
-                  aria-label="Inspect Kasri escrow orders"
-                  className={`hidden sm:flex absolute -left-5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full border items-center justify-center text-xs shadow-md cursor-pointer transition-transform hover:scale-110 ${isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-[#EAECF0] text-[#111317]"
-                    }`}
-                >
-                  &#8599;
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("network")}
-                  className={`w-full rounded-[20px] p-5 flex flex-col justify-between min-h-[180px] text-left cursor-pointer transition-transform hover:scale-[1.01] ${isDark ? "bg-[#152E23] text-emerald-50" : "bg-[#D5E4D6] text-[#111317]"
-                    }`}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-[10px] font-semibold opacity-75">Kasri&#8482; Escrow</span>
-                    <span className="text-xs font-extrabold tracking-tight">KASRI</span>
-                  </div>
-                  <div className="text-xl sm:text-2xl font-normal tracking-tight tabular-nums my-2" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                    TZS {escrowHeldTzs.toLocaleString("en-US")}
-                  </div>
-                  <div className="flex items-center justify-between w-full text-[10px] font-mono opacity-80">
-                    <span>{wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length} Held</span>
-                    <span>Open GRN &rarr;</span>
-                  </div>
-                </button>
-              </div>
             </div>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* Clickable Shelf & Batch Guard Card -> Opens Expiry Write-Off Risk Subpage */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => openReport("stock")}
-              onKeyDown={(e) => e.key === "Enter" && openReport("stock")}
-              className={`md:col-span-7 rounded-[24px] border p-5 flex flex-col justify-between gap-4 cursor-pointer text-left ${cardCls}`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-[14px] font-medium">{isSw ? "Usalama wa Rafu (FEFO)" : "Shelf & Expiry Risk"}</div>
-                  <div className={`text-[11px] mt-1 ${mutedCls}`}>{isSw ? "Utabiri wa hasara za muda" : "FEFO sell-through & write-off report"}</div>
-                  <div className="text-2xl font-normal tracking-tight tabular-nums mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                    {productsSummary.length} SKUs
-                  </div>
-                  <div className="text-[11px] font-medium text-amber-600 mt-0.5">
-                    {stockAlerts.nearExpiryCount} expiring &le; 30d &middot; {stockAlerts.expiredCount} blocked
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5 items-end">
-                  <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] mb-1 ${chipCls}`}>
-                    &#8599;
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTab("inventory");
-                    }}
-                    className={`px-3 py-1 rounded-xl border text-[11px] font-semibold cursor-pointer ${chipCls}`}
-                  >
-                    Edit <strong>{validLotsCount}</strong> Lots &rarr;
-                  </button>
-                  <div className={`px-3 py-1 rounded-xl border text-[11px] ${chipCls}`}>
-                    <strong>{stockAlerts.lowStockCount}</strong> Low Stock
-                  </div>
-                </div>
-              </div>
-
-              <div className="relative h-24 w-full pt-1">
-                <svg viewBox="0 0 360 80" className="w-full h-full overflow-visible" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="pharmaSplineFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={isDark ? "#38BDF8" : "#94A3B8"} stopOpacity="0.22" />
-                      <stop offset="100%" stopColor={isDark ? "#38BDF8" : "#94A3B8"} stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d="M 10 64 C 48 68, 70 42, 112 50 C 154 58, 168 28, 206 32 C 244 36, 282 14, 350 18 L 350 76 L 10 76 Z"
-                    fill="url(#pharmaSplineFill)"
-                  />
-                  <path
-                    d="M 10 64 C 48 68, 70 42, 112 50 C 154 58, 168 28, 206 32 C 244 36, 282 14, 350 18"
-                    fill="none"
-                    stroke={isDark ? "#94A3B8" : "#475569"}
-                    strokeWidth="1.5"
-                  />
-                  {[
-                    { x: 112, y: 50, idx: 0, label: "Healthy Safe" },
-                    { x: 206, y: 32, idx: 1, label: "30d FEFO Risk" },
-                    { x: 350, y: 18, idx: 2, label: "Blocked / Low" },
-                  ].map((pt) => (
-                    <circle
-                      key={pt.label}
-                      cx={pt.x}
-                      cy={pt.y}
-                      r={hoveredRiskNode === pt.idx ? 6 : 4}
-                      fill={hoveredRiskNode === pt.idx ? accent : "#111317"}
-                      stroke="#FFFFFF"
-                      strokeWidth="1.5"
-                      className="cursor-pointer"
-                      onMouseEnter={(e) => {
-                        e.stopPropagation();
-                        setHoveredRiskNode(pt.idx);
-                      }}
-                      onMouseLeave={() => setHoveredRiskNode(null)}
-                    />
-                  ))}
-                  <rect x="174" y="6" width="64" height="18" rx="9" fill="#E2F575" />
-                  <text x="206" y="17.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111317">
-                    FEFO Risk
-                  </text>
-                </svg>
-              </div>
-              {hoveredRiskNode !== null && (
-                <div className={`text-[11px] px-3 py-1.5 rounded-xl border ${chipCls}`}>
-                  {hoveredRiskNode === 0
-                    ? isSw
-                      ? `Makundi ${validLotsCount} yapo salama kwa mauzo ya FEFO.`
-                      : `${validLotsCount} verified lots are safe for immediate counter dispense.`
-                    : hoveredRiskNode === 1
-                      ? isSw
-                        ? `Makundi ${stockAlerts.nearExpiryCount} yataisha muda ndani ya siku 30.`
-                        : `${stockAlerts.nearExpiryCount} batch(es) enter the 30-day FEFO clearance window.`
-                      : isSw
-                        ? `Makundi ${stockAlerts.expiredCount} yamezuiwa · ${stockAlerts.lowStockCount} chini ya kizingiti.`
-                        : `${stockAlerts.expiredCount} expired blocked · ${stockAlerts.lowStockCount} low stock alerts.`}
-                </div>
-              )}
-            </div>
-
-            {/* Clickable Inventory Mix Card -> Opens Product ABC & Margin Intelligence */}
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => openReport("products")}
-              onKeyDown={(e) => e.key === "Enter" && openReport("products")}
-              className={`md:col-span-5 rounded-[24px] border p-5 flex flex-col justify-between gap-4 cursor-pointer text-left ${cardCls}`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[14px] font-medium block">{isSw ? "ABC & Faida ya Rafu" : "Inventory Mix & ABC"}</span>
-                  <span className={`text-[10px] ${mutedCls}`}>{isSw ? "Fungua jedwali la faida" : "Product margins & cover"}</span>
-                </div>
-                <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] ${chipCls}`}>
-                  &#8599;
-                </span>
-              </div>
-
-              <div className="relative h-28 flex items-center justify-center group">
-                <div
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-xl font-normal transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
-                  style={{
-                    fontFamily: "Outfit, Inter, sans-serif",
-                    background: isDark
-                      ? "radial-gradient(circle at 30% 30%, rgba(56,189,248,0.38), rgba(14,116,144,0.22))"
-                      : "radial-gradient(circle at 30% 30%, #B8E7EE, #7BCAD8)",
-                    color: isDark ? "#E0F2FE" : "#111317",
-                  }}
-                >
-                  {categoryMix.rxPct}%
-                </div>
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-xs font-medium -ml-3 -mt-12 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-1 group-hover:-translate-y-1"
-                  style={{
-                    background: isDark
-                      ? "radial-gradient(circle at 30% 30%, rgba(96,165,250,0.4), rgba(37,99,235,0.22))"
-                      : "radial-gradient(circle at 30% 30%, #DCEBFD, #B9D8FB)",
-                    color: isDark ? "#EFF6FF" : "#111317",
-                  }}
-                >
-                  {categoryMix.otcPct}%
-                </div>
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-medium -ml-16 mt-16 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:-translate-x-1 group-hover:translate-y-1"
-                  style={{
-                    background: isDark
-                      ? "radial-gradient(circle at 30% 30%, rgba(110,231,183,0.4), rgba(5,150,105,0.22))"
-                      : "radial-gradient(circle at 30% 30%, #D9F5EC, #B7E9D9)",
-                    color: isDark ? "#ECFDF5" : "#111317",
-                  }}
-                >
-                  {categoryMix.carePct}%
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                <div>
-                  <div className="text-base font-medium tabular-nums">{categoryMix.rxUnits}</div>
-                  <div className={`text-[10px] ${mutedCls}`}>Rx Units</div>
-                </div>
-                <div>
-                  <div className="text-base font-medium tabular-nums">{categoryMix.otcUnits}</div>
-                  <div className={`text-[10px] ${mutedCls}`}>OTC</div>
-                </div>
-                <div>
-                  <div className="text-base font-medium tabular-nums">{categoryMix.rehydUnits}</div>
-                  <div className={`text-[10px] ${mutedCls}`}>Care/ORS</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Row: Live Audit Trail + Clickable Centres & Operators Roster */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        <section className={`lg:col-span-7 rounded-[24px] border overflow-hidden ${cardCls}`}>
-          <div
-            className={`px-6 py-4 border-b flex items-center justify-between ${isDark ? "border-slate-800" : "border-[#EAECF0]"
-              }`}
-          >
-            <div>
-              <h2 className="text-sm font-medium">{isSw ? "Kumbukumbu za Matukio" : "Audit Trail"}</h2>
-              <p className={`text-[11px] ${mutedCls}`}>Recent major workspace actions</p>
-            </div>
-            <span className="font-mono text-[10px] uppercase tracking-wider font-semibold" style={{ color: accent }}>
-              {filteredLogs.length} events
-            </span>
-          </div>
-
-          <div className={`divide-y ${isDark ? "divide-slate-800/80" : "divide-slate-100"}`}>
-            {filteredLogs.length === 0 ? (
-              <div className={`p-6 text-xs text-center ${mutedCls}`}>No matching audit events found.</div>
-            ) : (
-              filteredLogs.slice(0, 6).map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  onClick={() =>
-                    setInspectedListing({
-                      title: entry.action,
-                      badge: entry.category,
-                      explanation: isSw
-                        ? `Tukio hili lilirekodiwa moja kwa moja na ${entry.actor} na haliwezi kufutwa.`
-                        : `Immutable audit record logged by ${entry.actor}.`,
-                      fields: [
-                        { label: "Actor", value: entry.actor },
-                        { label: "Category", value: entry.category },
-                        { label: "Timestamp", value: entry.createdAt.slice(0, 19).replace("T", " ") },
-                      ],
-                    })
-                  }
-                  className="w-full px-6 py-3 flex items-start justify-between gap-3 text-xs text-left hover:bg-slate-500/5 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-start gap-2.5 min-w-0">
-                    <span
-                      className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold shrink-0 mt-0.5 ${isDark ? "bg-slate-800 text-[#38BDF8]" : "bg-[#F3F4F6] text-[#111317]"
-                        }`}
-                    >
-                      {entry.category}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{entry.action}</div>
-                      <div className={`text-[11px] ${mutedCls}`}>{entry.actor}</div>
-                    </div>
-                  </div>
-                  <span className={`font-mono text-[10px] shrink-0 pt-0.5 ${mutedCls}`}>
-                    {entry.createdAt.slice(11, 16)}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </section>
-
-        <section className={`lg:col-span-5 rounded-[24px] border p-6 space-y-3.5 ${cardCls}`}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium">{isSw ? "Vituo & Timu" : "Centres & Operators"}</h2>
-            <button
-              type="button"
-              onClick={() => setTab("team")}
-              className="text-xs font-semibold hover:underline cursor-pointer"
-              style={{ color: accent }}
-            >
-              Edit Team &rarr;
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {centres.map((c) => {
-              const isActive = c.id === activeCentre?.id;
-              return (
-                <div key={c.id} className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
-                  <div>
-                    <div className="font-semibold">{c.name}</div>
-                    <div className={`text-[11px] ${mutedCls}`}>
-                      {c.address} &middot; {c.region}
-                    </div>
-                  </div>
-                  {isActive ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-[#E2F575] text-[#111317] text-[10px] font-bold">
-                      Synced
-                    </span>
-                  ) : canManageAdmin && onSwitchCentre ? (
-                    <button
-                      type="button"
-                      onClick={() => onSwitchCentre(c.id)}
-                      className="px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer hover:opacity-80"
-                      style={{ borderColor: accent, color: accent }}
-                    >
-                      Inspect &rarr;
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className={`pt-2 border-t text-[11px] flex items-center justify-between ${isDark ? "border-slate-800" : "border-slate-100"} ${mutedCls}`}>
-            <button
-              type="button"
-              onClick={() => openReport("people")}
-              className="hover:underline cursor-pointer"
-            >
-              {profiles.length} staff &middot; View League &rarr;
-            </button>
-            <button type="button" onClick={onOpenChat} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
-              Open Branch Chat &rarr;
-            </button>
-          </div>
-        </section>
-      </div>
-    </>
-  )
-}
-                                            </>
-                                          )}
-
-{/* Clean Listing Focus Card Inspector Modal (Expenses, Audit Events, etc.) */ }
-{
-  inspectedListing && (
-    <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-xs flex items-center justify-center p-4" onClick={() => setInspectedListing(null)}>
-      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md rounded-[26px] border p-6 space-y-4 shadow-2xl animate-stage-pop ${cardCls}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] font-mono text-[10px] font-bold">
-              {inspectedListing.badge}
-            </span>
-            <h3 className="text-base font-bold mt-1.5">{inspectedListing.title}</h3>
-          </div>
-          <button type="button" onClick={() => setInspectedListing(null)} className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
-            &times;
-          </button>
-        </div>
-        <p className={`text-xs leading-relaxed ${mutedCls}`}>{inspectedListing.explanation}</p>
-        <div className="space-y-2 text-xs">
-          {inspectedListing.fields.map((f) => (
-            <div key={f.label} className={`p-3 rounded-xl border flex justify-between ${chipCls}`}>
-              <span className={mutedCls}>{f.label}</span>
-              <span className="font-bold">{f.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-                                      </div >
-                                      );
+        )
+      }
+    </div >
+  );
 }

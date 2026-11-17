@@ -33,6 +33,7 @@
     "jsdom": "^26.1.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
+    "tweetsodium": "^0.0.4",
     "typescript": "^5",
     "vercel": "^58.11.0",
     "vitest": "^3.2.7"

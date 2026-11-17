@@ -208,9 +208,8 @@ function GateInner() {
   if (!state) {
     return (
       <div
-        className={`relative min-h-screen flex items-center justify-center p-6 transition-colors ${
-          isDark ? "bg-[#0B0F17] text-slate-300" : "bg-[#F8FAFC] text-[#0F172A]"
-        }`}
+        className={`relative min-h-screen flex items-center justify-center p-6 transition-colors ${isDark ? "bg-[#0B0F17] text-slate-300" : "bg-[#F8FAFC] text-[#0F172A]"
+          }`}
       >
         <ClaymorphicStageBackdrop isDark={isDark} />
         <div className="relative z-10 text-center space-y-3">
@@ -238,9 +237,8 @@ function GateInner() {
 
   return (
     <div
-      className={`relative min-h-screen flex flex-col justify-between p-4 sm:p-8 transition-colors duration-300 ${
-        isDark ? "bg-[#0B0F17] text-slate-100" : "bg-[#F8FAFC] text-[#0F172A]"
-      }`}
+      className={`relative min-h-screen flex flex-col justify-between p-4 sm:p-8 transition-colors duration-300 ${isDark ? "bg-[#0B0F17] text-slate-100" : "bg-[#F8FAFC] text-[#0F172A]"
+        }`}
     >
       <ClaymorphicStageBackdrop isDark={isDark} />
 
@@ -314,9 +312,8 @@ function GateInner() {
 
       {/* Crisp Architectural Gate Card (Less Rounded, Focused) */}
       <div
-        className={`relative z-10 max-w-md w-full mx-auto my-6 sm:my-8 rounded-lg border backdrop-blur-md p-5 sm:p-8 space-y-5 transition-all duration-200 ${surfaceCls} ${
-          isFading ? "opacity-0 translate-y-1.5" : "opacity-100 translate-y-0"
-        }`}
+        className={`relative z-10 max-w-md w-full mx-auto my-6 sm:my-8 rounded-lg border backdrop-blur-md p-5 sm:p-8 space-y-5 transition-all duration-200 ${surfaceCls} ${isFading ? "opacity-0 translate-y-1.5" : "opacity-100 translate-y-0"
+          }`}
       >
         {errorMsg && (
           <div className="p-3 rounded-md bg-rose-500/10 border border-rose-500/30 text-xs text-rose-500 font-medium">
@@ -397,11 +394,10 @@ function GateInner() {
                   key={ctr.id}
                   type="button"
                   onClick={() => chooseCentre(ctr.id)}
-                  className={`w-full min-h-[52px] p-3.5 rounded-md border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                    isDark
-                      ? "border-slate-800 bg-slate-900/70 hover:border-[#38BDF8]"
-                      : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#1039B9] hover:bg-white"
-                  }`}
+                  className={`w-full min-h-[52px] p-3.5 rounded-md border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${isDark
+                    ? "border-slate-800 bg-slate-900/70 hover:border-[#38BDF8]"
+                    : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-[#1039B9] hover:bg-white"
+                    }`}
                 >
                   <div className="min-w-0">
                     <div className="text-sm font-bold">{ctr.name}</div>
@@ -452,15 +448,14 @@ function GateInner() {
                       setSelectedProfileId(prof.id);
                       setErrorMsg(null);
                     }}
-                    className={`w-full min-h-[48px] p-3.5 rounded-md border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                      selected
-                        ? isDark
-                          ? "border-[#38BDF8] bg-[#1039B9]/20"
-                          : "border-[#1039B9] bg-[#EFF6FF]"
-                        : isDark
-                          ? "border-slate-800 bg-slate-900/60 hover:border-slate-700"
-                          : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-slate-300"
-                    }`}
+                    className={`w-full min-h-[48px] p-3.5 rounded-md border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${selected
+                      ? isDark
+                        ? "border-[#38BDF8] bg-[#1039B9]/20"
+                        : "border-[#1039B9] bg-[#EFF6FF]"
+                      : isDark
+                        ? "border-slate-800 bg-slate-900/60 hover:border-slate-700"
+                        : "border-[#E2E8F0] bg-[#F8FAFC] hover:border-slate-300"
+                      }`}
                   >
                     <div className="min-w-0">
                       <div className="text-xs font-bold">{prof.displayName}</div>
@@ -506,11 +501,10 @@ function GateInner() {
                 type="button"
                 disabled={busy}
                 onClick={unlockWithPasskey}
-                className={`w-full min-h-[44px] py-3 rounded-md border text-xs font-semibold cursor-pointer transition-colors ${
-                  isDark
-                    ? "border-slate-700 hover:border-[#38BDF8] text-[#38BDF8]"
-                    : "border-[#E2E8F0] hover:border-[#1039B9] text-[#1039B9]"
-                }`}
+                className={`w-full min-h-[44px] py-3 rounded-md border text-xs font-semibold cursor-pointer transition-colors ${isDark
+                  ? "border-slate-700 hover:border-[#38BDF8] text-[#38BDF8]"
+                  : "border-[#E2E8F0] hover:border-[#1039B9] text-[#1039B9]"
+                  }`}
               >
                 {isSw ? "Fungua kwa Biometria / Passkey" : "Unlock With Biometrics / Passkey"}
               </button>
