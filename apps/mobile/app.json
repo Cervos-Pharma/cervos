@@ -25,7 +25,9 @@
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS",
         "BLUETOOTH",
-        "BLUETOOTH_CONNECT"
+        "BLUETOOTH_CONNECT",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "ios": {
@@ -51,6 +53,15 @@
           "color": "#1039B9"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "c9e2574d-08e6-446d-9bcc-997a90fcf144"
+      }
+    },
+    "owner": "kambi.code"
   }
 }
