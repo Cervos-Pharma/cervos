@@ -23,10 +23,11 @@ jobs:
         with:
           node-version: 20
 
-      - uses: expo/expo-github-action@v8
-        with:
-          eas-version: latest
-          token: ${{ secrets.EXPO_TOKEN }}
+      # Straight eas-cli install instead of expo/expo-github-action: that
+      # wrapper was the only failing step (token itself verified working),
+      # and all we actually need is the CLI plus EXPO_TOKEN in the env.
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
 
       - name: Install mobile dependencies
         run: npm install --legacy-peer-deps
@@ -35,19 +36,20 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Build installable Android APK (EAS preview profile)
-        # No --no-wait: we need EAS to finish and drop the .apk into the
-        # working directory so it can be published for direct download.
-        run: eas build --platform android --profile preview --non-interactive
+        # --wait + --output: blocks until EAS finishes and writes the .apk
+        # straight to a stable filename for the release job.
+        run: >
+          eas build --platform android --profile preview
+          --non-interactive --wait --output Cervos-Pharma.apk
         env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://cervos.online' }}
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
-      - name: Stage APK with stable name
+      - name: Verify APK
         run: |
-          apk=$(ls -t *.apk 2>/dev/null | head -1)
-          if [ -z "$apk" ]; then echo "No APK produced"; exit 1; fi
-          cp "$apk" Cervos-Pharma.apk
+          test -s Cervos-Pharma.apk || { echo "No APK produced"; exit 1; }
           ls -la Cervos-Pharma.apk
 
       - name: Upload APK artifact
