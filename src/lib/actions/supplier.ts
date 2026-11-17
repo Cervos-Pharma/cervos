@@ -79,37 +79,154 @@ async function requireSupplier() {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
+export interface SupplierDispatchNode {
+  id: string;
+  label: string;
+  accountName: string;
+  lat: number;
+  lng: number;
+  kind: "supplier" | "branch";
+  status: "online" | "grace" | "offline";
+  detail?: string;
+}
+
+export interface SupplierDispatchRoute {
+  id: string;
+  from: [number, number];
+  to: [number, number];
+  label: string;
+  status: "active" | "pending" | "delivered";
+}
+
 /**
  * Everything the supplier dashboard needs in one round-trip-friendly set:
- * account, recent quote requests, and order KPIs (pending count, delivered revenue).
+ * account, recent quote requests, order KPIs, and buyer network dispatch map data.
  */
 export async function getSupplierDashboardData() {
   const { supabase, account, error } = await requireSupplier();
   if (error || !account) return null;
 
-  const [{ data: quotes }, { data: orders }] = await Promise.all([
-    supabase
-      .from("quote_requests")
-      .select("id, company_name, contact_name, email, message, status, created_at")
-      .eq("supplier_account_id", account.id)
-      .order("created_at", { ascending: false })
-      .limit(10),
-    supabase
-      .from("orders")
-      .select("id, status, seller_id, buyer_branch_id, currency, placed_at")
-      .eq("seller_id", account.id)
-      .order("placed_at", { ascending: false })
-      .limit(100),
-  ]);
+  const service = await createServiceClient();
 
-  const delivered = (orders ?? []).filter((o) => o.status === "delivered");
+  const [{ data: quotes }, { data: orders }, { data: ownDepots }, { data: connections }] =
+    await Promise.all([
+      supabase
+        .from("quote_requests")
+        .select("id, company_name, contact_name, email, message, status, created_at")
+        .eq("supplier_account_id", account.id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("orders")
+        .select("id, order_reference, status, seller_id, buyer_branch_id, currency, placed_at")
+        .eq("seller_id", account.id)
+        .order("placed_at", { ascending: false })
+        .limit(100),
+      service
+        .from("branches")
+        .select("id, name, lat, lng, subscription_status")
+        .eq("account_id", account.id),
+      service
+        .from("branch_supplier_connections")
+        .select("id, status, branch_id, branches(id, name, lat, lng, subscription_status, accounts!account_id(name))")
+        .eq("supplier_id", account.id)
+        .neq("status", "rejected"),
+    ]);
+
+  const orderList = orders ?? [];
+  const delivered = orderList.filter((o) => o.status === "delivered");
+
+  const dispatchNodes: SupplierDispatchNode[] = [];
+  const seenNodeIds = new Set<string>();
+
+  for (const d of ownDepots ?? []) {
+    if (typeof d.lat === "number" && typeof d.lng === "number") {
+      seenNodeIds.add(d.id as string);
+      dispatchNodes.push({
+        id: d.id as string,
+        label: d.name as string,
+        accountName: `${account.name} (Origin Hub)`,
+        lat: d.lat,
+        lng: d.lng,
+        kind: "supplier",
+        status: "online",
+        detail: "Fulfillment depot",
+      });
+    }
+  }
+
+  const buyerCoordMap = new Map<string, { lat: number; lng: number; name: string }>();
+  type ConnRow = {
+    id: string;
+    status: string;
+    branch_id: string;
+    branches: {
+      id: string;
+      name: string;
+      lat: number | null;
+      lng: number | null;
+      subscription_status: string;
+      accounts: { name: string } | null;
+    } | null;
+  };
+
+  for (const conn of (connections ?? []) as unknown as ConnRow[]) {
+    const b = conn.branches;
+    if (!b || typeof b.lat !== "number" || typeof b.lng !== "number") continue;
+    buyerCoordMap.set(b.id, { lat: b.lat, lng: b.lng, name: b.name });
+    if (seenNodeIds.has(b.id)) continue;
+    seenNodeIds.add(b.id);
+    dispatchNodes.push({
+      id: b.id,
+      label: b.name,
+      accountName: b.accounts?.name ?? "Connected Pharmacy",
+      lat: b.lat,
+      lng: b.lng,
+      kind: "branch",
+      status:
+        conn.status === "approved"
+          ? b.subscription_status === "locked"
+            ? "offline"
+            : "online"
+          : "grace",
+      detail:
+        conn.status === "approved" ? "Approved buyer branch" : "Connection pending approval",
+    });
+  }
+
+  // Fallback origin coordinates (Dar es Salaam hub) when supplier depot has no GPS yet
+  const primaryHub = dispatchNodes.find((n) => n.kind === "supplier");
+  const originCoord: [number, number] = primaryHub
+    ? [primaryHub.lat, primaryHub.lng]
+    : [-6.79, 39.208];
+
+  const dispatchRoutes: SupplierDispatchRoute[] = [];
+  for (const ord of orderList) {
+    if (ord.status === "cancelled") continue;
+    const dest = buyerCoordMap.get(ord.buyer_branch_id as string);
+    if (!dest) continue;
+    dispatchRoutes.push({
+      id: `route-${ord.id}`,
+      from: originCoord,
+      to: [dest.lat, dest.lng],
+      label: `${ord.order_reference ?? "Order"} → ${dest.name} (${ord.status})`,
+      status:
+        ord.status === "delivered"
+          ? "delivered"
+          : ord.status === "pending"
+          ? "pending"
+          : "active",
+    });
+  }
 
   return {
     account,
     quotes: quotes ?? [],
-    pendingOrders: (orders ?? []).filter((o) => o.status === "pending").length,
-    totalOrders: (orders ?? []).length,
+    pendingOrders: orderList.filter((o) => o.status === "pending").length,
+    totalOrders: orderList.length,
     deliveredCount: delivered.length,
+    dispatchNodes,
+    dispatchRoutes,
   };
 }
 
@@ -420,20 +537,49 @@ async function receiveOrderIntoInventory(orderId: string): Promise<string | null
   const receivable = (lines ?? []).filter((l) => l.product_id);
   if (receivable.length === 0) return null;
 
-  const batchRows = receivable.map((line) => ({
-    id: crypto.randomUUID(),
-    branch_id: order.buyer_branch_id,
-    product_id: line.product_id,
-    quantity: line.quantity,
-    cost_price: Number(line.unit_price),
-    sale_price: Number(line.unit_price),
-    expiry_date: null,
-    sync_version: 1,
-    updated_at: new Date().toISOString(),
-  }));
+  const productIds = [...new Set(receivable.map((l) => l.product_id as string))];
+  const { data: masterProducts } = await service
+    .from("products")
+    .select("id, default_sale_price, default_expiry")
+    .in("id", productIds);
+
+  const productMeta = new Map<
+    string,
+    { default_sale_price?: number | null; default_expiry?: string | null }
+  >((masterProducts ?? []).map((p) => [p.id as string, p]));
+
+  const batchRows = receivable.map((line) => {
+    const costPrice = Math.round(Number(line.unit_price) || 0);
+    const meta = productMeta.get(line.product_id as string);
+    const defaultSale = Number(meta?.default_sale_price ?? 0);
+    // Avoid 0% margin import when default_sale_price is unset or below wholesale cost.
+    const salePrice = defaultSale > costPrice ? Math.round(defaultSale) : Math.round(costPrice * 1.3);
+    const expiryDate = meta?.default_expiry ? String(meta.default_expiry).slice(0, 10) : null;
+
+    return {
+      id: crypto.randomUUID(),
+      branch_id: order.buyer_branch_id,
+      product_id: line.product_id,
+      quantity: line.quantity,
+      cost_price: costPrice,
+      sale_price: salePrice,
+      expiry_date: expiryDate,
+      sync_version: 1,
+      updated_at: new Date().toISOString(),
+    };
+  });
 
   const { error: insertError } = await service.from("batches").insert(batchRows);
-  return insertError ? insertError.message : null;
+  if (insertError) return insertError.message;
+
+  // Release escrow funds to the supplier after inventory is received cleanly.
+  const { releaseOrderEscrowPayout } = await import("@/lib/escrow");
+  const release = await releaseOrderEscrowPayout({ service, orderId });
+  if (!release.ok) {
+    console.warn(`[supplier] Escrow release deferred for ${orderId}: ${release.message}`);
+  }
+
+  return null;
 }
 
 /**

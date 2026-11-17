@@ -77,91 +77,89 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
 
   const content = (
     <>
-      {/* Brand / account logo */}
-      <div className="p-6 border-b border-outline-variant">
+      {/* Brand / account header */}
+      <div className="px-5 py-4 border-b border-outline-variant flex items-center gap-2.5">
         {logoUrl ? (
-          /* Custom supplier logo — set during onboarding */
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 relative flex-shrink-0 rounded overflow-hidden border border-outline-variant/40">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 relative flex-shrink-0 rounded-lg overflow-hidden border border-outline-variant">
               <Image
                 src={logoUrl}
                 alt={accountName ?? "Supplier"}
                 fill
-                sizes="36px"
+                sizes="32px"
                 className="object-contain"
               />
             </div>
             <div className="min-w-0">
-              <p className="font-headline-md text-headline-md font-bold text-on-surface tracking-tight truncate text-sm leading-tight">
+              <p className="font-headline-md font-bold text-ink-deep truncate text-sm leading-tight">
                 {accountName ?? t("sidebar.supplier")}
               </p>
-              <p className="font-label-md text-label-md text-on-surface-variant mt-0.5 uppercase tracking-wider text-[10px]">
+              <p className="font-mono text-[10px] text-on-surface-variant uppercase tracking-wider">
                 {t("sidebar.supplier_portal")}
               </p>
             </div>
           </div>
         ) : (
-          /* Default Cervos branding */
           <>
-            <h1 className="font-headline-md text-headline-md font-bold text-on-surface tracking-tight">Cervos</h1>
-            <p className="font-label-md text-label-md text-on-surface-variant mt-1 uppercase tracking-wider">{t("sidebar.supplier_portal")}</p>
+            <div className="w-7 h-7 relative flex-shrink-0">
+              <Image
+                src="/cervos-mark.svg"
+                alt="Cervos"
+                width={28}
+                height={28}
+                className="object-contain"
+                priority
+              />
+            </div>
+            <div>
+              <span className="font-headline-md text-sm font-bold text-ink-deep block leading-tight">Cervos</span>
+              <span className="font-mono text-[10px] text-on-surface-variant uppercase tracking-wider">
+                {t("sidebar.supplier_portal")}
+              </span>
+            </div>
           </>
         )}
       </div>
 
-      {/* New Quote CTA */}
-      <div className="px-4 py-4 border-b border-outline-variant">
-        <Link
-          href="/supplier/quote"
-          onClick={closeMobile}
-          className="w-full bg-ink-deep text-white font-label-md text-label-md py-3 flex justify-center items-center gap-2 hover:opacity-90 transition-opacity rounded"
-        >
-          <span className="material-symbols-outlined text-[16px]">add</span>
-          {t("sup.quote")}
-        </Link>
-      </div>
-
-      {/* Nav — scrolls */}
-      <ul className="flex-1 py-3 overflow-y-auto min-h-0 scrollbar-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline-variant [&::-webkit-scrollbar-thumb]:rounded-full">
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col gap-0.5 px-3 py-3 overflow-y-auto min-h-0 scrollbar-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline-variant [&::-webkit-scrollbar-thumb]:rounded-full">
         {NAV.map((item) => {
           const active = pathname === item.href || (item.href !== "/supplier" && pathname.startsWith(item.href));
           return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                onClick={closeMobile}
-                className={`flex items-center gap-3 px-6 py-3 font-label-md text-label-md transition-all ${
-                  active
-                    ? "text-primary border-r-2 border-primary bg-surface-container-low font-bold"
-                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                {t(item.labelKey)}
-              </Link>
-            </li>
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={closeMobile}
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                active
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-ink-deep"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+              <span className="truncate">{t(item.labelKey)}</span>
+            </Link>
           );
         })}
-      </ul>
+      </nav>
 
-      {/* Footer — pinned */}
-      <div className="border-t border-outline-variant py-3 shrink-0 bg-surface">
+      {/* Footer */}
+      <div className="px-3 py-3 mt-auto flex flex-col gap-1 border-t border-outline-variant shrink-0 bg-surface-base">
         {accountName && (
-          <div className="px-6 py-2 mb-2">
-            <p className="text-label-md font-label-md text-on-surface-variant text-xs">{t("sidebar.signed_in_as")}</p>
-            <p className="text-body-sm font-medium text-on-surface truncate">{accountName}</p>
+          <div className="px-3 py-1.5 mb-1">
+            <p className="text-[10px] font-mono text-on-surface-variant uppercase tracking-wider">{t("sidebar.signed_in_as")}</p>
+            <p className="text-xs font-semibold text-ink-deep truncate">{accountName}</p>
           </div>
         )}
-        {/* Lang toggle */}
-        <div className="flex items-center gap-2 px-6 py-2 mb-1">
+        <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="material-symbols-outlined text-[16px] text-on-surface-variant">translate</span>
-          <div className="flex gap-1 bg-surface-container rounded p-0.5">
+          <div className="flex gap-0.5 bg-surface-container-low border border-outline-variant rounded-md p-0.5">
             {(["EN", "SW"] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setLang(l)}
-                className={`px-2 py-0.5 text-xs font-label-md rounded transition-colors ${
-                  lang === l ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary"
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                  lang === l ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-ink-deep"
                 }`}
               >
                 {l}
@@ -169,42 +167,34 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
             ))}
           </div>
         </div>
-        <ul>
-          <li>
-            <Link
-              href="/support"
-              onClick={closeMobile}
-              className="flex items-center gap-3 px-6 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all font-label-md text-label-md"
-            >
-              <span className="material-symbols-outlined text-[18px]">contact_support</span>
-              {t("sup.support")}
-            </Link>
-          </li>
-          <li>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 px-6 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all font-label-md text-label-md w-full text-left"
-            >
-              <span className="material-symbols-outlined text-[18px]">logout</span>
-              {t("portal.logout")}
-            </button>
-          </li>
-        </ul>
+        <Link
+          href="/support"
+          onClick={closeMobile}
+          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-ink-deep hover:bg-surface-container-low transition-colors rounded-lg text-sm"
+        >
+          <span className="material-symbols-outlined text-[18px]">contact_support</span>
+          <span>{t("sup.support")}</span>
+        </Link>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2 text-error hover:bg-error-container/60 transition-colors rounded-lg text-sm font-medium w-full text-left"
+        >
+          <span className="material-symbols-outlined text-[18px]">logout</span>
+          <span>{t("portal.logout")}</span>
+        </button>
       </div>
     </>
   );
 
   return (
     <>
-      {/* Mobile drawer — slide in/out below lg */}
       <MobileDrawer open={mobileOpen} onClose={closeMobile}>
-        <nav className="h-full w-64 flex flex-col bg-surface overflow-hidden">{content}</nav>
+        <aside className="h-full w-64 flex flex-col bg-surface-base overflow-hidden">{content}</aside>
       </MobileDrawer>
 
-      {/* Fixed desktop sidebar — lg+ only */}
-      <nav className="hidden lg:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface h-full overflow-hidden">
+      <aside className="hidden lg:flex flex-col w-64 z-20 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface-base h-full overflow-hidden">
         {content}
-      </nav>
+      </aside>
     </>
   );
 }

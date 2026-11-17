@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../lib/hooks'
 import { fetchProducts } from '../lib/queries'
 import { Product } from '../lib/types'
@@ -70,7 +70,7 @@ export default function Storefront() {
         <div className="flex items-center gap-4">
           <input
             type="text"
-            value={`https://cervos.market/s/${supplier?.company_name?.toLowerCase().replace(/\s+/g, '-')}`}
+            value={`https://cervos.co.tz/s/${supplier?.company_name?.toLowerCase().replace(/\s+/g, '-')}`}
             readOnly
             className="flex-1 px-4 py-3 bg-surface border border-surface-300 rounded-lg text-gray-400 font-mono text-sm"
           />

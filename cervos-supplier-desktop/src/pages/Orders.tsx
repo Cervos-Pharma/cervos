@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/hooks'
 import { fetchOrders, updateOrderStatus } from '../lib/queries'
@@ -148,7 +148,7 @@ export default function Orders() {
                       <option value="cancelled">Cancelled</option>
                     </select>
                   </td>
-                  <td className="px-6 py-4 text-white font-medium">TZS ${order.total.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-white font-medium">TZS {order.total.toLocaleString()}</td>
                   <td className="px-6 py-4 text-right">
                     <Link
                       to={`/orders/${order.id}`}

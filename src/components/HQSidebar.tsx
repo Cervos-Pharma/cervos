@@ -20,6 +20,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useI18n } from "@/lib/i18n/context";
 import MobileDrawer from "@/components/MobileDrawer";
 
@@ -65,16 +66,31 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
 
   const content = (
     <>
-      <div className="px-6 mb-3">
-        <h2 className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">
-          {t("hq.sidebar.title")}
-        </h2>
-        <div className="font-mono text-[10px] text-on-surface-variant uppercase">
-          {t("hq.sidebar.status")}
+      {/* Brand header */}
+      <div className="px-5 py-4 border-b border-outline-variant flex items-center gap-2.5">
+        <div className="w-7 h-7 relative flex-shrink-0">
+          <Image
+            src="/cervos-mark.svg"
+            alt="Cervos HQ"
+            width={28}
+            height={28}
+            className="object-contain"
+            priority
+          />
+        </div>
+        <div className="min-w-0">
+          <span className="font-headline-md text-sm font-bold text-ink-deep block leading-tight">
+            {t("hq.sidebar.title")}
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-on-surface-variant uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            {t("hq.sidebar.status")}
+          </span>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-0.5 px-2 overflow-y-auto min-h-0 scrollbar-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline-variant [&::-webkit-scrollbar-thumb]:rounded-full py-1">
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col gap-0.5 px-3 py-3 overflow-y-auto min-h-0 scrollbar-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline-variant [&::-webkit-scrollbar-thumb]:rounded-full">
         {NAV.map((item) => {
           const active =
             pathname === item.href ||
@@ -87,18 +103,18 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
               key={item.href}
               href={item.href}
               onClick={closeMobile}
-              className={`flex items-center gap-3 px-3 py-2.5 transition-all duration-75 ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 active
-                  ? "bg-primary text-on-primary font-bold"
-                  : "text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-ink-deep"
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-              <span className="font-label-md text-label-md flex-1">{item.label}</span>
+              <span className="flex-1 truncate">{item.label}</span>
               {showBadge && (
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full min-w-[20px] text-center tabular-nums ${
                   active
-                    ? "bg-on-primary/20 text-on-primary"
+                    ? "bg-primary text-on-primary"
                     : "bg-amber-100 text-amber-700"
                 }`}>
                   {openSupportCount > 99 ? "99+" : openSupportCount}
@@ -107,18 +123,19 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
             </Link>
           );
         })}
-      </div>
+      </nav>
 
-      <div className="px-2 mt-auto pt-2 border-t border-outline-variant shrink-0 bg-surface-container-low flex flex-col gap-1">
+      {/* Footer */}
+      <div className="px-3 py-3 mt-auto border-t border-outline-variant shrink-0 bg-surface-base flex flex-col gap-1">
         <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="material-symbols-outlined text-[16px] text-on-surface-variant">translate</span>
-          <div className="flex gap-0.5 bg-surface-container-highest rounded p-0.5">
+          <div className="flex gap-0.5 bg-surface-container-low border border-outline-variant rounded-md p-0.5">
             {(["EN", "SW"] as const).map((l) => (
               <button
                 key={l}
                 onClick={() => setLang(l)}
-                className={`px-2.5 py-0.5 text-[11px] font-label-md rounded transition-colors ${
-                  lang === l ? "bg-primary text-on-primary font-bold" : "text-on-surface-variant hover:text-on-surface"
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                  lang === l ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-ink-deep"
                 }`}
               >
                 {l}
@@ -128,10 +145,10 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 w-full text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-all duration-75 rounded-md"
+          className="flex items-center gap-3 px-3 py-2 w-full text-error hover:bg-error-container/60 transition-colors rounded-lg text-sm font-medium text-left"
         >
           <span className="material-symbols-outlined text-[18px]">logout</span>
-          <span className="font-label-md text-label-md">{t("hq.sidebar.logout")}</span>
+          <span>{t("hq.sidebar.logout")}</span>
         </button>
       </div>
     </>
@@ -139,9 +156,8 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
 
   return (
     <>
-      {/* Mobile drawer — slide in/out below lg */}
       <MobileDrawer open={mobileOpen} onClose={closeMobile}>
-        <aside className="bg-surface-container-low h-full w-64 flex flex-col py-4 overflow-hidden">
+        <aside className="bg-surface-base h-full w-64 flex flex-col overflow-hidden">
           {content}
         </aside>
       </MobileDrawer>
@@ -152,13 +168,12 @@ export default function HQSidebar({ openSupportCount = 0 }: HQSidebarProps) {
         type="button"
         onClick={() => setMobileOpen(true)}
         aria-label="Open navigation menu"
-        className="lg:hidden fixed top-3 left-3 z-30 p-2.5 rounded-md bg-surface-base border border-outline-variant shadow-sm text-on-surface-variant hover:text-on-surface transition-colors"
+        className="lg:hidden fixed top-3 left-3 z-30 p-2.5 rounded-lg bg-surface-base border border-outline-variant shadow-sm text-on-surface-variant hover:text-ink-deep transition-colors"
       >
         <span className="material-symbols-outlined text-[22px]">menu</span>
       </button>
 
-      {/* Fixed desktop sidebar — lg+ only */}
-      <aside className="hidden lg:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface-container-low h-full py-4 overflow-hidden">
+      <aside className="hidden lg:flex flex-col w-64 z-40 fixed left-0 top-0 bottom-0 border-r border-outline-variant bg-surface-base h-full overflow-hidden">
         {content}
       </aside>
     </>

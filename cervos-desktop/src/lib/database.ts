@@ -1,11 +1,31 @@
 let db: any = null
 let SQL: any = null
+let _saveChain: Promise<void> = Promise.resolve()
 
 // Vite resolves this at build time to the correct hashed asset URL, which
 // works with Tauri's tauri://localhost/ custom protocol on Windows.
 import sqlWasmUrl from '/sql-wasm.wasm?url'
 
 const DB_KEY = 'cervos_db'
+const LEGACY_DB_KEY = 'cervos_pos_sqlite_db'
+const TAURI_DB_FILE = 'cervos_pos.sqlite'
+
+function isTauriRuntime(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in (window as unknown as Record<string, unknown>)
+}
+
+function decodeBase64Bytes(raw: string): Uint8Array {
+  return Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))
+}
+
+function encodeBytesBase64(data: Uint8Array): string {
+  const CHUNK_SIZE = 0x8000
+  let binary = ''
+  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+    binary += String.fromCharCode(...data.subarray(i, i + CHUNK_SIZE))
+  }
+  return btoa(binary)
+}
 
 export async function initDb(): Promise<void> {
   if (db) return
@@ -14,32 +34,48 @@ export async function initDb(): Promise<void> {
     const initSqlJs = (await import('sql.js')).default
 
     const locateWasm = (file: string) => {
-      // The browser glue (sql-wasm-browser.js, via the bundled package entry)
-      // may ask for 'sql-wasm.wasm' OR 'sql-wasm-browser.wasm' — always answer
-      // with the locally bundled wasm. The old CDN fallback not only breaks
-      // offline use, jsdelivr can serve a build whose import surface doesn't
-      // match this glue copy (observed: Wasm LinkError "Import #38 requires
-      // a callable").
       if (file.endsWith('.wasm')) return sqlWasmUrl
       return `https://cdn.jsdelivr.net/npm/sql.js/dist/${file}`
     }
 
     SQL = await initSqlJs({ locateFile: locateWasm })
 
-    const savedDb = localStorage.getItem(DB_KEY)
-    if (savedDb) {
+    let initialBytes: Uint8Array | null = null
+
+    if (isTauriRuntime()) {
       try {
-        const data = Uint8Array.from(atob(savedDb), (c) => c.charCodeAt(0))
-        db = new SQL.Database(data)
-      } catch {
-        db = new SQL.Database()
+        const fs = await import('@tauri-apps/plugin-fs')
+        const hasNativeFile = await fs.exists(TAURI_DB_FILE, { baseDir: fs.BaseDirectory.AppLocalData })
+        if (hasNativeFile) {
+          initialBytes = await fs.readFile(TAURI_DB_FILE, { baseDir: fs.BaseDirectory.AppLocalData })
+        } else {
+          // One-time migration from legacy localStorage base64 storage into native AppLocalData binary file
+          const legacySaved = localStorage.getItem(DB_KEY) || localStorage.getItem(LEGACY_DB_KEY)
+          if (legacySaved) {
+            initialBytes = decodeBase64Bytes(legacySaved)
+            await fs.writeFile(TAURI_DB_FILE, initialBytes, { baseDir: fs.BaseDirectory.AppLocalData })
+          }
+        }
+      } catch (fsErr) {
+        console.warn('Tauri FS DB load fell back to localStorage:', fsErr)
       }
-    } else {
-      db = new SQL.Database()
     }
 
+    if (!initialBytes) {
+      const savedDb = localStorage.getItem(DB_KEY) || localStorage.getItem(LEGACY_DB_KEY)
+      if (savedDb) {
+        try {
+          initialBytes = decodeBase64Bytes(savedDb)
+        } catch {
+          initialBytes = null
+        }
+      }
+    }
+
+    db = initialBytes ? new SQL.Database(initialBytes) : new SQL.Database()
+
     await runMigrations()
-    saveDb()
+    await saveDb()
   } catch (err) {
     console.error('initDb failed:', err)
     try {
@@ -51,34 +87,28 @@ export async function initDb(): Promise<void> {
   }
 }
 
-function saveDb(): void {
-  if (!db) return
-  const data = db.export()
-  // Converting the whole exported DB to a binary string via
-  // String.fromCharCode(...data) blows the call stack once the array gets
-  // large enough — spreading a big typed array into individual function
-  // arguments hits the JS engine's argument-count limit ("Maximum call
-  // stack size exceeded"). This grows with real usage (more products,
-  // batches, orders, notifications), so it will eventually trip even if it
-  // didn't before. Converting in fixed-size chunks avoids the limit
-  // entirely regardless of how large the database gets.
-  const CHUNK_SIZE = 0x8000 // 32768 bytes per chunk
-  let binary = ''
-  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-    binary += String.fromCharCode(...data.subarray(i, i + CHUNK_SIZE))
-  }
-  try {
-    localStorage.setItem(DB_KEY, btoa(binary))
-  } catch (err) {
-    // localStorage has a hard per-origin quota (commonly 5-10MB). The whole
-    // SQLite DB is stored here as base64, so it can eventually exceed that
-    // quota as real data accumulates over time — that's a separate,
-    // larger problem (moving persistence to an actual file via
-    // @tauri-apps/plugin-fs, already a project dependency, instead of
-    // localStorage) that should be addressed before this becomes a
-    // recurring failure, not patched further here.
-    console.error('saveDb: localStorage write failed (possibly over quota):', err)
-  }
+function saveDb(): Promise<void> {
+  if (!db) return Promise.resolve()
+  const data: Uint8Array = db.export()
+  _saveChain = _saveChain
+    .catch(() => {})
+    .then(async () => {
+      if (isTauriRuntime()) {
+        try {
+          const fs = await import('@tauri-apps/plugin-fs')
+          await fs.writeFile(TAURI_DB_FILE, data, { baseDir: fs.BaseDirectory.AppLocalData })
+          return
+        } catch (fsErr) {
+          console.error('saveDb Tauri FS write failed, falling back to localStorage:', fsErr)
+        }
+      }
+      try {
+        localStorage.setItem(DB_KEY, encodeBytesBase64(data))
+      } catch (err) {
+        console.error('saveDb: localStorage write failed (possibly over quota):', err)
+      }
+    })
+  return _saveChain
 }
 
 async function runMigrations(): Promise<void> {
@@ -313,6 +343,22 @@ async function runMigrations(): Promise<void> {
     )
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id TEXT PRIMARY KEY,
+      branch_id TEXT,
+      batch_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      operator_id TEXT,
+      movement_type TEXT NOT NULL,
+      quantity_delta INTEGER NOT NULL,
+      reason TEXT,
+      reference_id TEXT,
+      created_at TEXT,
+      synced INTEGER DEFAULT 0
+    )
+  `)
+
   const operatorCheck = db.exec('SELECT COUNT(*) as count FROM operators')
   const operatorCount = operatorCheck.length > 0 && operatorCheck[0].values.length > 0 ? operatorCheck[0].values[0][0] : 0
   if (operatorCount === 0) {
@@ -377,7 +423,7 @@ export async function executeDb(sql: string, params: any[] = []): Promise<void> 
   if (!db) await initDb()
   if (!db) throw new Error('Database not initialized — sql.js failed to load.')
   db.run(sql, params)
-  saveDb()
+  await saveDb()
 }
 
 export function generateId(): string {

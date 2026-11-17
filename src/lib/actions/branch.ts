@@ -56,13 +56,26 @@ export async function requireBranchOperator(): Promise<
 
   if (!op) return { data: null, error: "Operator access required." };
 
-  const branch = (op.branches as unknown as {
-    id: string;
-    name: string;
-    account_id: string;
-    subscription_status: string | null;
-    last_synced_at: string | null;
-  }[] | null)?.find((b) => b.id === op.branch_id);
+  const rawBranches = op.branches as unknown as
+    | {
+      id: string;
+      name: string;
+      account_id: string;
+      subscription_status: string | null;
+      last_synced_at: string | null;
+    }
+    | {
+      id: string;
+      name: string;
+      account_id: string;
+      subscription_status: string | null;
+      last_synced_at: string | null;
+    }[]
+    | null;
+
+  const branch = Array.isArray(rawBranches)
+    ? rawBranches.find((b) => b.id === op.branch_id) ?? rawBranches[0]
+    : rawBranches;
 
   if (!branch) return { data: null, error: "Operator branch not found." };
 

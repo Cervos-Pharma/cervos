@@ -28,10 +28,14 @@ async function loadSession(): Promise<any> {
   return null
 }
 
-export async function saveSetting(n: string, t: string): Promise<void> {
+export async function saveSetting(n: string, t: unknown): Promise<void> {
+  const serialized =
+    typeof t === 'string' && (t === 'null' || t === 'true' || t === 'false' || (t.startsWith('"') && t.endsWith('"')))
+      ? t
+      : JSON.stringify(t)
   await executeDb(
     `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-    [n, JSON.stringify(t)]
+    [n, serialized]
   )
 }
 
@@ -871,9 +875,9 @@ export async function syncSubscription(branchId: string): Promise<void> {
         .maybeSingle(),
       accountId
         ? Ie.from('accounts')
-            .select('subscription_plan, subscription_plans(name)')
-            .eq('id', accountId)
-            .maybeSingle()
+          .select('subscription_plan, subscription_plans(name)')
+          .eq('id', accountId)
+          .maybeSingle()
         : Promise.resolve({ data: null, error: null }),
     ])
 
@@ -881,10 +885,10 @@ export async function syncSubscription(branchId: string): Promise<void> {
     const planName = (planRes.data as any)?.subscription_plans?.name || 'Basic'
 
     if (branch) {
-      await saveSetting('subscription_status', JSON.stringify(branch.subscription_status))
-      await saveSetting('subscription_tier', JSON.stringify(planName))
-      await saveSetting('grace_ends_at', JSON.stringify(branch.grace_ends_at))
-      await saveSetting('trial_ends_at', JSON.stringify(branch.trial_ends_at))
+      await saveSetting('subscription_status', branch.subscription_status)
+      await saveSetting('subscription_tier', planName)
+      await saveSetting('grace_ends_at', branch.grace_ends_at)
+      await saveSetting('trial_ends_at', branch.trial_ends_at)
     }
   } catch (error) {
     console.error('Failed to sync subscription:', error)
@@ -922,32 +926,30 @@ export async function checkSubscriptionBlocked(): Promise<{ blocked: boolean; re
 // Batched per table+operation so a cycle makes at most a handful of requests
 // instead of one per row — important on Supabase free tier.
 
-export async function processSyncQueue(): Promise<{ uploaded: number; failed: number }> {
+export async function processSyncQueue(): Promise<{ uploaded: number; failed: number; errors: string[] }> {
   return bulkPush()
 }
 
-async function bulkPush(): Promise<{ uploaded: number; failed: number }> {
-  if (!Ie) return { uploaded: 0, failed: 0 }
+const SYNCED_COLUMN_TABLES = new Set(['sales', 'shifts', 'activity_log', 'expenses'])
+
+async function bulkPush(): Promise<{ uploaded: number; failed: number; errors: string[] }> {
+  if (!Ie) return { uploaded: 0, failed: 0, errors: [] }
   const queue = await queryDb('SELECT * FROM sync_queue ORDER BY created_at ASC')
-  if (queue.length === 0) return { uploaded: 0, failed: 0 }
+  if (queue.length === 0) return { uploaded: 0, failed: 0, errors: [] }
 
   const groups: Record<string, { item: any; payload: any }[]> = {}
   for (const item of queue) {
     try {
       const payload = JSON.parse(item.payload)
       const key = `${item.table_name}:${item.operation}`
-      ;(groups[key] ||= []).push({ item, payload })
+        ; (groups[key] ||= []).push({ item, payload })
     } catch {
       await queryDb('DELETE FROM sync_queue WHERE id = ?', [item.id])
     }
   }
 
-  // Cloud FKs require parents to exist before children. Queue arrival order
-  // doesn't guarantee that (POS queues batches → sale_items → sales, so
-  // sale_items reached Supabase before its sales row did and PostgREST
-  // rejected them with foreign-key 409s that only healed 5 minutes later on
-  // the next cycle). Commit in dependency order instead:
-  const DEPENDENCY_ORDER = ['products', 'batches', 'orders', 'order_line_items', 'sales', 'sale_items']
+  // Cloud FKs require parents to exist before children.
+  const DEPENDENCY_ORDER = ['products', 'batches', 'orders', 'order_line_items', 'sales', 'sale_items', 'stock_movements', 'shifts', 'expenses']
   const rank = (table: string) => {
     const at = DEPENDENCY_ORDER.indexOf(table)
     return at === -1 ? DEPENDENCY_ORDER.length : at
@@ -956,17 +958,11 @@ async function bulkPush(): Promise<{ uploaded: number; failed: number }> {
 
   let uploaded = 0
   let failed = 0
+  const errors: string[] = []
   for (const key of uploadOrder) {
     const [table_name, operationRaw] = key.split(':')
-    // Some call sites pass 'INSERT'/'DELETE' (uppercase); normalize so a
-    // casing mismatch never silently drops queued rows forever (they'd
-    // otherwise hit "unknown operation" below and stay stuck retry-failing).
     const operation = operationRaw.toLowerCase()
     let entries = groups[key]
-    // The same row can be queued multiple times (e.g. two sales from the same
-    // batch → two "batches" upserts). Postgres rejects a single ON CONFLICT
-    // command that touches the same row twice, so keep only the last payload
-    // per row_id — it reflects the newest state.
     const latest = new Map<string, (typeof entries)[number]>()
     for (const e of entries) latest.set(e.item.row_id, e)
     entries = [...latest.values()]
@@ -975,37 +971,41 @@ async function bulkPush(): Promise<{ uploaded: number; failed: number }> {
         const ids = entries.map((e) => e.item.row_id)
         const { error } = await Ie.from(table_name).delete().in('id', ids)
         if (error) throw error
-        for (const e of entries) await queryDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
+        for (const e of entries) await executeDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
         uploaded += entries.length
-      } catch {
+      } catch (err: any) {
         failed += entries.length
+        errors.push(`${table_name} delete: ${err?.message || String(err)}`)
       }
       continue
     }
     if (operation !== 'insert' && operation !== 'update' && operation !== 'upsert') {
       failed += entries.length
+      errors.push(`${table_name}: unsupported operation "${operationRaw}"`)
       continue
     }
-    // Push rows ONE at a time. A single multi-row upsert fails under RLS when
-    // it mixes rows that don't exist yet (INSERT path) with rows that do
-    // (UPDATE path): the UPDATE-part USING check rejects the not-yet-inserted
-    // rows and the whole batch 403s — even though every row succeeds alone.
     for (const e of entries) {
       try {
         const { error } = await Ie.from(table_name).upsert([e.payload], { onConflict: 'id' })
         if (error) throw error
-        await queryDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
+        await executeDb('DELETE FROM sync_queue WHERE id = ?', [e.item.id])
+        if (SYNCED_COLUMN_TABLES.has(table_name)) {
+          await executeDb(`UPDATE ${table_name} SET synced = 1, sync_error = NULL WHERE id = ?`, [e.item.row_id]).catch(async () => {
+            await executeDb(`UPDATE ${table_name} SET synced = 1 WHERE id = ?`, [e.item.row_id]).catch(() => { })
+          })
+        }
         uploaded += 1
-      } catch {
+      } catch (err: any) {
         failed += 1
+        errors.push(`${table_name}/${e.item.row_id}: ${err?.message || String(err)}`)
       }
     }
   }
 
   if (uploaded > 0) {
-    await saveSetting('last_synced_at', JSON.stringify(new Date().toISOString()))
+    await saveSetting('last_synced_at', new Date().toISOString())
   }
-  return { uploaded, failed }
+  return { uploaded, failed, errors }
 }
 
 // ─── Pull (download delta from Supabase into local SQLite) ──────────────────
@@ -1029,11 +1029,11 @@ async function upsertLocal(table: string, row: Record<string, any>): Promise<voi
 async function applyCommand(cmd: any): Promise<void> {
   const c = cmd.command
   if (c === 'lock_branch' || c === 'suspend_branch') {
-    await saveSetting('subscription_status', JSON.stringify('locked'))
-    await saveSetting('locked_reason', JSON.stringify(cmd.reason ?? 'hq_command'))
+    await saveSetting('subscription_status', 'locked')
+    await saveSetting('locked_reason', cmd.reason ?? 'hq_command')
   } else if (c === 'unlock_branch') {
-    await saveSetting('subscription_status', JSON.stringify('active'))
-    await saveSetting('locked_reason', JSON.stringify(null))
+    await saveSetting('subscription_status', 'active')
+    await saveSetting('locked_reason', null)
   }
   // force_sync is naturally handled by the next cycle
 }
@@ -1317,7 +1317,7 @@ export function userSyncMessage(message: string | null | undefined): string | nu
   return 'Sync did not complete — your data is safe on this device and will retry automatically.';
 }
 
-export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pushed?: number; message?: string }> {
+export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pushed?: number; errors?: string[]; message?: string }> {
   if (typeof window === 'undefined') return { ok: false, message: 'no window' }
   if (_syncing) return { ok: true, message: 'already syncing' } // not an error — a sync is already in flight
   const linked = await ensureLinked()
@@ -1333,6 +1333,11 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
     const accountId = accountResult.length ? JSON.parse(accountResult[0].value) : null
     if (!accountId) return { ok: false, message: 'no account' }
 
+    // Push BEFORE Pull so local offline sales, shifts, and batch decrements are committed
+    // to Supabase before pulling delta snapshots back down.
+    await pushPosSettings(branchId)
+    const pushed = await bulkPush()
+
     const since = (await getLastPullTimestamp(branchId)) || '1970-01-01T00:00:00Z'
 
     const [prodRes, batchRes, cmdRes, branchRes, opRes, orderRes, planRes] = await Promise.all([
@@ -1343,12 +1348,7 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
         .select('subscription_status, grace_ends_at, trial_ends_at, locked_reason')
         .eq('id', branchId)
         .maybeSingle(),
-      // operators has no updated_at column to filter incrementally on, and per-branch
-      // counts are small, so pull the full set for this branch every cycle.
       Ie.from('operators').select('*').eq('branch_id', branchId),
-      // Orders placed by this branch — status changes (approved/confirmed/
-      // shipped/delivered) bump updated_at web-side, so this is a proper
-      // incremental delta, not a full re-pull every cycle.
       Ie.from('orders')
         .select('id, order_reference, currency, status, note, placed_at, supplier_approved_at, confirmed_at, shipped_at, delivered_at, cancelled_at, updated_at, accounts!seller_id(name)')
         .eq('buyer_branch_id', branchId)
@@ -1371,8 +1371,6 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
     const operators = opRes.data || []
     const orders = orderRes.data || []
 
-    // Line items never change after order creation, so it's enough to pull
-    // them only for orders that just changed in this same cycle.
     let orderLineItems: any[] = []
     if (orders.length > 0) {
       const liRes = await Ie
@@ -1382,11 +1380,6 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
       orderLineItems = liRes.data || []
     }
 
-    // Notifications may target the whole pharmacy account or this exact
-    // branch (prediction alerts use the latter). Pull both scopes rather than
-    // silently dropping branch-targeted alerts after a device re-sync.
-    // This is bounded rather than incremental because read state can flip
-    // without changing created_at.
     const notifRes = await Ie
       .from('notifications')
       .select('*')
@@ -1407,24 +1400,18 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
     }
 
     if (branch) {
-      await saveSetting('subscription_status', JSON.stringify(branch.subscription_status))
-      await saveSetting('subscription_tier', JSON.stringify(branch.subscription_tier ?? null))
-      await saveSetting('grace_ends_at', JSON.stringify(branch.grace_ends_at ?? null))
-      await saveSetting('trial_ends_at', JSON.stringify(branch.trial_ends_at ?? null))
-      await saveSetting('locked_reason', JSON.stringify(branch.locked_reason ?? null))
+      await saveSetting('subscription_status', branch.subscription_status)
+      await saveSetting('subscription_tier', branch.subscription_tier ?? null)
+      await saveSetting('grace_ends_at', branch.grace_ends_at ?? null)
+      await saveSetting('trial_ends_at', branch.trial_ends_at ?? null)
+      await saveSetting('locked_reason', branch.locked_reason ?? null)
     }
 
-    // Settings replicate too: merge the branch's latest cloud settings down
-    // (local queued edits win), then push local changes up, so a change made
-    // here appears in the database and on every other device of the branch.
     await pullPosSettings(branchId)
-    await pushPosSettings(branchId)
-
-    const pushed = await bulkPush()
 
     const nowIso = new Date().toISOString()
     await setLastPullTimestamp(branchId, nowIso)
-    await saveSetting('last_synced_at', JSON.stringify(nowIso))
+    await saveSetting('last_synced_at', nowIso)
 
     const block = await checkSubscriptionBlocked()
     useSyncStore.getState().setBlocked(block.blocked, block.reason ?? null)
@@ -1433,7 +1420,13 @@ export async function runSyncCycle(): Promise<{ ok: boolean; pulled?: number; pu
     useSyncStore.getState().setPending(pendingRes[0]?.c ?? 0)
 
     _failStreak = 0
-    return { ok: true, pulled, pushed: pushed.uploaded }
+    return {
+      ok: pushed.failed === 0,
+      pulled,
+      pushed: pushed.uploaded,
+      errors: pushed.errors,
+      message: pushed.failed > 0 ? pushed.errors[0] : undefined,
+    }
   } catch (e: any) {
     _failStreak++
     return { ok: false, message: e?.message || 'sync error' }

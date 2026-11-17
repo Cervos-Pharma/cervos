@@ -114,7 +114,7 @@ export default function ProductInventoryDetail() {
           </div>
           <div className="bg-surface rounded-lg p-4 text-center">
             <p className="text-sm text-gray-400 mb-1">Unit Price</p>
-            <p className="text-3xl font-bold text-white">TZS ${product.price.toLocaleString()}</p>
+            <p className="text-3xl font-bold text-white">TZS {product.price.toLocaleString()}</p>
           </div>
         </div>
 

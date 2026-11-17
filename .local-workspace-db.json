@@ -1,0 +1,19 @@
+{
+  "accounts": [],
+  "centres": [],
+  "profiles": [],
+  "passkeys": [],
+  "auditLogs": [],
+  "batches": [],
+  "sales": [],
+  "wholesaleOrders": [],
+  "branchMessages": [],
+  "expenses": [],
+  "paymentSettings": {},
+  "joinRequests": [],
+  "hqUpdates": [],
+  "hqMessages": [],
+  "savedCustomers": [],
+  "shiftLogs": [],
+  "notifications": []
+}

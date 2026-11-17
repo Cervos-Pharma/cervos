@@ -3,7 +3,7 @@ const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 /**
  * Best-effort client-IP extraction for rate-limit keying. Reads the standard
  * proxy headers set by Vercel's edge (x-forwarded-for) and falls back to the
- * direct peer address. Not a security boundary — just a throttle key.
+ * direct peer address. Not a security boundary - just a throttle key.
  */
 export function clientIpFrom(request: {
   headers: { get(name: string): string | null };
@@ -35,6 +35,11 @@ export function checkRateLimit(
   windowMs: number
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
+  if (rateLimitMap.size > 2000) {
+    for (const [k, v] of rateLimitMap.entries()) {
+      if (now > v.resetAt) rateLimitMap.delete(k);
+    }
+  }
   const entry = rateLimitMap.get(key);
 
   if (!entry || now > entry.resetAt) {

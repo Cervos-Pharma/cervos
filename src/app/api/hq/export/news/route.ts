@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": "text/csv",
       "Content-Disposition": `attachment; filename="news-posts-${new Date().toISOString().slice(0,10)}.csv"`,
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }

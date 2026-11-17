@@ -1,7 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
+import "leaflet/dist/leaflet.css";
 import type { NetworkHealthMetrics } from "@/lib/actions/hq";
+import CervosMap from "@/components/MapClientWrapper";
+import type { MarkerData } from "@/components/CervosMap";
 
 interface BranchPoint {
   lat: number | null;
@@ -49,80 +52,32 @@ declare global {
 
 export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Props) {
   const globeContainerRef = useRef<HTMLDivElement>(null);
-  const mapContainerRef = useRef<HTMLDivElement>(null);
   const globeInstanceRef = useRef<unknown>(null);
-  const leafletMapRef = useRef<unknown>(null);
-  const leafletLoadedRef = useRef(false);
-  const [view, setView] = useState<"globe" | "map">("globe");
+  const [view, setView] = useState<"globe" | "map">("map");
   const [globeError, setGlobeError] = useState<string | null>(null);
 
   const validPoints = useMemo(
-    () => branchLocations.filter((b) => b.lat != null && b.lng != null),
+    () =>
+      branchLocations.filter(
+        (b) => typeof b.lat === "number" && typeof b.lng === "number"
+      ),
     [branchLocations]
   );
 
-  // ── 2D Leaflet map (init once, sync markers) ──────────────────────────────
-  useEffect(() => {
-    if (view !== "map") return;
+  const mapMarkers: MarkerData[] = useMemo(
+    () =>
+      validPoints.map((p, idx) => ({
+        id: `${p.name}-${idx}`,
+        lat: p.lat!,
+        lng: p.lng!,
+        label: p.name,
+        accountName: p.accountName,
+        status: p.status,
+      })),
+    [validPoints]
+  );
 
-    let cancelled = false;
-
-    (async () => {
-      const L = (await import("leaflet")).default;
-
-      if (cancelled || !mapContainerRef.current || leafletLoadedRef.current) return;
-
-      const map = L.map(mapContainerRef.current).setView([-6.7924, 39.2083], 6);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 18,
-      }).addTo(map);
-
-      const layer = L.layerGroup().addTo(map);
-
-      leafletMapRef.current = map;
-      leafletLoadedRef.current = true;
-
-      // Add markers
-      validPoints.forEach((point) => {
-        if (point.lat == null || point.lng == null) return;
-        const color = STATUS_COLORS[point.status] ?? "#6750A4";
-        L.circleMarker([point.lat, point.lng], {
-          radius: 6,
-          fillColor: color,
-          color: "#fff",
-          weight: 1.5,
-          fillOpacity: 0.8,
-        }).bindPopup(`
-          <div style="font-family:system-ui,sans-serif;min-width:140px">
-            <strong>${point.name}</strong><br/>
-            <span style="color:#666;font-size:12px">${point.accountName}</span><br/>
-            <span style="color:${color};font-size:11px;font-weight:600">${point.status.toUpperCase().replace("_", " ")}</span>
-          </div>
-        `).addTo(layer);
-      });
-
-      if (validPoints.length > 1) {
-        const group = L.featureGroup(
-          validPoints
-            .filter((p) => p.lat != null && p.lng != null)
-            .map((p) => L.circleMarker([p.lat!, p.lng!], { radius: 0.1, interactive: false }))
-        );
-        map.fitBounds(group.getBounds().pad(0.1));
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (leafletMapRef.current) {
-        (leafletMapRef.current as { remove: () => void }).remove();
-        leafletMapRef.current = null;
-        leafletLoadedRef.current = false;
-      }
-    };
-  }, [view]); // only re-init when toggling to map view
-
-  // ── 3D Globe via CDN ─────────────────────────────────────────────────────
+  // ── 3D Globe via CDN (on explicit toggle) ─────────────────────────────────
   useEffect(() => {
     if (view !== "globe") return;
 
@@ -146,7 +101,7 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
             mountGlobe(window.Globe);
           };
           script.onerror = () => {
-            if (isMounted) setGlobeError("Failed to load globe.gl. Please switch to 2D map.");
+            if (isMounted) setGlobeError("Failed to load 3D globe assets. Use the interactive 2D map instead.");
           };
           document.head.appendChild(script);
         } else {
@@ -175,8 +130,9 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
           .pointColor((p: BranchPoint) => STATUS_COLORS[p.status] ?? "#6750A4")
           .pointAltitude(0.01)
           .pointRadius(0.4)
-          .pointLabel((p: BranchPoint) =>
-            `<div style="font-family:system-ui,sans-serif;color:#222;padding:8px;min-width:140px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+          .pointLabel(
+            (p: BranchPoint) =>
+              `<div style="font-family:system-ui,sans-serif;color:#222;padding:8px;min-width:140px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
               <strong>${p.name}</strong><br/>
               <span style="color:#666;font-size:12px">${p.accountName}</span><br/>
               <span style="color:${STATUS_COLORS[p.status]};font-size:11px;font-weight:600">${p.status.toUpperCase().replace("_", " ")}</span>
@@ -184,25 +140,27 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
           );
 
         try {
+          (instance as unknown as (el: HTMLElement) => void)(container);
           const controls = instance.controls();
           if (controls) {
             controls.autoRotate = true;
             controls.autoRotateSpeed = 0.3;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         globeInstanceRef.current = instance;
       };
 
-      // WebGL check
       try {
         const canvas = document.createElement("canvas");
         const gl = canvas.getContext("webgl") || canvas.getContext("webgl2");
         if (!gl) {
-          if (isMounted) setGlobeError("WebGL not available on this device. Please use the 2D map view.");
+          if (isMounted) setGlobeError("WebGL not available on this device. Use the 2D map view.");
           return;
         }
       } catch {
-        if (isMounted) setGlobeError("WebGL check failed. Please use the 2D map view.");
+        if (isMounted) setGlobeError("WebGL check failed. Use the 2D map view.");
         return;
       }
 
@@ -216,7 +174,9 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
       if (globeInstanceRef.current) {
         try {
           (globeInstanceRef.current as { destroy: () => void }).destroy();
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         globeInstanceRef.current = null;
       }
     };
@@ -229,28 +189,39 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex rounded-lg border border-outline-variant overflow-hidden">
           <button
-            onClick={() => setView("globe")}
+            type="button"
+            onClick={() => setView("map")}
             className={`px-4 py-2 text-sm font-semibold transition-colors ${
-              view === "globe" ? "bg-primary text-on-primary" : "bg-surface text-on-surface-variant hover:bg-surface-container"
+              view === "map"
+                ? "bg-primary text-on-primary"
+                : "bg-surface text-on-surface-variant hover:bg-surface-container"
+            }`}
+          >
+            2D Network Map
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setGlobeError(null);
+              setView("globe");
+            }}
+            className={`px-4 py-2 text-sm font-semibold transition-colors ${
+              view === "globe"
+                ? "bg-primary text-on-primary"
+                : "bg-surface text-on-surface-variant hover:bg-surface-container"
             }`}
           >
             3D Globe
           </button>
-          <button
-            onClick={() => setView("map")}
-            className={`px-4 py-2 text-sm font-semibold transition-colors ${
-              view === "map" ? "bg-primary text-on-primary" : "bg-surface text-on-surface-variant hover:bg-surface-container"
-            }`}
-          >
-            2D Map
-          </button>
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
-          {(Object.entries(STATUS_COLORS)).map(([status, color]) => (
+          {Object.entries(STATUS_COLORS).map(([status, color]) => (
             <div key={status} className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-              <span className="font-body-sm text-on-surface-variant text-xs capitalize">{status.replace("_", " ")}</span>
+              <span className="font-body-sm text-on-surface-variant text-xs capitalize">
+                {status.replace("_", " ")}
+              </span>
             </div>
           ))}
           <span className="font-body-sm text-on-surface-variant text-xs ml-2">
@@ -265,7 +236,11 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
             <div className="text-center p-6">
               <p className="font-body-md text-on-surface-variant mb-3">{globeError}</p>
               <button
-                onClick={() => { setGlobeError(null); setView("map"); }}
+                type="button"
+                onClick={() => {
+                  setGlobeError(null);
+                  setView("map");
+                }}
                 className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:opacity-90"
               >
                 Switch to 2D Map
@@ -280,21 +255,20 @@ export default function NetworkGlobe({ networkHealth, branchLocations = [] }: Pr
           />
         )
       ) : (
-        <div className="space-y-3">
-          <div className="flex items-center gap-4 flex-wrap text-xs text-on-surface-variant">
-            {[
-              { color: STATUS_COLORS.healthy, label: "Healthy" },
-              { color: STATUS_COLORS.at_risk, label: "At Risk" },
-              { color: STATUS_COLORS.locked, label: "Locked" },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                <span>{item.label}</span>
-              </div>
-            ))}
-          </div>
-          <div ref={mapContainerRef} className="w-full h-[500px] max-h-[600px] rounded-lg overflow-hidden border border-outline-variant" style={{ zIndex: 0 }} />
+        <div className="w-full h-[500px] max-h-[600px] rounded-lg overflow-hidden border border-outline-variant">
+          <CervosMap
+            center={[-6.369, 34.8888]}
+            zoom={6}
+            markers={mapMarkers}
+            enableRegionJump
+            className="h-full w-full"
+          />
         </div>
+      )}
+      {networkHealth.totalBranches > 0 && (
+        <p className="font-body-sm text-xs text-on-surface-variant">
+          {networkHealth.onlineNow}/{networkHealth.totalBranches} branches currently synced online.
+        </p>
       )}
     </div>
   );

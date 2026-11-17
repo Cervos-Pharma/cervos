@@ -103,10 +103,7 @@ export default function Subscription() {
         .eq('audience', 'pharmacy')
         .order('price_monthly_tzs', { ascending: true })
       if (planError) throw planError
-      const filtered = ((planRows ?? []) as Plan[]).filter((p) =>
-        p.name === 'Basic' || p.price_monthly_tzs === 10000
-      )
-      setPlans(filtered.length > 0 ? filtered : ((planRows ?? []) as Plan[]).slice(0, 1))
+      setPlans((planRows ?? []) as Plan[])
 
       const walletRow = await queryDb("SELECT value FROM app_settings WHERE key = 'payme_wallet_number'")
       if (walletRow.length) setWallet(JSON.parse(walletRow[0].value))

@@ -1,4 +1,4 @@
-﻿export interface Product {
+export interface Product {
   id: string
   generic_name: string
   brand_name: string
@@ -18,6 +18,7 @@ export interface Batch {
   id: string
   branch_id: string
   product_id: string
+  batch_number?: string | null
   quantity: number
   cost_price: number
   sale_price: number

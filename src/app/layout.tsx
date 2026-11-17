@@ -1,35 +1,71 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Providers from "@/providers";
 import MockModeBar from "@/components/MockModeBar";
+import PwaRegister from "@/components/PwaRegister";
+import { CervosCommandBar } from "@cervos/ui";
 import { getLang } from "@/lib/i18n/server";
 import "./globals.css";
 
+export const viewport: Viewport = {
+  themeColor: "#1039b9",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "Cervos — Pharmacy OS",
+  metadataBase: new URL("https://cervos.online"),
+  title: {
+    default: "Cervos Pharma — Pharmacy Operations & Supply Chain",
+    template: "%s — Cervos Pharma",
+  },
   description:
-    "Precision logistics for the modern pharmacy. Secure, offline-first, FEFO-optimised.",
+    "Precision logistics, bilingual accounting, and offline-first dispensary operations for modern African pharmacy networks.",
+  keywords: [
+    "pharmacy pos",
+    "fefo inventory",
+    "tanzania pharmacy software",
+    "m-pesa pharmacy",
+    "pharmacy accounting tzs",
+    "tmda compliance",
+    "pharmacy supply chain",
+  ],
+  alternates: {
+    canonical: "https://cervos.online",
+    languages: {
+      "en": "https://cervos.online",
+      "sw": "https://cervos.online?lang=SW",
+    },
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Cervos Pharma",
+  },
   icons: {
-    icon: "/logo.png",
-    shortcut: "/logo.png",
-    apple: "/logo.png",
+    icon: [
+      { url: "/cervos-company-logo-circular.svg", type: "image/svg+xml" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/cervos-company-logo-circular.svg",
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "Cervos — Pharmacy OS",
-    description: "Precision logistics for the modern pharmacy. Secure, offline-first, FEFO-optimised.",
-    siteName: "Cervos",
-    images: [{ url: "/logo.png", width: 512, height: 512 }],
+    title: "Cervos Pharma — Pharmacy Operations & Supply Chain",
+    description: "Precision logistics, bilingual accounting, and offline-first dispensary operations.",
+    url: "https://cervos.online",
+    siteName: "Cervos Pharma",
+    locale: "en_US",
+    alternateLocale: ["sw_TZ"],
+    type: "website",
+    images: [{ url: "/logo.png", width: 512, height: 512, alt: "Cervos Pharma Logo" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cervos — Pharmacy OS",
-    description: "Precision logistics for the modern pharmacy.",
+    title: "Cervos Pharma",
+    description: "Precision logistics, bilingual accounting, and offline-first dispensary operations.",
     images: ["/logo.png"],
   },
 };
-
-export const links = [
-  { rel: "stylesheet", href: "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" },
-];
 
 export default async function RootLayout({
   children,
@@ -37,10 +73,12 @@ export default async function RootLayout({
   const lang = await getLang();
   return (
     <html lang={lang === "SW" ? "sw" : "en"} suppressHydrationWarning>
-      {/* No explicit <head> needed — Material Symbols loaded via globals.css @import
-          to avoid third-party devtools <script> injection causing a React hydration mismatch */}
-      <body className="bg-surface text-on-surface font-body-md antialiased">
-        <Providers initialLang={lang}>{children}</Providers>
+      <body className="bg-surface text-on-surface font-body-md antialiased selection:bg-primary/15 selection:text-primary">
+        <Providers initialLang={lang}>
+          {children}
+          <CervosCommandBar />
+          <PwaRegister />
+        </Providers>
         <MockModeBar />
       </body>
     </html>

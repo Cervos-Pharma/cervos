@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../lib/hooks'
 import { fetchAnalytics, fetchOrders, fetchQuotes, fetchPendingCommands, acknowledgeCommand, createPollingInterval } from '../lib/queries'
@@ -218,7 +218,7 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-400">{order.buyer_name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-white">TZS ${order.total.toLocaleString()}</p>
+                    <p className="font-medium text-white">TZS {order.total.toLocaleString()}</p>
                     <p className="text-xs text-gray-400">
                       {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
                     </p>
@@ -250,7 +250,7 @@ export default function Dashboard() {
                     <p className="text-sm text-gray-400">{quote.buyer_name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-white">TZS ${quote.subtotal.toLocaleString()}</p>
+                    <p className="font-medium text-white">TZS {quote.subtotal.toLocaleString()}</p>
                     <span
                       className={`inline-block px-2 py-0.5 rounded-full text-xs ${
                         quote.status === 'accepted'

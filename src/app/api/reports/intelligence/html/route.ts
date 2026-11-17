@@ -1,14 +1,16 @@
 /**
  * @route POST /api/reports/intelligence/html
  * @description Generates a self-contained HTML intelligence report with embedded
- *   data — no external DB calls at render time. All data is serialized as JSON
+ *   data - no external DB calls at render time. All data is serialized as JSON
  *   and embedded in the page so it works offline / as a shared artifact.
  *   Includes inline CSS for print, interactive charts (Chart.js via CDN), and
  *   a Leaflet 2D map of branch locations.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
 import { checkIpRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import { noStoreJson } from "@/lib/workspace/cookies";
 import {
   getIntelligenceOverview,
   getBranchIntelligenceMetrics,
@@ -34,7 +36,12 @@ interface ReportRequest {
 }
 
 export async function POST(req: NextRequest) {
-  // Report generation is expensive (multi-table aggregations) — throttle hard.
+  const cookieStore = await cookies();
+  if (!isValidHQToken(cookieStore.get(HQ_COOKIE_NAME)?.value)) {
+    return noStoreJson({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Report generation is expensive (multi-table aggregations) - throttle hard.
   const rl = checkIpRateLimit(req, "intel-report", 5, 60_000);
   if (!rl.allowed) return rateLimitResponse(rl.resetAt);
 
@@ -82,14 +89,25 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Disposition": `attachment; filename="cervos-intel-${new Date().toISOString().slice(0, 10)}.html"`,
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
       },
     });
   } catch (e) {
-    return NextResponse.json(
+    return noStoreJson(
       { error: e instanceof Error ? e.message : "Report generation failed" },
       { status: 500 }
     );
   }
+}
+
+function escapeHtml(raw: unknown): string {
+  return String(raw ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function buildHtmlReport(data: {
@@ -102,14 +120,14 @@ function buildHtmlReport(data: {
   logistics: LogisticsMetrics | null;
   users: UserActivityMetrics | null;
 }, sections: string[]): string {
-  const json = JSON.stringify(data);
+  const json = JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cervos Intelligence Report — ${new Date(data.generatedAt).toLocaleDateString()}</title>
+  <title>Cervos Intelligence Report - ${new Date(data.generatedAt).toLocaleDateString()}</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -162,7 +180,7 @@ function buildHtmlReport(data: {
 <div class="container" id="report">
 
   <div class="header">
-    <h1>Cervos Pharmacy OS — Intelligence Report</h1>
+    <h1>Cervos Pharmacy OS - Intelligence Report</h1>
     <p>Generated: ${new Date(data.generatedAt).toLocaleString()} &nbsp;|&nbsp; Period: Last ${data.periodDays} days</p>
   </div>
 
@@ -175,7 +193,7 @@ function buildHtmlReport(data: {
   ${sections.includes("users") ? buildUsersSection(data.users) : ""}
 
   <div class="card no-print" style="text-align:center; margin-top: 40px;">
-    <p style="color:#79747e; font-size: 13px;">Cervos Intelligence Report — Generated automatically from live data</p>
+    <p style="color:#79747e; font-size: 13px;">Cervos Intelligence Report - Generated automatically from live data</p>
     <button onclick="window.print()" style="margin-top:12px; padding: 10px 24px; background:#6750A4; color: white; border: none; border-radius: 8px; cursor:pointer; font-size: 14px;">Print / Save as PDF</button>
   </div>
 
@@ -291,7 +309,7 @@ function buildBranchSection(branch: BranchIntelligenceMetrics | null): string {
       <thead><tr><th>#</th><th>Branch</th><th>Account</th><th>Revenue</th><th>Transactions</th></tr></thead>
       <tbody>
         ${branch.topBranchesByRevenue.slice(0, 10).map((b, i) => `
-        <tr><td class="mono">${i + 1}</td><td>${b.branchName}</td><td class="mono">${b.accountName}</td>
+        <tr><td class="mono">${i + 1}</td><td>${escapeHtml(b.branchName)}</td><td class="mono">${escapeHtml(b.accountName)}</td>
           <td class="mono">TZS ${b.revenue.toLocaleString()}</td><td class="mono">${b.transactionCount}</td></tr>`).join("")}
       </tbody>
     </table>
@@ -302,7 +320,7 @@ function buildBranchSection(branch: BranchIntelligenceMetrics | null): string {
       <thead><tr><th>Branch</th><th>Account</th><th>Expiring Batches</th><th>Days Until Expiry</th></tr></thead>
       <tbody>
         ${risk.atRiskBranches.slice(0, 20).map(b => `
-        <tr><td>${b.branchName}</td><td class="mono">${b.accountName}</td>
+        <tr><td>${escapeHtml(b.branchName)}</td><td class="mono">${escapeHtml(b.accountName)}</td>
           <td class="mono">${b.expiringBatches}</td>
           <td><span class="badge ${b.daysUntilExpiry <= 0 ? "badge-critical" : "badge-warning"}">${b.daysUntilExpiry <= 0 ? "EXPIRED" : `${b.daysUntilExpiry}d`}</span></td></tr>`).join("")}
       </tbody>
@@ -343,7 +361,7 @@ function buildRevenueSection(revenue: RevenueMetrics | null): string {
   <div class="card"><h2>Revenue Trend</h2><div class="chart-wrap"><canvas id="revenueTrend"></canvas></div></div>
   ${revenue.topAccountsByRevenue.length > 0 ? `<div class="card"><h2>Top 10 Accounts by Revenue</h2>
     <table><thead><tr><th>#</th><th>Account</th><th>Revenue</th></tr></thead><tbody>
-      ${revenue.topAccountsByRevenue.slice(0, 10).map((a, i) => `<tr><td class="mono">${i+1}</td><td>${a.name}</td><td class="mono">TZS ${a.revenue.toLocaleString()}</td></tr>`).join("")}
+      ${revenue.topAccountsByRevenue.slice(0, 10).map((a, i) => `<tr><td class="mono">${i+1}</td><td>${escapeHtml(a.name)}</td><td class="mono">TZS ${a.revenue.toLocaleString()}</td></tr>`).join("")}
     </tbody></table></div>` : ""}`;
 }
 
@@ -366,11 +384,11 @@ function buildLogisticsSection(logistics: LogisticsMetrics | null): string {
   ${l.reorderRecommendations.filter(r => r.urgency !== "ok").length > 0 ? `<div class="card"><h2>Reorder Recommendations</h2>
     <table><thead><tr><th>Product</th><th>Category</th><th>Daily Use</th><th>Stock</th><th>Days Left</th><th>Reorder Pt</th><th>Urgency</th></tr></thead><tbody>
       ${l.reorderRecommendations.filter(r => r.urgency !== "ok").slice(0, 20).map(r => `
-        <tr><td>${r.genericName}</td><td class="mono">${r.category ?? "—"}</td><td class="mono">${r.avgDailyUsage}/d</td>
+        <tr><td>${escapeHtml(r.genericName)}</td><td class="mono">${escapeHtml(r.category ?? "-")}</td><td class="mono">${r.avgDailyUsage}/d</td>
           <td class="mono">${r.currentStock}</td>
           <td class="mono ${r.daysOfStockRemaining < 7 ? "danger" : ""}">${r.daysOfStockRemaining}d</td>
           <td class="mono">${r.reorderPoint}</td>
-          <td><span class="badge ${r.urgency === "critical" ? "badge-critical" : "badge-warning"}">${r.urgency}</span></td></tr>`).join("")}
+          <td><span class="badge ${r.urgency === "critical" ? "badge-critical" : "badge-warning"}">${escapeHtml(r.urgency)}</span></td></tr>`).join("")}
     </tbody></table></div>` : ""}`;
 }
 

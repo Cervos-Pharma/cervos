@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { allocateFefoBatches, clampDiscount } from "@cervos/core";
 import { queryDb, executeDb, generateId, nowIso } from "../lib/database";
 import { queueForSync, processSyncQueue, checkSubscriptionBlocked } from "../lib/sync";
 import { useAuthStore } from "../lib/store";
@@ -47,6 +48,7 @@ export default function Pos() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [saleError, setSaleError] = useState<string | null>(null);
+  const [prescriptionRef, setPrescriptionRef] = useState("");
   const [completedSale, setCompletedSale] = useState<CompletedSale | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,9 +56,17 @@ export default function Pos() {
     loadData();
   }, []);
 
+  function isBatchExpired(expiryDate?: string | null): boolean {
+    if (!expiryDate) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    return expiryDate.slice(0, 10) < today;
+  }
+
   async function loadData() {
     const prods = await queryDb("SELECT * FROM products");
-    const bats = await queryDb("SELECT * FROM batches WHERE quantity > 0");
+    const bats = await queryDb(
+      "SELECT * FROM batches WHERE quantity > 0 ORDER BY (expiry_date IS NULL) ASC, expiry_date ASC"
+    );
     const taxSetting = await queryDb("SELECT value FROM app_settings WHERE key = 'tax_rate'");
     if (taxSetting.length > 0) {
       const configuredRate = Number(JSON.parse(taxSetting[0].value));
@@ -67,16 +77,28 @@ export default function Pos() {
   }
 
   function findProductByBarcode(barcodeStr: string): { product: Product; batch: Batch } | null {
-    if (!barcodeStr.trim()) return null;
+    const trimmed = barcodeStr.trim();
+    if (!trimmed) return null;
 
-    const productByBarcode = products.find((p) => p.barcode === barcodeStr);
+    const productByBarcode = products.find((p) => p.barcode === trimmed);
     if (productByBarcode) {
-      const batch = batches.find((b) => b.product_id === productByBarcode.id);
-      if (batch) return { product: productByBarcode, batch };
+      const fefoItem = availableItems.find((item) => item.product.id === productByBarcode.id);
+      if (fefoItem) return fefoItem;
+      const expiredMatch = batches.find(
+        (b) => b.product_id === productByBarcode.id && b.quantity > 0 && isBatchExpired(b.expiry_date)
+      );
+      if (expiredMatch) {
+        setSaleError(`Expired batch blocked for ${productByBarcode.generic_name}. Select non-expired stock.`);
+      }
+      return null;
     }
 
-    const batchById = batches.find((b) => b.id === barcodeStr);
+    const batchById = batches.find((b) => b.id === trimmed || b.batch_number === trimmed);
     if (batchById) {
+      if (isBatchExpired(batchById.expiry_date)) {
+        setSaleError("This batch is expired and cannot be dispensed under FEFO safety rules.");
+        return null;
+      }
       const product = products.find((p) => p.id === batchById.product_id);
       if (product) return { product, batch: batchById };
     }
@@ -166,20 +188,26 @@ export default function Pos() {
   }
 
   const availableItems = batches
-    .filter((batch) => batch.quantity > 0)
+    .filter((batch) => batch.quantity > 0 && !isBatchExpired(batch.expiry_date))
+    .sort((a, b) => {
+      const expA = a.expiry_date?.slice(0, 10) || "9999-12-31";
+      const expB = b.expiry_date?.slice(0, 10) || "9999-12-31";
+      return expA.localeCompare(expB);
+    })
     .map((batch) => ({ batch, product: products.find((product) => product.id === batch.product_id) }))
-    .filter((item): item is { batch: Batch; product: Product } => Boolean(item.product))
+    .filter((item): item is { batch: Batch; product: Product } => Boolean(item.product));
 
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const matchingItems = normalizedSearch
     ? availableItems.filter(({ product }) =>
-        [product.generic_name, product.brand_name, product.barcode]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(normalizedSearch))
-      )
+      [product.generic_name, product.brand_name, product.barcode]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+    )
     : availableItems
 
   function addAvailableItem(item: { batch: Batch; product: Product }) {
+    setSaleError(null);
     addToCart({ batch: item.batch, product: item.product, quantity: 1, unit_price: item.batch.sale_price })
     setSearchQuery('')
   }
@@ -196,8 +224,12 @@ export default function Pos() {
     return getSubtotal() * (taxRate / 100);
   }
 
+  function getDiscount(): number {
+    return clampDiscount(getSubtotal(), parseFloat(discount || "0"));
+  }
+
   function getTotal(): number {
-    return getSubtotal() + getTax() - parseFloat(discount || "0");
+    return Math.max(0, getSubtotal() + getTax() - getDiscount());
   }
 
   function getChange(): number {
@@ -205,14 +237,50 @@ export default function Pos() {
     return Math.max(0, tender - getTotal());
   }
 
+  const hasRxItems = cart.some((item) => Boolean(item.product.requires_prescription));
+
   async function processSale() {
     if (cart.length === 0 || isProcessing) return;
 
     setSaleError(null);
 
+    if (hasRxItems && !prescriptionRef.trim()) {
+      setSaleError("Prescription reference or claim token is required for Rx-only medicines.");
+      return;
+    }
+
+    for (const item of cart) {
+      const check = allocateFefoBatches(
+        [
+          {
+            id: item.batch.id,
+            batchNumber: item.batch.batch_number || item.batch.id.slice(0, 8),
+            quantity: item.batch.quantity,
+            expiryDate: item.batch.expiry_date ?? null,
+          },
+        ],
+        item.quantity,
+        {
+          requiresPrescription: Boolean(item.product.requires_prescription),
+          prescriptionRef: prescriptionRef.trim() || null,
+        }
+      );
+      if (!check.ok) {
+        setSaleError(`${item.product.generic_name}: ${check.error}`);
+        return;
+      }
+    }
+
+    const total = getTotal();
+    const parsedTender = tenderAmount.trim() === "" ? total : parseFloat(tenderAmount);
+    if (!Number.isFinite(parsedTender) || parsedTender < total) {
+      setSaleError(`Amount paid (TZS ${Number.isFinite(parsedTender) ? parsedTender.toLocaleString() : 0}) cannot be less than total due (TZS ${total.toLocaleString()}).`);
+      return;
+    }
+
     const block = await checkSubscriptionBlocked();
     if (block.blocked) {
-      alert(`Cannot process sale: ${block.reason || "subscription blocked"}`);
+      setSaleError(`Cannot process sale: ${block.reason || "subscription blocked"}`);
       return;
     }
 
@@ -227,8 +295,10 @@ export default function Pos() {
       const receiptId = generateId();
       const receiptNumber = `RCP-${Date.now().toString(36).toUpperCase()}`;
       const now = nowIso();
-      const total = getTotal();
-      const tender = parseFloat(tenderAmount || "0") || total;
+      const safeDiscount = getDiscount();
+      const tender = parsedTender;
+      const changeDue = Math.max(0, tender - total);
+      const paymentRef = prescriptionRef.trim() || null;
 
       await executeDb(
         `INSERT INTO sales (id, branch_id, operator_id, total, discount, tax, tender, change_due, payment_method, payment_ref, created_at, synced)
@@ -238,12 +308,12 @@ export default function Pos() {
           branchId,
           currentOperator?.id || null,
           total,
-          parseFloat(discount || "0"),
+          safeDiscount,
           getTax(),
           tender,
-          getChange(),
+          changeDue,
           paymentMethod,
-          null,
+          paymentRef,
           now,
           0,
         ]
@@ -254,6 +324,24 @@ export default function Pos() {
         await executeDb(
           `INSERT INTO sale_items (id, sale_id, batch_id, quantity, unit_price) VALUES (?,?,?,?,?)`,
           [saleItemId, saleId, item.batch.id, item.quantity, item.unit_price]
+        );
+        const movementId = generateId();
+        await executeDb(
+          `INSERT INTO stock_movements (id, branch_id, batch_id, product_id, operator_id, movement_type, quantity_delta, reason, reference_id, created_at, synced)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            movementId,
+            branchId,
+            item.batch.id,
+            item.product.id,
+            currentOperator.id,
+            "sale",
+            -item.quantity,
+            paymentRef ? `Rx ${paymentRef}` : "POS dispense",
+            saleId,
+            now,
+            0,
+          ]
         );
         const batchUpdateIso = nowIso();
         await executeDb(
@@ -276,9 +364,6 @@ export default function Pos() {
             updated_at: batchUpdateIso,
           });
         }
-        // sale_items.id is a uuid column in Supabase — reuse the same generated
-        // id as the local row (a composite "saleId-batchId" string is not a valid
-        // uuid and the cloud upsert would reject it, stranding the row forever).
         await queueForSync("sale_items", saleItemId, "insert", {
           id: saleItemId,
           sale_id: saleId,
@@ -298,23 +383,25 @@ export default function Pos() {
         branch_id: branchId,
         operator_id: currentOperator?.id || null,
         total,
-        discount: parseFloat(discount || "0"),
+        discount: safeDiscount,
         tax: getTax(),
         tender,
-        change_due: getChange(),
+        change_due: changeDue,
         payment_method: paymentMethod,
+        payment_ref: paymentRef,
         created_at: now,
       });
 
       setCart([]);
       setTenderAmount("");
       setDiscount("0");
+      setPrescriptionRef("");
       loadData();
       setCompletedSale({
         receiptNumber,
         total,
         tender,
-        change: getChange(),
+        change: changeDue,
         paymentMethod,
         createdAt: now,
       });
@@ -354,128 +441,180 @@ export default function Pos() {
       )}
       <div className="flex flex-col lg:flex-row h-full">
         <div className="flex-1 flex flex-col p-4 sm:p-6 min-w-0">
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex gap-2">
-              <input
-                ref={barcodeInputRef}
-                type="text"
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-                onKeyDown={handleBarcodeScan}
-                placeholder={t('pos.scanBarcode')}
-                className="flex-1 px-4 py-3 rounded-lg border border-outline-variant bg-surface-base text-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                autoFocus
-              />
-              <button
-                onClick={() => setShowScanner(true)}
-                className="px-4 py-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                title={t('pos.scanBarcode')}
-                type="button"
-              >
-                <span className="material-symbols-outlined">qr_code_scanner</span>
-              </button>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex gap-2">
+                <input
+                  ref={barcodeInputRef}
+                  type="text"
+                  value={barcode}
+                  onChange={(e) => setBarcode(e.target.value)}
+                  onKeyDown={handleBarcodeScan}
+                  placeholder={t('pos.scanBarcode')}
+                  className="flex-1 px-4 py-3 rounded-lg border border-outline-variant bg-surface-base text-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  autoFocus
+                />
+                <button
+                  onClick={() => setShowScanner(true)}
+                  className="px-4 py-3 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                  title={t('pos.scanBarcode')}
+                  type="button"
+                >
+                  <span className="material-symbols-outlined">qr_code_scanner</span>
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="w-full sm:w-64 relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearchBarcode()}
-              placeholder={t('pos.searchPlaceholder')}
-              className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            />
-            {normalizedSearch && (
-              <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-outline-variant bg-surface-base shadow-lg">
-                {matchingItems.length > 0 ? matchingItems.slice(0, 6).map((item) => (
-                  <button
-                    key={item.batch.id}
-                    type="button"
-                    onClick={() => addAvailableItem(item)}
-                    className="w-full px-3 py-2 text-left hover:bg-primary/10 border-b border-outline-variant last:border-b-0"
-                  >
-                    <span className="block text-sm font-medium">{item.product.generic_name}</span>
-                    <span className="block text-xs text-on-surface-variant">
-                      {item.product.brand_name || 'Generic'} · TZS {item.batch.sale_price.toLocaleString()} · {item.batch.quantity} in stock
-                    </span>
-                  </button>
-                )) : (
-                  <p className="px-3 py-3 text-sm text-on-surface-variant">No in-stock products match your search.</p>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Cart — table on desktop, card list on phones */}
-        <div className="flex-1 overflow-auto bg-surface-base border border-outline-variant rounded-xl">
-          {cart.length === 0 ? (
-            <div className="h-full overflow-y-auto p-5">
-              <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
-                <span className="material-symbols-outlined text-5xl">point_of_sale</span>
-                <p className="mt-2 text-lg font-medium">{t('pos.chooseProducts')}</p>
-                <p className="text-sm">{t('pos.chooseProductsHint')}</p>
-              </div>
-              {matchingItems.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {matchingItems.map((item) => (
+            <div className="w-full sm:w-64 relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearchBarcode()}
+                placeholder={t('pos.searchPlaceholder')}
+                className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+              />
+              {normalizedSearch && (
+                <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-lg border border-outline-variant bg-surface-base shadow-lg">
+                  {matchingItems.length > 0 ? matchingItems.slice(0, 6).map((item) => (
                     <button
                       key={item.batch.id}
                       type="button"
                       onClick={() => addAvailableItem(item)}
-                      className="rounded-xl border border-outline-variant p-4 text-left hover:border-primary hover:bg-primary/5 transition-colors"
+                      className="w-full px-3 py-2 text-left hover:bg-primary/10 border-b border-outline-variant last:border-b-0"
                     >
-                      <p className="font-semibold text-on-surface">{item.product.generic_name}</p>
-                      <p className="text-sm text-on-surface-variant">{item.product.brand_name || 'Generic'}</p>
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <span className="font-semibold text-primary">TZS {item.batch.sale_price.toLocaleString()}</span>
-                        <span className="text-on-surface-variant">{item.batch.quantity} {t('pos.inStock')}</span>
-                      </div>
-                      <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">
-                        <span className="material-symbols-outlined text-base">add_shopping_cart</span>
-                        {t('pos.addToCart')}
+                      <span className="block text-sm font-medium">{item.product.generic_name}</span>
+                      <span className="block text-xs text-on-surface-variant">
+                        {item.product.brand_name || 'Generic'} · TZS {item.batch.sale_price.toLocaleString()} · {item.batch.quantity} in stock
                       </span>
                     </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-outline-variant p-6 text-center text-on-surface-variant">
-                  <p className="font-medium">{t('pos.noSaleableStock')}</p>
-                  <p className="mt-1 text-sm">{t('pos.noSaleableStockHint')}</p>
+                  )) : (
+                    <p className="px-3 py-3 text-sm text-on-surface-variant">No in-stock products match your search.</p>
+                  )}
                 </div>
               )}
             </div>
-          ) : (
-            <>
-              {/* Desktop cart table (lg+) */}
-              <table className="hidden lg:table w-full">
-                <thead className="bg-outline-variant/50 sticky top-0">
-                  <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
-                    <th className="px-4 py-3">{t('pos.cart')}</th>
-                    <th className="px-4 py-3 text-right">{t('common.price')}</th>
-                    <th className="px-4 py-3 text-center">{t('common.quantity')}</th>
-                    <th className="px-4 py-3 text-right">{t('pos.subtotal')}</th>
-                    <th className="px-4 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody>
+          </div>
+
+          {/* Cart — table on desktop, card list on phones */}
+          <div className="flex-1 overflow-auto bg-surface-base border border-outline-variant rounded-xl">
+            {cart.length === 0 ? (
+              <div className="h-full overflow-y-auto p-5">
+                <div className="flex flex-col items-center justify-center py-8 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-5xl">point_of_sale</span>
+                  <p className="mt-2 text-lg font-medium">{t('pos.chooseProducts')}</p>
+                  <p className="text-sm">{t('pos.chooseProductsHint')}</p>
+                </div>
+                {matchingItems.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {matchingItems.map((item) => (
+                      <button
+                        key={item.batch.id}
+                        type="button"
+                        onClick={() => addAvailableItem(item)}
+                        className="rounded-xl border border-outline-variant p-4 text-left hover:border-primary hover:bg-primary/5 transition-colors"
+                      >
+                        <p className="font-semibold text-on-surface">{item.product.generic_name}</p>
+                        <p className="text-sm text-on-surface-variant">{item.product.brand_name || 'Generic'}</p>
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="font-semibold text-primary">TZS {item.batch.sale_price.toLocaleString()}</span>
+                          <span className="text-on-surface-variant">{item.batch.quantity} {t('pos.inStock')}</span>
+                        </div>
+                        <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                          <span className="material-symbols-outlined text-base">add_shopping_cart</span>
+                          {t('pos.addToCart')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-outline-variant p-6 text-center text-on-surface-variant">
+                    <p className="font-medium">{t('pos.noSaleableStock')}</p>
+                    <p className="mt-1 text-sm">{t('pos.noSaleableStockHint')}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Desktop cart table (lg+) */}
+                <table className="hidden lg:table w-full">
+                  <thead className="bg-outline-variant/50 sticky top-0">
+                    <tr className="text-left text-xs font-semibold text-on-surface-variant uppercase">
+                      <th className="px-4 py-3">{t('pos.cart')}</th>
+                      <th className="px-4 py-3 text-right">{t('common.price')}</th>
+                      <th className="px-4 py-3 text-center">{t('common.quantity')}</th>
+                      <th className="px-4 py-3 text-right">{t('pos.subtotal')}</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cart.map((item) => (
+                      <tr key={item.batch.id} className="border-t border-outline-variant">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-sm">{item.product.generic_name}</p>
+                          <p className="text-xs text-on-surface-variant">
+                            {item.product.brand_name || "Generic"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          TZS {item.unit_price.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => updateQuantity(item.batch.id, -1)}
+                              className="w-9 h-9 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                            >
+                              -
+                            </button>
+                            <span className="w-8 text-center font-medium">
+                              {item.quantity}
+                            </span>
+                            <button
+                              onClick={() => updateQuantity(item.batch.id, 1)}
+                              className="w-9 h-9 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          TZS {(item.unit_price * item.quantity).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => removeFromCart(item.batch.id)}
+                            className="p-2 rounded hover:bg-error/10 text-error transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-xl">
+                              delete
+                            </span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Mobile cart cards (< lg) — touch-friendly qty steppers */}
+                <ul className="lg:hidden divide-y divide-outline-variant">
                   {cart.map((item) => (
-                    <tr key={item.batch.id} className="border-t border-outline-variant">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-sm">{item.product.generic_name}</p>
-                        <p className="text-xs text-on-surface-variant">
-                          {item.product.brand_name || "Generic"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        TZS {item.unit_price.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
+                    <li key={item.batch.id} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">{item.product.generic_name}</p>
+                          <p className="text-xs text-on-surface-variant">
+                            {item.product.brand_name || "Generic"} · TZS {item.unit_price.toLocaleString()}
+                          </p>
+                        </div>
+                        <span className="font-semibold text-sm shrink-0">
+                          TZS {(item.unit_price * item.quantity).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
                           <button
                             onClick={() => updateQuantity(item.batch.id, -1)}
-                            className="w-9 h-9 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                            className="w-10 h-10 rounded-full bg-outline-variant active:bg-primary active:text-white transition-colors flex items-center justify-center text-lg"
                           >
                             -
                           </button>
@@ -484,187 +623,151 @@ export default function Pos() {
                           </span>
                           <button
                             onClick={() => updateQuantity(item.batch.id, 1)}
-                            className="w-9 h-9 rounded-full bg-outline-variant hover:bg-primary hover:text-white transition-colors flex items-center justify-center"
+                            className="w-10 h-10 rounded-full bg-outline-variant active:bg-primary active:text-white transition-colors flex items-center justify-center text-lg"
                           >
                             +
                           </button>
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold">
-                        TZS {(item.unit_price * item.quantity).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3">
                         <button
                           onClick={() => removeFromCart(item.batch.id)}
-                          className="p-2 rounded hover:bg-error/10 text-error transition-colors"
+                          className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors"
                         >
                           <span className="material-symbols-outlined text-xl">
                             delete
                           </span>
                         </button>
-                      </td>
-                    </tr>
+                      </div>
+                    </li>
                   ))}
-                </tbody>
-              </table>
-
-              {/* Mobile cart cards (< lg) — touch-friendly qty steppers */}
-              <ul className="lg:hidden divide-y divide-outline-variant">
-                {cart.map((item) => (
-                  <li key={item.batch.id} className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{item.product.generic_name}</p>
-                        <p className="text-xs text-on-surface-variant">
-                          {item.product.brand_name || "Generic"} · TZS {item.unit_price.toLocaleString()}
-                        </p>
-                      </div>
-                      <span className="font-semibold text-sm shrink-0">
-                        TZS {(item.unit_price * item.quantity).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => updateQuantity(item.batch.id, -1)}
-                          className="w-10 h-10 rounded-full bg-outline-variant active:bg-primary active:text-white transition-colors flex items-center justify-center text-lg"
-                        >
-                          -
-                        </button>
-                        <span className="w-8 text-center font-medium">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.batch.id, 1)}
-                          className="w-10 h-10 rounded-full bg-outline-variant active:bg-primary active:text-white transition-colors flex items-center justify-center text-lg"
-                        >
-                          +
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => removeFromCart(item.batch.id)}
-                        className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-xl">
-                          delete
-                        </span>
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Payment panel — right rail on desktop, stacks below the cart on mobile */}
-      <div className="w-full lg:w-80 bg-surface-base lg:border-l border-t lg:border-t-0 border-outline-variant p-4 sm:p-6 flex flex-col">
-        <h2 className="font-headline text-lg font-bold text-on-surface mb-4">
-          {t('pos.payment')}
-        </h2>
-        {saleError && <div className="mb-4 rounded-lg border border-error/20 bg-error/10 p-3 text-sm text-error">{saleError}</div>}
-
-        <div className="space-y-3 mb-4">
-          <div>
-            <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-              {t('pos.paymentMethod')}
-            </label>
-            <select
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
-            >
-              {PAYMENT_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method.replace("_", " ").toUpperCase()}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-              {t('pos.discount')} (TZS)
-            </label>
-            <input
-              type="number"
-              value={discount}
-              onChange={(e) => setDiscount(e.target.value)}
-              min="0"
-              step="0.01"
-              className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-on-surface-variant mb-1">
-              {t('pos.amountTendered')} (TZS)
-            </label>
-            <input
-              type="number"
-              value={tenderAmount}
-              onChange={(e) => setTenderAmount(e.target.value)}
-              min="0"
-              step="0.01"
-              placeholder={getTotal().toLocaleString()}
-              className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
-            />
-          </div>
-        </div>
-
-        <div className="border-t border-outline-variant pt-4 space-y-2">
-          <div className="flex justify-between text-sm">
-            <span className="text-on-surface-variant">{t('pos.subtotal')}</span>
-            <span>TZS {getSubtotal().toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-on-surface-variant">{t('pos.tax')} ({taxRate}%)</span>
-            <span>TZS {getTax().toLocaleString()}</span>
-          </div>
-          {parseFloat(discount || "0") > 0 && (
-            <div className="flex justify-between text-sm text-secondary">
-              <span>{t('pos.discount')}</span>
-              <span>-TZS {parseFloat(discount || "0").toLocaleString()}</span>
-            </div>
-          )}
-          <div className="flex justify-between font-headline text-xl font-black">
-            <span>{t('receipt.total')}</span>
-            <span>TZS {getTotal().toLocaleString()}</span>
-          </div>
-          {parseFloat(tenderAmount || "0") > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-on-surface-variant">{t('pos.changeDue')}</span>
-              <span className="text-secondary font-semibold">
-                TZS {getChange().toLocaleString()}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-auto pt-4">
-          <button
-            onClick={processSale}
-            disabled={cart.length === 0 || isProcessing}
-            className="w-full py-4 rounded-xl bg-primary text-on-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isProcessing ? (
-              <>
-                <span className="material-symbols-outlined animate-spin">
-                  progress_activity
-                </span>
-                {t('pos.processing')}
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined">check_circle</span>
-                {t('pos.completeSale')}
+                </ul>
               </>
             )}
-          </button>
+          </div>
+        </div>
+
+        {/* Payment panel — right rail on desktop, stacks below the cart on mobile */}
+        <div className="w-full lg:w-80 bg-surface-base lg:border-l border-t lg:border-t-0 border-outline-variant p-4 sm:p-6 flex flex-col">
+          <h2 className="font-headline text-lg font-bold text-on-surface mb-4">
+            {t('pos.payment')}
+          </h2>
+          {saleError && <div className="mb-4 rounded-lg border border-error/20 bg-error/10 p-3 text-sm text-error">{saleError}</div>}
+
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+                {t('pos.paymentMethod')}
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
+              >
+                {PAYMENT_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {method.replace("_", " ").toUpperCase()}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {hasRxItems && (
+              <div>
+                <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+                  Prescription Ref / Claim Token *
+                </label>
+                <input
+                  type="text"
+                  value={prescriptionRef}
+                  onChange={(e) => setPrescriptionRef(e.target.value)}
+                  placeholder="e.g. RX-8492 or claim token"
+                  className="w-full px-3 py-2 rounded-md border border-amber-500/50 bg-surface-base text-sm focus:outline-none focus:border-primary"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+                {t('pos.discount')} (TZS)
+              </label>
+              <input
+                type="number"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                min="0"
+                max={getSubtotal()}
+                step="0.01"
+                className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant mb-1">
+                {t('pos.amountTendered')} (TZS)
+              </label>
+              <input
+                type="number"
+                value={tenderAmount}
+                onChange={(e) => setTenderAmount(e.target.value)}
+                min="0"
+                step="0.01"
+                placeholder={getTotal().toLocaleString()}
+                className="w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm focus:outline-none focus:border-primary"
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-outline-variant pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">{t('pos.subtotal')}</span>
+              <span className="tabular-nums">TZS {getSubtotal().toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">{t('pos.tax')} ({taxRate}%)</span>
+              <span className="tabular-nums">TZS {getTax().toLocaleString()}</span>
+            </div>
+            {getDiscount() > 0 && (
+              <div className="flex justify-between text-sm text-secondary">
+                <span>{t('pos.discount')}</span>
+                <span className="tabular-nums">-TZS {getDiscount().toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-headline text-xl font-black">
+              <span>{t('receipt.total')}</span>
+              <span className="tabular-nums">TZS {getTotal().toLocaleString()}</span>
+            </div>
+            {parseFloat(tenderAmount || "0") > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-on-surface-variant">{t('pos.changeDue')}</span>
+                <span className="text-secondary font-semibold">
+                  TZS {getChange().toLocaleString()}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-auto pt-4">
+            <button
+              onClick={processSale}
+              disabled={cart.length === 0 || isProcessing}
+              className="w-full py-4 rounded-xl bg-primary text-on-primary font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isProcessing ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin">
+                    progress_activity
+                  </span>
+                  {t('pos.processing')}
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined">check_circle</span>
+                  {t('pos.completeSale')}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 }

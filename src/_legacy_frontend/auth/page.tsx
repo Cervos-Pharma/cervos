@@ -1,0 +1,377 @@
+"use client";
+
+import { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import Toast from "@/components/Toast";
+import { useI18n } from "@/lib/i18n/context";
+
+type Tab = "signin" | "signup" | "reset";
+type AccountType = "pharmacy" | "supplier";
+
+function RedirectLoader({ message }: { message: string }) {
+  return (
+    <div className="fixed inset-0 z-[200] bg-surface-base/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4">
+      <div className="w-12 h-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">{message}</p>
+    </div>
+  );
+}
+
+function ConfirmScreen({ email, onBack, t }: { email: string; onBack: () => void; t: (k: string) => string }) {
+  return (
+    <div className="flex flex-col items-center text-center py-4">
+      <div className="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center mb-6">
+        <span className="material-symbols-outlined text-[32px] text-secondary">mark_email_read</span>
+      </div>
+      <h2 className="font-headline-md text-headline-md text-ink-deep mb-2">{t("auth.confirm.title")}</h2>
+      <p className="font-body-md text-body-md text-on-surface-variant mb-1">{t("auth.confirm.body")}</p>
+      <p className="font-body-md text-body-md text-primary font-semibold mb-6 break-all">{email}</p>
+      <p className="font-body-sm text-body-sm text-on-surface-variant mb-8 max-w-xs">{t("auth.confirm.note")}</p>
+      <button onClick={onBack} className="font-label-md text-label-md text-primary hover:underline flex items-center gap-1">
+        <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+        {t("auth.back_to_signin")}
+      </button>
+    </div>
+  );
+}
+
+function InviteBanner({ companyName, t }: { companyName: string; t: (k: string) => string }) {
+  return (
+    <div className="bg-secondary/10 border border-secondary/20 p-4 mb-6 rounded">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="material-symbols-outlined text-[18px] text-secondary">mail</span>
+        <span className="font-label-md text-label-md text-secondary font-medium">{t("auth.invite.title")}</span>
+      </div>
+      <p className="font-body-sm text-body-sm text-on-surface-variant">
+        {t("auth.invite.body").replace("{company}", companyName)}
+      </p>
+    </div>
+  );
+}
+
+function AuthForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { lang, setLang, t } = useI18n();
+
+  const [tab, setTab] = useState<Tab>(
+    searchParams.get("tab") === "signup" ? "signup" : searchParams.get("tab") === "reset" ? "reset" : "signin"
+  );
+  const [accountType, setAccountType] = useState<AccountType>(
+    searchParams.get("type") === "supplier" ? "supplier" : "pharmacy"
+  );
+  const [loading, setLoading] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "error" | "success" | "info" } | null>(null);
+
+  const inviteToken = searchParams.get("invite_token");
+  const [inviteData, setInviteData] = useState<{ companyName: string; token: string } | null>(null);
+  const [loadingInvite, setLoadingInvite] = useState(false);
+
+  const [siEmail, setSiEmail] = useState("");
+  const [siPassword, setSiPassword] = useState("");
+  const [siShowPw, setSiShowPw] = useState(false);
+
+  const [suFullName, setSuFullName] = useState("");
+  const [suEmail, setSuEmail] = useState("");
+  const [suPhone, setSuPhone] = useState("");
+  const [suEntity, setSuEntity] = useState("");
+  const [suPassword, setSuPassword] = useState("");
+  const [suShowPw, setSuShowPw] = useState(false);
+
+  const [resetEmail, setResetEmail] = useState("");
+  // Persistent post-send state: the reset form switches to a confirmation
+  // showing which address the link went to. It stays until the user leaves
+  // (no auto-jump back to sign-in — that made the success invisible and
+  // invited duplicate submissions).
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteToken) {
+      fetchInviteDetails(inviteToken);
+    }
+  }, [inviteToken]);
+
+  async function fetchInviteDetails(token: string) {
+    setLoadingInvite(true);
+    try {
+      const res = await fetch(`/api/invite/lookup?token=${encodeURIComponent(token)}`);
+      const data = await res.json();
+      if (data.error) {
+        setToast({ message: data.error, type: "error" });
+      } else if (data.data) {
+        setInviteData({ companyName: data.data.companyName, token });
+        setAccountType("supplier");
+        setTab("signup");
+      }
+      } catch {
+        setToast({ message: t("auth.fetch_error"), type: "error" });
+      } finally {
+      setLoadingInvite(false);
+    }
+  }
+
+  useEffect(() => {
+    if (searchParams.get("error") === "confirmation_failed") {
+      setToast({ message: t("auth.confirm.expired"), type: "error" });
+    }
+  }, [searchParams, t]);
+
+  async function handleSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signInWithPassword({ email: siEmail, password: siPassword });
+      if (error) { setToast({ message: error.message, type: "error" }); return; }
+      setRedirecting(true);
+      const next = searchParams.get("next");
+      const acctType = data.user?.user_metadata?.account_type ?? "pharmacy";
+      router.replace(next ?? (acctType === "supplier" ? "/supplier" : "/dashboard"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSignUp(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.signUp({
+        email: suEmail,
+        password: suPassword,
+        options: {
+          data: {
+            full_name: suFullName,
+            phone: suPhone,
+            account_type: accountType,
+            entity_name: inviteData?.companyName || suEntity,
+            invite_token: inviteData?.token || null,
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          email_confirm: true,
+        } as any,
+      });
+      if (error) { setToast({ message: error.message, type: "error" }); return; }
+      if (data.user && !data.session) { setConfirmEmail(suEmail); return; }
+      setRedirecting(true);
+      router.replace(accountType === "supplier" ? "/supplier" : "/dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handlePasswordReset(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        // Route the email link through /auth/callback (PKCE code exchange →
+        // redirect to /auth/recovery). This works with BOTH the default
+        // Supabase email template ({{ .ConfirmationURL }}) and custom templates,
+        // as long as `${origin}/auth/callback?next=/auth/recovery` is added to
+        // Supabase Auth → URL Configuration → Redirect URLs. If /auth/recovery
+        // is missing from that allow-list, Supabase silently falls back to the
+        // Site URL (the landing page) — the "reset link goes nowhere" bug.
+        redirectTo: `${window.location.origin}/auth/callback?next=/auth/recovery`,
+      });
+      if (error) { setToast({ message: error.message, type: "error" }); return; }
+      setToast({ message: t("auth.reset.sent"), type: "success" });
+      setResetSentTo(resetEmail.trim());
+      setResetEmail("");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inputCls = "w-full h-11 px-3.5 bg-surface-base border border-outline-variant rounded-lg text-sm text-ink-deep focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-colors placeholder:text-on-surface-variant/60";
+  const btnCls = "w-full h-11 bg-primary text-on-primary rounded-lg text-sm font-semibold flex items-center justify-center gap-2 hover:bg-primary/95 active:scale-[0.99] transition-colors disabled:opacity-60 shadow-xs";
+
+  return (
+    <div className="min-h-screen flex flex-col bg-surface text-ink-deep font-body-md">
+      {redirecting && <RedirectLoader message={t("common.loading")} />}
+
+      <header className="w-full border-b border-outline-variant bg-surface-base/95 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 flex justify-between items-center">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 relative">
+              <Image src="/cervos-mark.svg" alt="Cervos" width={32} height={32} className="object-contain" priority />
+            </div>
+            <span className="font-headline-md text-lg font-bold text-primary tracking-tight">Cervos</span>
+          </Link>
+          <div className="flex bg-surface-container-low rounded-lg border border-outline-variant p-0.5">
+            {(["EN", "SW"] as const).map((l) => (
+              <button
+                key={l}
+                onClick={() => setLang(l)}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${lang === l ? "bg-surface-base text-primary shadow-xs" : "text-on-surface-variant hover:text-ink-deep"}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-grow flex items-center justify-center px-4 py-10 sm:py-14">
+        <div className="w-full max-w-[440px]">
+          <div className="rounded-2xl border border-outline-variant bg-surface-base p-7 sm:p-8 shadow-sm">
+            {loadingInvite ? (
+              <div className="flex flex-col items-center py-12">
+                <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin mb-4" />
+                <p className="font-body-sm text-on-surface-variant">{t("auth.validating_invite")}</p>
+              </div>
+            ) : confirmEmail ? (
+              <ConfirmScreen email={confirmEmail} onBack={() => { setConfirmEmail(null); setTab("signin"); }} t={t} />
+            ) : (
+              <>
+                <div className="flex mb-8 border-b border-ink-deep/10">
+                  {([["signin", t("auth.signin")], ["signup", t("auth.signup")]] as [Tab, string][]).map(([key, label]) => (
+                    <button key={key} onClick={() => setTab(key)} className={`flex-1 pb-3 font-bold text-base transition-all border-b-2 ${tab === key ? "text-primary border-primary" : "text-on-surface-variant border-transparent hover:text-primary"}`}>{label}</button>
+                  ))}
+                </div>
+
+                {tab === "signin" && (
+                  <form onSubmit={handleSignIn} className="flex flex-col gap-4">
+                    <input type="email" value={siEmail} onChange={e => setSiEmail(e.target.value)} placeholder={t("auth.email")} required className={inputCls} />
+                    <div className="relative">
+                      <input type={siShowPw ? "text" : "password"} value={siPassword} onChange={e => setSiPassword(e.target.value)} placeholder={t("auth.password")} required className={inputCls + " pr-12"} />
+                      <button type="button" onClick={() => setSiShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface">
+                        <span className="material-symbols-outlined text-[20px]">{siShowPw ? "visibility_off" : "visibility"}</span>
+                      </button>
+                    </div>
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => setTab("reset")} className="font-label-md text-label-md text-primary hover:underline">{t("auth.forgot")}</button>
+                    </div>
+                    <button type="submit" disabled={loading} className={btnCls + " mt-1"}>
+                      {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>{t("auth.signin")} <span className="material-symbols-outlined text-[18px]">arrow_forward</span></>}
+                    </button>
+                    <p className="text-center font-body-sm text-body-sm text-on-surface-variant">
+                      {t("auth.noaccount")}{" "}
+                      <button type="button" onClick={() => setTab("signup")} className="text-primary hover:underline font-semibold">{t("auth.signup")}</button>
+                    </p>
+                  </form>
+                )}
+
+                {tab === "signup" && (
+                  <form onSubmit={handleSignUp} className="flex flex-col gap-3">
+                    {inviteData && <InviteBanner companyName={inviteData.companyName} t={t} />}
+                    <div className="flex gap-2">
+                      {(["pharmacy", "supplier"] as AccountType[]).map(type => (
+                        <button key={type} type="button" onClick={() => setAccountType(type)} className={`flex-1 py-2.5 font-label-md text-label-md rounded flex items-center justify-center gap-2 transition-all ${accountType === type ? "bg-primary text-on-primary" : "border border-ink-deep/20 text-on-surface-variant hover:border-primary hover:text-primary"}`} disabled={!!inviteData}>
+                          <span className="material-symbols-outlined text-[15px]">{type === "pharmacy" ? "local_pharmacy" : "local_shipping"}</span>
+                          {type === "pharmacy" ? t("auth.pharmacy") : t("auth.supplier")}
+                        </button>
+                      ))}
+                    </div>
+                    <input type="text" value={suFullName} onChange={e => setSuFullName(e.target.value)} placeholder={t("auth.fullname")} required className={inputCls} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="email" value={suEmail} onChange={e => setSuEmail(e.target.value)} placeholder={t("auth.email")} required className={inputCls} />
+                      <input type="tel" value={suPhone} onChange={e => setSuPhone(e.target.value)} placeholder={t("auth.phone")} className={inputCls} />
+                    </div>
+                    <input
+                      type="text"
+                      value={inviteData?.companyName || suEntity}
+                      onChange={e => setSuEntity(e.target.value)}
+                      placeholder={accountType === "pharmacy" ? t("auth.pharmacyname") : t("auth.companyname")}
+                      required
+                      className={inputCls}
+                      disabled={!!inviteData}
+                    />
+                    <div className="relative">
+                      <input type={suShowPw ? "text" : "password"} value={suPassword} onChange={e => setSuPassword(e.target.value)} placeholder={t("auth.createpw")} required minLength={8} className={inputCls + " pr-12"} />
+                      <button type="button" onClick={() => setSuShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface">
+                        <span className="material-symbols-outlined text-[20px]">{suShowPw ? "visibility_off" : "visibility"}</span>
+                      </button>
+                    </div>
+                    {suPassword && (
+                      <div className="flex gap-1 -mt-1">
+                        {[...Array(4)].map((_, i) => (
+                          <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${suPassword.length >= (i + 1) * 3 ? suPassword.length >= 12 ? "bg-secondary" : suPassword.length >= 8 ? "bg-amber-400" : "bg-error" : "bg-outline-variant/30"}`} />
+                        ))}
+                      </div>
+                    )}
+                    <button type="submit" disabled={loading} className={btnCls}>
+                      {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>{t("auth.createaccount")} <span className="material-symbols-outlined text-[18px]">domain_add</span></>}
+                    </button>
+                    <p className="text-center font-body-sm text-body-sm text-on-surface-variant">
+                      {t("auth.haveaccount")}{" "}
+                      <button type="button" onClick={() => setTab("signin")} className="text-primary hover:underline font-semibold">{t("auth.signin")}</button>
+                    </p>
+                  </form>
+                )}
+
+                {tab === "reset" && (
+                  <form onSubmit={handlePasswordReset} className="flex flex-col gap-4">
+                    <div className="text-center mb-2">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                        <span className="material-symbols-outlined text-[24px] text-primary">lock_reset</span>
+                      </div>
+                      <h2 className="font-headline-md text-headline-md text-ink-deep mb-1">{t("auth.reset.title")}</h2>
+                      <p className="font-body-sm text-body-sm text-on-surface-variant">{t("auth.reset.body")}</p>
+                    </div>
+                    {resetSentTo && (
+                      <div className="flex flex-col items-center gap-3 p-5 border border-secondary/40 bg-secondary/[0.06] rounded">
+                        <div className="w-10 h-10 rounded-full bg-secondary/15 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[22px] text-secondary">mark_email_read</span>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-body-md text-ink-deep">{t("auth.reset.sent")}</p>
+                          <p className="font-body-sm text-body-sm text-on-surface-variant mt-1 break-all">{resetSentTo}</p>
+                          <p className="font-body-sm text-body-sm text-on-surface-variant mt-2">{t("auth.reset.check_spam")}</p>
+                        </div>
+                        <button type="button" onClick={() => setResetSentTo(null)} className="font-label-md text-label-md text-primary hover:underline">
+                          {t("auth.reset.use_other")}
+                        </button>
+                      </div>
+                    )}
+                    {!resetSentTo && (
+                      <>
+                        <input type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)} placeholder={t("auth.email")} required className={inputCls} />
+                        <button type="submit" disabled={loading} className={btnCls}>
+                          {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <>{t("auth.reset.send_link")} <span className="material-symbols-outlined text-[18px]">send</span></>}
+                        </button>
+                      </>
+                    )}
+                    <button type="button" onClick={() => setTab("signin")} className="text-center font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors flex items-center justify-center gap-1">
+                      <span className="material-symbols-outlined text-[16px]">arrow_back</span> {t("auth.back_to_signin")}
+                    </button>
+                  </form>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+
+      <footer className="w-full py-5 px-4 sm:px-8 flex flex-col md:flex-row justify-between items-center gap-3 text-xs text-on-surface-variant border-t border-outline-variant bg-surface-base">
+        <p>© {new Date().getFullYear()} Cervos · hq@cervos.online</p>
+        <div className="flex gap-6">
+          <Link href="/terms" className="hover:text-primary transition-colors">{t("auth.terms")}</Link>
+          <Link href="/privacy" className="hover:text-primary transition-colors">{t("auth.privacy")}</Link>
+          <Link href="/support" className="hover:text-primary transition-colors">{t("auth.support_link")}</Link>
+        </div>
+      </footer>
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    }>
+      <AuthForm />
+    </Suspense>
+  );
+}

@@ -30,7 +30,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary-400">Loading...</div>
+        <div className="animate-pulse text-primary">Loading...</div>
       </div>
     )
   }
@@ -48,7 +48,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary-400">Loading...</div>
+        <div className="animate-pulse text-primary">Loading...</div>
       </div>
     )
   }
@@ -107,7 +107,7 @@ function OnboardingRoute() {
   if (isOnboarded === null) {
     return (
       <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary-400">Loading...</div>
+        <div className="animate-pulse text-primary">Loading...</div>
       </div>
     )
   }
@@ -187,7 +187,7 @@ function AppRoutes() {
   if (!dbReady || !sessionRestored || isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-surface">
-        <div className="animate-pulse text-primary-400">Loading...</div>
+        <div className="animate-pulse text-primary">Loading...</div>
       </div>
     )
   }
@@ -201,7 +201,7 @@ function AppRoutes() {
           <Route index element={<Dashboard />} />
           <Route path="pos" element={<Pos />} />
           <Route path="inventory" element={<Inventory />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
           <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
           <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
           <Route path="records" element={<AdminRoute><Records /></AdminRoute>} />

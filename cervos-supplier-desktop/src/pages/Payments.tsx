@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../lib/hooks'
 import { fetchOrders } from '../lib/queries'
 
@@ -86,7 +86,7 @@ export default function Payments() {
               {payments.map((payment) => (
                 <tr key={payment.id} className="hover:bg-surface-200 transition-colors">
                   <td className="px-6 py-4 text-white font-mono text-sm">{payment.order_number}</td>
-                  <td className="px-6 py-4 text-white font-medium">TZS ${payment.amount.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-white font-medium">TZS {payment.amount.toLocaleString()}</td>
                   <td className="px-6 py-4">
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-medium ${

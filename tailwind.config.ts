@@ -5,6 +5,7 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./packages/ui/src/**/*.{ts,tsx}",
   ],
   theme: {
     extend: {
@@ -12,6 +13,7 @@ const config: Config = {
       colors: {
         // Core brand
         primary: "#1039b9",
+        "primary-variant": "#0d2e94",
         "primary-container": "#3454d1",
         "on-primary": "#ffffff",
         "on-primary-container": "#d4d9ff",
@@ -39,33 +41,33 @@ const config: Config = {
         "on-tertiary-fixed": "#00210e",
         "on-tertiary-fixed-variant": "#00522b",
 
-        // Surface system — canonical #fcf8ff
-        surface: "#fcf8ff",
+        // Surface system — calm clinical slate
+        surface: "#f8fafc",
         "surface-base": "#ffffff",
-        "surface-bright": "#fcf8ff",
-        "surface-dim": "#dad7f3",
-        "surface-variant": "#e2e0fc",
-        "surface-muted": "#f8f9fc",
+        "surface-bright": "#f8fafc",
+        "surface-dim": "#e2e8f0",
+        "surface-variant": "#e2e8f0",
+        "surface-muted": "#f1f5f9",
         "surface-container-lowest": "#ffffff",
-        "surface-container-low": "#f5f2ff",
-        "surface-container": "#efecff",
-        "surface-container-high": "#e8e5ff",
-        "surface-container-highest": "#e2e0fc",
+        "surface-container-low": "#f1f5f9",
+        "surface-container": "#e2e8f0",
+        "surface-container-high": "#cbd5e1",
+        "surface-container-highest": "#cbd5e1",
         "surface-tint": "#3252cf",
-        "inverse-surface": "#2f2e43",
-        "inverse-on-surface": "#f2efff",
-        background: "#fcf8ff",
+        "inverse-surface": "#1e293b",
+        "inverse-on-surface": "#f8fafc",
+        background: "#f8fafc",
 
         // Text / ink
-        "on-surface": "#1a1a2e",
-        "on-background": "#1a1a2e",
-        "on-surface-variant": "#444654",
-        "ink-deep": "#1A1A2E",
-        "text-muted": "#6B7280",
+        "on-surface": "#0f172a",
+        "on-background": "#0f172a",
+        "on-surface-variant": "#475569",
+        "ink-deep": "#0f172a",
+        "text-muted": "#64748b",
 
         // Utility
-        outline: "#747685",
-        "outline-variant": "#c4c5d6",
+        outline: "#94a3b8",
+        "outline-variant": "#e2e8f0",
 
         // Error
         error: "#ba1a1a",
@@ -120,6 +122,7 @@ const config: Config = {
 
       borderRadius: {
         DEFAULT: "0.25rem",
+        "no-notch": "0.5rem",
         lg: "0.5rem",
         xl: "0.75rem",
         full: "9999px",

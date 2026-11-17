@@ -43,7 +43,7 @@ export interface MockClientOptions {
   onSignOut?: () => void;
 }
 
-type FilterOp = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "in" | "is";
+type FilterOp = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "in" | "is" | "ilike";
 interface Filter {
   op: FilterOp;
   col: string;
@@ -135,6 +135,10 @@ export class MockQueryBuilder {
     this.filters.push({ op: "is", col, value });
     return this;
   }
+  ilike(col: string, pattern: string) {
+    this.filters.push({ op: "ilike", col, value: pattern });
+    return this;
+  }
   not(col: string, op: string, value: unknown) {
     this.filters.push({ op: op as FilterOp, col, value, negated: true });
     return this;
@@ -209,6 +213,11 @@ export class MockQueryBuilder {
         case "is":
           ok = v === f.value;
           break;
+        case "ilike": {
+          const needle = String(f.value ?? "").replaceAll("%", "").toLowerCase();
+          ok = typeof v === "string" && v.toLowerCase().includes(needle);
+          break;
+        }
         default:
           ok = false;
       }
@@ -241,7 +250,8 @@ export class MockQueryBuilder {
         continue;
       }
       if (node.children && node.children.length > 0) {
-        out[node.name] = this.resolveEmbed(table, row, node);
+        const [baseName] = node.name.split("!");
+        out[baseName] = this.resolveEmbed(table, row, node);
         continue;
       }
       if (Object.prototype.hasOwnProperty.call(row, node.name)) {
@@ -253,7 +263,11 @@ export class MockQueryBuilder {
 
   private resolveEmbed(table: string, row: MockRow, node: ColumnNode): unknown {
     const rels = MOCK_RELATIONSHIPS[table] ?? [];
-    const rel = rels.find((r) => r.embedTable === node.name);
+    const [baseName, fkHint] = node.name.split("!");
+    const rel =
+      (fkHint
+        ? rels.find((r) => r.embedTable === baseName && r.fkCol === fkHint)
+        : undefined) ?? rels.find((r) => r.embedTable === baseName);
     if (!rel) return null;
     const targetRows = this.db[rel.embedTable] ?? [];
     if (rel.many) {

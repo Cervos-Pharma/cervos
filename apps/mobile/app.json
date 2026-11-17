@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Cervos Pharma",
+    "slug": "cervos-pharma",
+    "scheme": "cervos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "icon": "../../public/logo.png",
+    "splash": {
+      "image": "../../public/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0F17"
+    },
+    "android": {
+      "package": "com.cervos.pharma",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "../../public/logo.png",
+        "backgroundColor": "#1039B9"
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.cervos.pharma",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scan GS1-128 and QR medicine barcodes on pharmacy shelves and GRN receipts.",
+        "NSLocationWhenInUseUsageDescription": "Pin your pharmacy branch coordinates cleanly on Cervos regional maps."
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Cervos Pharma to scan medicine GS1/QR barcodes."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1039B9"
+        }
+      ]
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fetchOrder, updateOrderStatus } from '../lib/queries'
 import { Order } from '../lib/types'
@@ -131,7 +131,7 @@ export default function OrderDetail() {
                   <p className="text-white">{item.product_name}</p>
                   <p className="text-sm text-gray-400">Qty: {item.quantity} Ã— ${item.unit_price.toFixed(2)}</p>
                 </div>
-                <p className="text-white font-medium">TZS ${item.total.toLocaleString()}</p>
+                <p className="text-white font-medium">TZS {item.total.toLocaleString()}</p>
               </div>
             ))}
           </div>
@@ -140,19 +140,19 @@ export default function OrderDetail() {
         <div className="border-t border-surface-300 mt-6 pt-6 space-y-2">
           <div className="flex justify-between text-gray-400">
             <span>Subtotal</span>
-            <span>TZS ${order.subtotal.toLocaleString()}</span>
+            <span>TZS {order.subtotal.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-gray-400">
             <span>Shipping</span>
-            <span>TZS ${order.shipping_cost.toLocaleString()}</span>
+            <span>TZS {order.shipping_cost.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-gray-400">
             <span>Tax</span>
-            <span>TZS ${order.tax.toLocaleString()}</span>
+            <span>TZS {order.tax.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-white font-semibold text-lg pt-2">
             <span>Total</span>
-            <span>TZS ${order.total.toLocaleString()}</span>
+            <span>TZS {order.total.toLocaleString()}</span>
           </div>
         </div>
 

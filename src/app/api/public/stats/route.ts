@@ -5,7 +5,7 @@ import { checkIpRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  // Public endpoint with service-role reads — cap abuse without hurting the
+  // Public endpoint with service-role reads - cap abuse without hurting the
   // landing page (which fires this once per load).
   const rl = checkIpRateLimit(request, "public-stats", 15, 60_000);
   if (!rl.allowed) return rateLimitResponse(rl.resetAt);
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
         .not("lat", "is", null)
         .not("lng", "is", null)
         .limit(50),
-      // Real download counter — sum of actual redirects served, not a
+      // Real download counter - sum of actual redirects served, not a
       // placeholder number.
       supabase.from("app_releases").select("download_count"),
     ]);
@@ -63,9 +63,9 @@ export async function GET(request: NextRequest) {
       downloads,
       markers,
     });
-  } catch (err: any) {
+  } catch {
     return NextResponse.json(
-      { pharmacies: 0, suppliers: 0, branches: 0, downloads: 0, markers: [], error: err?.message },
+      { pharmacies: 0, suppliers: 0, branches: 0, downloads: 0, markers: [], error: "Stats temporarily unavailable" },
       { status: 500 }
     );
   }

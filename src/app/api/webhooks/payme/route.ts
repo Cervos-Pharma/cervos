@@ -60,6 +60,20 @@ export async function POST(req: NextRequest) {
 
   const succeeded = payment_status === "COMPLETED" && result === "SUCCESS";
 
+  if (succeeded) {
+    const expectedAmount = Number(payment.amount_tzs ?? 0);
+    const receivedAmount = Number(amount);
+    if (
+      expectedAmount > 0 &&
+      (!Number.isFinite(receivedAmount) || Math.round(receivedAmount) !== Math.round(expectedAmount))
+    ) {
+      console.error(
+        `[Payme Webhook] Amount mismatch for ${reference}: got ${amount}, expected ${expectedAmount}`
+      );
+      return NextResponse.json({ error: "Payment amount mismatch" }, { status: 400 });
+    }
+  }
+
   const updateFields: Record<string, unknown> = {
     provider_transaction_id: transid,
     updated_at: new Date().toISOString(),

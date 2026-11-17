@@ -274,7 +274,7 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
               </option>
               {branchList.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name} {b.pos_activated_at ? "✓ (POS Active)" : "(No POS)"}
+                  {b.name} {b.pos_activated_at ? "(POS active)" : "(No POS)"}
                 </option>
               ))}
             </select>

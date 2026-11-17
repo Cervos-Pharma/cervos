@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": "text/csv",
       "Content-Disposition": `attachment; filename="payments-${new Date().toISOString().slice(0,10)}.csv"`,
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }

@@ -1,0 +1,5 @@
+packages:
+  - "packages/*"
+  - "cervos-desktop"
+  - "cervos-supplier-desktop"
+

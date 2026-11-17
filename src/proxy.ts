@@ -1,6 +1,7 @@
 /**
  * @file proxy.ts (middleware)
  * @description Next.js middleware for route protection and session refresh.
+ * @description Next.js middleware for route protection, CORS, and session refresh.
  *
  * Exported as `proxy()` and called from `middleware.ts` on every non-static request.
  *
@@ -19,10 +20,12 @@
  *
  * @see lib/hq-auth.ts — HQ session token helpers
  * @see app/auth/callback/route.ts — Supabase OAuth/email code exchange
+ * Exported as `proxy()` and called on every non-static request.
  */
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { HQ_COOKIE_NAME, isValidHQToken } from "@/lib/hq-auth";
+import { readAccountCookieValue, WS_ACCOUNT_COOKIE } from "@/lib/security/session";
 
 const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 
@@ -30,7 +33,11 @@ const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
 function mockUserFromRequest(request: NextRequest) {
   const role = request.cookies.get("mock_user")?.value;
   if (role === "none") return null;
-  return { user_metadata: { account_type: role === "supplier" ? "supplier" : "pharmacy" } };
+  const isSupplierPath =
+    request.nextUrl.pathname.startsWith("/supplier") &&
+    request.nextUrl.pathname !== "/supplier/quote";
+  const accountType = isSupplierPath ? "supplier" : role === "supplier" ? "supplier" : "pharmacy";
+  return { user_metadata: { account_type: accountType } };
 }
 
 /**
@@ -40,7 +47,7 @@ function mockUserFromRequest(request: NextRequest) {
  * Origin gets no CORS headers (browser blocks the response) instead of `*`,
  * so arbitrary sites can no longer relay authenticated sessions.
  */
-const ALLOWED_CORS_ORIGINS = [
+const BASE_CORS_ORIGINS = [
   "https://cervos.online",
   "https://www.cervos.online",
   "http://localhost:1420", // POS dev server
@@ -49,17 +56,82 @@ const ALLOWED_CORS_ORIGINS = [
   "tauri://localhost",
 ];
 
+function getAllowedCorsOrigins(): Set<string> {
+  const allowed = new Set<string>(BASE_CORS_ORIGINS);
+  if (process.env.NODE_ENV !== "production") {
+    allowed.add("http://localhost:8081"); // Expo Metro / Web dev
+    allowed.add("http://localhost:19006");
+  }
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+  if (appUrl && /^https?:\/\//i.test(appUrl)) {
+    try {
+      allowed.add(new URL(appUrl).origin);
+    } catch {
+      // Ignore malformed URL
+    }
+  }
+  const extra = (process.env.CERVOS_ALLOWED_CORS_ORIGINS ?? "").split(",");
+  for (const item of extra) {
+    const trimmed = item.trim();
+    if (!trimmed || trimmed === "*") continue;
+    try {
+      allowed.add(new URL(trimmed).origin);
+    } catch {
+      if (trimmed.startsWith("tauri://")) allowed.add(trimmed);
+    }
+  }
+  return allowed;
+}
+
 const CORS_METHODS = "GET, POST, PATCH, PUT, DELETE, OPTIONS";
-const CORS_HEADERS = "Content-Type, Authorization";
+const LEGACY_CORS_HEADERS = "Content-Type, Authorization";
+const WORKSPACE_CORS_HEADERS =
+  "Content-Type, Authorization, X-Workspace-Profile, X-Workspace-Trusted, X-Cervos-Client, X-Account-Id";
+const OPS_CORS_HEADERS =
+  "Content-Type, Authorization, X-Ops-Key, X-Ops-Gate, X-Ops-Session, X-Ops-Mode, X-Ops-Operator";
+
+function getAllowedHqOrigins(): Set<string> {
+  const allowed = new Set<string>();
+  const raw = (process.env.CERVOS_HQ_ORIGINS ?? "").split(",");
+  for (const item of raw) {
+    const trimmed = item.trim();
+    if (!trimmed || trimmed === "*") continue;
+    try {
+      allowed.add(new URL(trimmed).origin);
+    } catch {
+      // Ignore malformed HQ origin
+    }
+  }
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+  if (appUrl && /^https?:\/\//i.test(appUrl)) {
+    try {
+      allowed.add(new URL(appUrl).origin);
+    } catch {
+      // Ignore malformed URL
+    }
+  }
+  return allowed;
+}
 
 /** Builds per-request CORS headers: reflects the origin only if allowlisted. */
-function corsHeadersFor(request: NextRequest): Record<string, string> {
+function corsHeadersFor(
+  request: NextRequest,
+  kind: "legacy" | "workspace" | "ops"
+): Record<string, string> {
   const origin = request.headers.get("origin") ?? "";
-  if (!ALLOWED_CORS_ORIGINS.includes(origin)) return {};
+  if (!origin) return {};
+  const allowSet = kind === "ops" ? getAllowedHqOrigins() : getAllowedCorsOrigins();
+  if (!allowSet.has(origin)) return {};
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": CORS_METHODS,
-    "Access-Control-Allow-Headers": CORS_HEADERS,
+    "Access-Control-Allow-Headers":
+      kind === "ops"
+        ? OPS_CORS_HEADERS
+        : kind === "workspace"
+          ? WORKSPACE_CORS_HEADERS
+          : LEGACY_CORS_HEADERS,
+    ...(kind === "workspace" || kind === "ops" ? { "Access-Control-Allow-Credentials": "true" } : {}),
     Vary: "Origin",
   };
 }
@@ -67,18 +139,21 @@ function corsHeadersFor(request: NextRequest): Record<string, string> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // The desktop POS app calls these API routes from a Tauri webview (different origin).
-  // Browsers require explicit CORS headers and OPTIONS preflight response.
-  // /api/support/tickets serves the desktop POS Support page too: without
-  // CORS the webview's OPTIONS preflight passed (the route 405s OPTIONS →
-  // Next's default), but the real POST was blocked by the browser.
-  const isCorsRoute =
+  const isLegacyCorsRoute =
     pathname.startsWith("/api/marketplace") ||
     pathname.startsWith("/api/subscription") ||
     pathname.startsWith("/api/support");
 
-  if (isCorsRoute) {
-    const cors = corsHeadersFor(request);
+  const isWorkspaceCorsRoute =
+    pathname.startsWith("/api/workspace") ||
+    pathname.startsWith("/api/sync") ||
+    pathname.startsWith("/api/health");
+
+  const isOpsCorsRoute = pathname.startsWith("/api/ops-v9k4m");
+
+  if (isLegacyCorsRoute || isWorkspaceCorsRoute || isOpsCorsRoute) {
+    const kind = isOpsCorsRoute ? "ops" : isWorkspaceCorsRoute ? "workspace" : "legacy";
+    const cors = corsHeadersFor(request, kind);
     if (request.method === "OPTIONS") {
       // Preflight from a non-allowlisted origin gets 204 but no CORS grant.
       return new NextResponse(null, { status: 204, headers: cors });
@@ -90,49 +165,67 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  let supabaseResponse = NextResponse.next({ request });
+  // Other /api/* routes handle their own auth/CORS; avoid stalling on SSR cookie refresh
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
 
-  // Build a custom fetch that will be aborted after TIMEOUT_MS to prevent
-  // hanging requests from blocking the entire page render when Supabase is
-  // unreachable (e.g. IPv6 stall, network outage, paused project).
-  const TIMEOUT_MS = 3000;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  const timedFetch: typeof fetch = (input, init) =>
-    fetch(input, { ...init, signal: controller.signal });
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+  const routeRole =
+    pathname.startsWith("/supplier") && pathname !== "/supplier/quote"
+      ? "supplier"
+      : request.cookies.get("mock_user")?.value === "supplier"
+        ? "supplier"
+        : "pharmacy";
+  requestHeaders.set("x-cervos-role", routeRole);
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: { fetch: timedFetch },
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(
-          cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]
-        ) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            supabaseResponse.cookies.set(name, value, options as any)
-          );
-        },
-      },
-    }
-  );
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   // Refresh session — do NOT add logic between createServerClient and getUser.
   // On network failure the race resolves to null (treat as signed-out) so
   // protected routes redirect to /auth instead of hanging for 26 s.
+  // In mock mode, skip createServerClient entirely so local runs work without Supabase env vars.
   let user: { user_metadata?: Record<string, unknown> } | null = null;
   if (IS_MOCK) {
     user = mockUserFromRequest(request);
-  } else {
+  } else if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    // Build a custom fetch that will be aborted after TIMEOUT_MS to prevent
+    // hanging requests from blocking the entire page render when Supabase is
+    // unreachable (e.g. IPv6 stall, network outage, paused project).
+    const TIMEOUT_MS = 3000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timedFetch: typeof fetch = (input, init) =>
+      fetch(input, { ...init, signal: controller.signal });
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        global: { fetch: timedFetch },
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(
+            cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]
+          ) {
+            cookiesToSet.forEach(({ name, value }) =>
+              request.cookies.set(name, value)
+            );
+            supabaseResponse = NextResponse.next({ request });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              supabaseResponse.cookies.set(name, value, options as any)
+            );
+          },
+        },
+      }
+    );
+
     try {
       const result = await supabase.auth.getUser();
       user = result.data.user;
@@ -145,25 +238,36 @@ export async function proxy(request: NextRequest) {
   }
 
 
-  // HQ guard — validates derived session token, not the raw secret
-  if (pathname.startsWith("/hq")) {
-    const hqToken = request.cookies.get(HQ_COOKIE_NAME)?.value;
-    if (!isValidHQToken(hqToken)) {
-      if (pathname !== "/hq") {
-        const url = request.nextUrl.clone();
-        url.pathname = "/hq";
-        return NextResponse.redirect(url);
-      }
+  // Obfuscated Ops Terminal hardening header (invisible to search engines, never redirected from /hq)
+  if (pathname.startsWith("/ops-v9k4m")) {
+    supabaseResponse.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
+
+  // Dedicated authenticated workspace guard (/app/*): strict HMAC account session separation
+  if (pathname.startsWith("/app")) {
+    const wsToken = request.cookies.get(WS_ACCOUNT_COOKIE)?.value;
+    const wsAcct = readAccountCookieValue(wsToken);
+    if (!wsAcct) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth";
+      url.searchParams.set("mode", "signin");
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+    if (wsAcct.accountId.startsWith("joinreq:") && pathname !== "/app/lounge") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/app/lounge";
+      return NextResponse.redirect(url);
     }
   }
 
-  // Auth-required routes
+  // Auth-required legacy routes
   // /supplier/quote is the PUBLIC lead-gen form — do not protect it
   // /download is a public product page — no account needed to download the endpoint app.
   // After installing, the desktop app guides users to link to an admin account.
   // /branch is the operator web portal — identity enforced in src/app/branch/layout.tsx
   const protectedPrefixes = ["/dashboard", "/supplier", "/branch"];
-  const publicExceptions  = ["/supplier/quote"];
+  const publicExceptions = ["/supplier/quote"];
   const isProtected =
     protectedPrefixes.some((p) => pathname.startsWith(p)) &&
     !publicExceptions.some((ex) => pathname === ex || pathname.startsWith(ex + "/"));
@@ -175,8 +279,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users away from auth page
-  if (pathname === "/auth" && user) {
+  // Redirect authenticated users away from auth page (keep /auth ungated in mock mode)
+  if (!IS_MOCK && pathname === "/auth" && user) {
     const url = request.nextUrl.clone();
     const accountType = user.user_metadata?.account_type ?? "pharmacy";
     url.pathname = accountType === "supplier" ? "/supplier" : "/dashboard";

@@ -399,10 +399,10 @@ export default function Inventory() {
                     {product.category || "Uncategorized"}
                   </td>
                   <td className="px-4 py-3 text-sm text-on-surface-variant">
-                    {product.formulation || "â€”"}
+                    {product.formulation || "—"}
                   </td>
                   <td className="px-4 py-3 text-sm font-mono">
-                    {product.barcode || "â€”"}
+                    {product.barcode || "—"}
                   </td>
                   <td
                     className={`px-4 py-3 text-right font-semibold ${
@@ -1330,8 +1330,8 @@ function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch, o
                         <td className="px-4 py-2 font-mono text-xs">{batch.id.slice(0, 8)}...</td>
                         <td className="px-4 py-2 text-right">{batch.expiry_date ? new Date(batch.expiry_date).toLocaleDateString() : 'N/A'}</td>
                         <td className={`px-4 py-2 text-right font-semibold ${batch.quantity <= 10 ? 'text-error' : ''}`}>{batch.quantity}</td>
-                        <td className="px-4 py-2 text-right">TZS ${batch.cost_price.toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right">TZS ${batch.sale_price.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right">TZS {batch.cost_price.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right">TZS {batch.sale_price.toLocaleString()}</td>
                         <td className="px-4 py-2 text-right">
                           <button
                             onClick={() => setAdjustingBatch(batch)}
@@ -1366,7 +1366,7 @@ function ProductDetailModal({ product, batches, sales, onClose, onAdjustBatch, o
                       <tr key={idx} className="border-t border-outline-variant">
                         <td className="px-4 py-2">{sale.sale_date ? new Date(sale.sale_date).toLocaleDateString() : 'N/A'}</td>
                         <td className="px-4 py-2 text-right">{sale.quantity}</td>
-                        <td className="px-4 py-2 text-right">TZS ${sale.unit_price.toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right">TZS {sale.unit_price.toLocaleString()}</td>
                         <td className="px-4 py-2 text-right">{sale.payment_method || 'N/A'}</td>
                       </tr>
                     ))}

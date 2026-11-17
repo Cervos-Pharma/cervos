@@ -31,6 +31,7 @@ import {
   HQ_COOKIE_NAME,
   isValidHQToken,
   deriveHQSessionToken,
+  deriveAdminSessionToken,
   getHQSecret,
 } from "@/lib/hq-auth";
 
@@ -126,7 +127,7 @@ export async function loginHQ(input: {
   const supabase = await createServiceClient();
   const { data: admin } = await supabase
     .from("hq_admins")
-    .select("id, email, password_hash, name")
+    .select("id, email, password_hash, name, role, disabled")
     .eq("email", email)
     .maybeSingle();
 
@@ -138,7 +139,15 @@ export async function loginHQ(input: {
     return { error: "Invalid HQ credentials." };
   }
 
-  const sessionToken = deriveHQSessionToken(configured);
+  if (admin.disabled) {
+    return { error: "This HQ account has been disabled." };
+  }
+
+  const sessionToken = deriveAdminSessionToken(
+    configured,
+    String(admin.id),
+    String(admin.role ?? "admin")
+  );
   const cookieStore = await cookies();
   cookieStore.set(HQ_COOKIE_NAME, sessionToken, {
     httpOnly: true,
@@ -608,7 +617,7 @@ export async function createSupplierInvite(
     return { data: null, error: "Quote request not found." };
   }
 
-  const existingInvite = await supabase
+  const { data: existingInvite } = await supabase
     .from("supplier_invites")
     .select("id")
     .eq("quote_request_id", quoteRequestId)
@@ -2671,9 +2680,12 @@ export async function getBranchIntelligenceMetrics(periodDays: number): Promise<
     const branchMap = new Map(branches.map((b) => [b.id, b]));
 
     const batchToBranch = new Map<string, string>();
+    const batchToProduct = new Map<string, string>();
     for (const b of batches) {
       if (b.branch_id) batchToBranch.set(b.id, b.branch_id);
+      if (b.product_id) batchToProduct.set(b.id, b.product_id);
     }
+    const salesInPeriod = new Set(sales.map((s) => s.id));
 
     const branchRevenue = new Map<string, number>();
     const branchTxCount = new Map<string, number>();
@@ -2687,22 +2699,16 @@ export async function getBranchIntelligenceMetrics(periodDays: number): Promise<
     const branchLowStock = new Map<string, { productId: string; qty: number }[]>();
 
     for (const si of saleItems) {
+      if (salesInPeriod.size > 0 && !salesInPeriod.has(si.sale_id)) continue;
       const branchId = batchToBranch.get(si.batch_id);
       if (!branchId) continue;
-      branchRevenue.set(branchId, (branchRevenue.get(branchId) ?? 0) + (Number(si.unit_price) || 0) * si.quantity);
+      const lineTotal = (Number(si.unit_price) || 0) * si.quantity;
+      branchRevenue.set(branchId, (branchRevenue.get(branchId) ?? 0) + lineTotal);
       branchTxCount.set(branchId, (branchTxCount.get(branchId) ?? 0) + 1);
-      productRevenue.set(si.batch_id, (productRevenue.get(si.batch_id) ?? 0) + (Number(si.unit_price) || 0) * si.quantity);
-      productQty.set(si.batch_id, (productQty.get(si.batch_id) ?? 0) + si.quantity);
-    }
-
-    for (const s of sales) {
-      const saleBranchSet = new Set<string>();
-      for (const si of saleItems.filter((x) => x.sale_id === s.id)) {
-        const bId = batchToBranch.get(si.batch_id);
-        if (bId) saleBranchSet.add(bId);
-      }
-      for (const bId of saleBranchSet) {
-        branchRevenue.set(bId, (branchRevenue.get(bId) ?? 0) + Number(s.total || 0));
+      const productId = batchToProduct.get(si.batch_id);
+      if (productId) {
+        productRevenue.set(productId, (productRevenue.get(productId) ?? 0) + lineTotal);
+        productQty.set(productId, (productQty.get(productId) ?? 0) + si.quantity);
       }
     }
 

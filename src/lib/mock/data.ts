@@ -454,11 +454,11 @@ export function createMockData(): MockTable {
 
   // ── Operators ──────────────────────────────────────────────────────────────
   const operators = [
-    { id: "op-uzuri-cbd-1", branch_id: "br-uzuri-cbd", name: "Amina Hassan", pin_hash: "sha256:1234", role: "owner", created_at: iso(300 * DAY) },
-    { id: "op-uzuri-cbd-2", branch_id: "br-uzuri-cbd", name: "Daudi Malima", pin_hash: "sha256:2345", role: "pharmacist_in_charge", created_at: iso(280 * DAY) },
-    { id: "op-uzuri-cbd-3", branch_id: "br-uzuri-cbd", name: "Zainab Ali", pin_hash: "sha256:3456", role: "cashier", created_at: iso(200 * DAY) },
-    { id: "op-uzuri-kar-1", branch_id: "br-uzuri-kariakoo", name: "Joseph Lema", pin_hash: "sha256:1234", role: "pharmacist_in_charge", created_at: iso(110 * DAY) },
-    { id: "op-uzuri-kar-2", branch_id: "br-uzuri-kariakoo", name: "Fatuma Said", pin_hash: "sha256:2345", role: "cashier", created_at: iso(90 * DAY) },
+    { id: "op-uzuri-cbd-1", branch_id: "br-uzuri-cbd", auth_user_id: "user-pharm", web_enabled: true, name: "Amina Hassan", pin_hash: "sha256:1234", role: "owner", created_at: iso(300 * DAY) },
+    { id: "op-uzuri-cbd-2", branch_id: "br-uzuri-cbd", auth_user_id: "user-pharm", web_enabled: true, name: "Daudi Malima", pin_hash: "sha256:2345", role: "pharmacist_in_charge", created_at: iso(280 * DAY) },
+    { id: "op-uzuri-cbd-3", branch_id: "br-uzuri-cbd", auth_user_id: "user-pharm", web_enabled: true, name: "Zainab Ali", pin_hash: "sha256:3456", role: "cashier", created_at: iso(200 * DAY) },
+    { id: "op-uzuri-kar-1", branch_id: "br-uzuri-kariakoo", auth_user_id: "user-pharm", web_enabled: true, name: "Joseph Lema", pin_hash: "sha256:1234", role: "pharmacist_in_charge", created_at: iso(110 * DAY) },
+    { id: "op-uzuri-kar-2", branch_id: "br-uzuri-kariakoo", auth_user_id: "user-pharm", web_enabled: true, name: "Fatuma Said", pin_hash: "sha256:2345", role: "cashier", created_at: iso(90 * DAY) },
     { id: "op-neema-1", branch_id: "br-neema-central", name: "John Mushi", pin_hash: "sha256:1234", role: "owner", created_at: iso(40 * DAY) },
     { id: "op-baraka-1", branch_id: "br-baraka-njiro", name: "Grace Ndege", pin_hash: "sha256:1234", role: "pharmacist_in_charge", created_at: iso(150 * DAY) },
     { id: "op-afya-1", branch_id: "br-afya-ubungo", name: "Salma Juma", pin_hash: "sha256:1234", role: "owner", created_at: iso(290 * DAY) },
@@ -598,6 +598,16 @@ export function createMockData(): MockTable {
     { id: "sc-9", supplier_id: "acc-mazingira", product_id: "prod-7", price: 1600, min_order_qty: 50, stock_qty: 150, status: "active", sku: "MAZ-IBU", pack_size: "100 tabs", currency: "TZS", lead_time_days: 5, created_at: iso(90 * DAY), updated_at: iso(1 * DAY) },
   ];
 
+  // ── Branch ↔ Supplier Connections ──────────────────────────────────────────
+  const branch_supplier_connections = [
+    { id: "bsc-1", branch_id: "br-uzuri-cbd", supplier_id: "acc-afya", status: "approved", requested_at: iso(45 * DAY), decided_at: iso(44 * DAY) },
+    { id: "bsc-2", branch_id: "br-uzuri-kariakoo", supplier_id: "acc-afya", status: "approved", requested_at: iso(30 * DAY), decided_at: iso(29 * DAY) },
+    { id: "bsc-3", branch_id: "br-neema-central", supplier_id: "acc-tibu", status: "approved", requested_at: iso(20 * DAY), decided_at: iso(19 * DAY) },
+    { id: "bsc-4", branch_id: "br-uzuri-mikocheni", supplier_id: "acc-furaha", status: "pending", requested_at: iso(1.5 * DAY), decided_at: null },
+    { id: "bsc-5", branch_id: "br-uzuri-cbd", supplier_id: "acc-tibu", status: "pending", requested_at: iso(0.8 * DAY), decided_at: null },
+    { id: "bsc-6", branch_id: "br-baraka-njiro", supplier_id: "acc-afya", status: "approved", requested_at: iso(22 * DAY), decided_at: iso(21 * DAY) },
+  ];
+
   // ── Orders + line items ────────────────────────────────────────────────────
   const orders = [
     { id: "ord-1", order_reference: "ORD-2026-001", buyer_branch_id: "br-uzuri-cbd", seller_id: "acc-afya", currency: "TZS", status: "delivered", note: "Routine restock", placed_at: iso(18 * DAY), confirmed_at: iso(18 * DAY), shipped_at: iso(16 * DAY), delivered_at: iso(14 * DAY), cancelled_at: null, updated_at: iso(14 * DAY) },
@@ -686,6 +696,7 @@ export function createMockData(): MockTable {
     support_tickets,
     quote_requests,
     supplier_catalog,
+    branch_supplier_connections,
     orders,
     order_line_items,
     marketplace_orders,
@@ -706,11 +717,19 @@ export interface MockRelationship {
 }
 
 export const MOCK_RELATIONSHIPS: Record<string, MockRelationship[]> = {
+  operators: [{ fkCol: "branch_id", embedTable: "branches", many: false }],
   batches: [
     { fkCol: "product_id", embedTable: "products", many: false },
     { fkCol: "branch_id", embedTable: "branches", many: false },
   ],
   branches: [{ fkCol: "account_id", embedTable: "accounts", many: false }],
+  branch_supplier_connections: [
+    { fkCol: "supplier_id", embedTable: "accounts", many: false },
+    { fkCol: "branch_id", embedTable: "branches", many: false },
+  ],
   activity_log: [{ fkCol: "branch_id", embedTable: "branches", many: false }],
-  orders: [{ fkCol: "id", embedTable: "order_line_items", many: true, fkTargetCol: "order_id" }],
+  orders: [
+    { fkCol: "buyer_branch_id", embedTable: "branches", many: false },
+    { fkCol: "id", embedTable: "order_line_items", many: true, fkTargetCol: "order_id" },
+  ],
 };

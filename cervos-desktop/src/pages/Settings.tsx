@@ -31,6 +31,7 @@ export default function Settings() {
   const [taxRate, setTaxRate] = useState('10')
   const [lowStockThreshold, setLowStockThreshold] = useState('10')
   const [expiryDaysThreshold, setExpiryDaysThreshold] = useState('30')
+  const [settingsSaved, setSettingsSaved] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -77,7 +78,7 @@ export default function Settings() {
         pin: newOpPin,
         role: newOpRole,
       })
-      runSyncCycle().catch(() => {})
+      runSyncCycle().catch(() => { })
       setNewOpName('')
       setNewOpPin('')
       setNewOpRole('operator')
@@ -92,7 +93,7 @@ export default function Settings() {
     if (id === currentOperator?.id) return
     if (!confirm(t('settings.deleteOperatorConfirm'))) return
     await deleteOperator(id)
-    runSyncCycle().catch(() => {})
+    runSyncCycle().catch(() => { })
     loadOperators()
   }
 
@@ -133,10 +134,17 @@ export default function Settings() {
 
   async function handleSaveName() {
     if (!canEditSettings) return
-    await executeDb(
-      `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      ['pharmacy_name', JSON.stringify(pharmacyName)]
-    )
+    const trimmed = pharmacyName.trim()
+    if (trimmed) {
+      await executeDb(
+        `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        ['pharmacy_name', JSON.stringify(trimmed)]
+      )
+      await executeDb(
+        `INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        ['centre_name', JSON.stringify(trimmed)]
+      )
+    }
     const settings = [
       ['tax_rate', Number(taxRate)],
       ['low_stock_threshold', Number(lowStockThreshold)],
@@ -150,9 +158,18 @@ export default function Settings() {
         )
       }
     }
+    setSettingsSaved(true)
+    setTimeout(() => setSettingsSaved(false), 2500)
+    runSyncCycle().catch(() => { })
+  }
+
+  function handleLockTerminal() {
+    logout()
+    navigate('/login')
   }
 
   async function handleSignOut() {
+    if (!isAdmin) return
     await signOut()
     logout()
     navigate('/login')
@@ -208,6 +225,20 @@ export default function Settings() {
                 <input type="number" min="0" step="1" value={expiryDaysThreshold} disabled={!canEditSettings} onChange={(e) => setExpiryDaysThreshold(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-md border border-outline-variant bg-surface-base text-sm disabled:opacity-60 disabled:cursor-not-allowed" />
               </label>
             </div>
+            {canEditSettings && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs text-secondary font-medium">
+                  {settingsSaved ? 'Branch settings saved & queued for cloud sync' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSaveName}
+                  className="px-4 py-2 rounded-md border border-outline-variant text-sm font-semibold hover:bg-outline-variant/30 transition-colors"
+                >
+                  Save Thresholds
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -221,21 +252,19 @@ export default function Settings() {
           <div className="flex gap-2">
             <button
               onClick={() => setLocale('en')}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-                locale === 'en'
-                  ? 'bg-primary text-white'
-                  : 'border border-outline-variant hover:bg-outline-variant/30'
-              }`}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${locale === 'en'
+                ? 'bg-primary text-white'
+                : 'border border-outline-variant hover:bg-outline-variant/30'
+                }`}
             >
               {t('settings.english')}
             </button>
             <button
               onClick={() => setLocale('sw')}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${
-                locale === 'sw'
-                  ? 'bg-primary text-white'
-                  : 'border border-outline-variant hover:bg-outline-variant/30'
-              }`}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-colors ${locale === 'sw'
+                ? 'bg-primary text-white'
+                : 'border border-outline-variant hover:bg-outline-variant/30'
+                }`}
             >
               {t('settings.swahili')}
             </button>
@@ -437,18 +466,28 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="bg-surface-base border border-outline-variant rounded-xl p-5">
-          <h2 className="font-headline text-lg font-bold text-on-surface mb-4">
+        <div className="bg-surface-base border border-outline-variant rounded-xl p-5 space-y-3">
+          <h2 className="font-headline text-lg font-bold text-on-surface">
             {t('settings.account')}
           </h2>
 
           <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-error text-error hover:bg-error/10 transition-colors"
+            onClick={handleLockTerminal}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-outline-variant text-on-surface hover:bg-outline-variant/20 transition-colors"
           >
-            <span className="material-symbols-outlined text-xl">logout</span>
-            <span className="font-medium">{t('settings.signOut')}</span>
+            <span className="material-symbols-outlined text-xl">lock</span>
+            <span className="font-medium">Lock Terminal (Switch Operator PIN)</span>
           </button>
+
+          {isAdmin && (
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-error text-error hover:bg-error/10 transition-colors"
+            >
+              <span className="material-symbols-outlined text-xl">logout</span>
+              <span className="font-medium">Disconnect Branch Cloud Session</span>
+            </button>
+          )}
         </div>
 
         <div className="text-center text-xs text-on-surface-variant">

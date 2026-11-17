@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../lib/hooks'
 import { fetchAnalytics } from '../lib/queries'
 import { AnalyticsData } from '../lib/types'
@@ -241,7 +241,7 @@ export default function Analytics() {
                     <span className="text-white">{product.name}</span>
                   </div>
                   <div className="text-right">
-                    <p className="text-white font-medium">TZS ${product.revenue.toLocaleString()}</p>
+                    <p className="text-white font-medium">TZS {product.revenue.toLocaleString()}</p>
                     <p className="text-sm text-gray-400">{product.quantity} sold</p>
                   </div>
                 </div>

@@ -2,7 +2,6 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../lib/store'
 import { useI18nStore, t } from '../lib/i18n'
-import { signOut } from '../lib/sync'
 import { queryDb } from '../lib/database'
 import { LogoMark } from './Logo'
 import { useShell } from './Shell'
@@ -12,7 +11,6 @@ const baseNavItems = [
   { path: '/pos', icon: 'point_of_sale', key: 'nav.pos' },
   { path: '/inventory', icon: 'inventory_2', key: 'nav.inventory' },
   { path: '/shifts', icon: 'schedule', key: 'nav.shifts' },
-  { path: '/settings', icon: 'settings', key: 'nav.settings' },
   { path: '/alerts', icon: 'notifications', key: 'nav.alerts' },
   { path: '/support', icon: 'support_agent', key: 'nav.support' },
 ]
@@ -24,6 +22,7 @@ const adminNavItems = [
   { path: '/marketplace', icon: 'store', key: 'nav.marketplace' },
   { path: '/orders', icon: 'receipt', key: 'nav.orders' },
   { path: '/subscription', icon: 'credit_card', key: 'nav.subscription' },
+  { path: '/settings', icon: 'settings', key: 'nav.settings' },
 ]
 
 export default function Sidebar() {
@@ -65,12 +64,10 @@ export default function Sidebar() {
     return () => window.removeEventListener('keydown', onKey)
   }, [sidebarOpen, setSidebarOpen])
 
-  async function handleLogout() {
-    // Same real sign-out Settings already does (Supabase session + local
-    // operator session) — just made reachable from one click instead of
-    // being buried a page deep.
+  function handleLogout() {
+    // Lock the POS terminal and return to the PIN pad without signing out
+    // the branch's background cloud sync session.
     setSidebarOpen(false)
-    await signOut()
     logout()
     navigate('/login')
   }

@@ -92,7 +92,7 @@ export default function Onboarding() {
                 value={formData.company_name}
                 onChange={handleChange}
                 className="w-full px-4 py-3 bg-surface border border-surface-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-                placeholder="Acme Inc."
+                placeholder="Kariakoo Pharma Distributors Ltd"
               />
             </div>
 
@@ -106,7 +106,7 @@ export default function Onboarding() {
                 value={formData.contact_name}
                 onChange={handleChange}
                 className="w-full px-4 py-3 bg-surface border border-surface-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-                placeholder="John Doe"
+                placeholder="Amina Juma"
               />
             </div>
 
@@ -119,7 +119,7 @@ export default function Onboarding() {
                   value={formData.city}
                   onChange={handleChange}
                   className="w-full px-4 py-3 bg-surface border border-surface-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-                  placeholder="New York"
+                  placeholder="Dar es Salaam"
                 />
               </div>
               <div>
@@ -130,7 +130,7 @@ export default function Onboarding() {
                   value={formData.country}
                   onChange={handleChange}
                   className="w-full px-4 py-3 bg-surface border border-surface-300 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-accent"
-                  placeholder="USA"
+                  placeholder="Tanzania"
                 />
               </div>
             </div>

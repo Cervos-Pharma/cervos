@@ -27,6 +27,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "nav.news":          { EN: "News",        SW: "Habari" },
   "nav.support":       { EN: "Support",     SW: "Msaada" },
   "nav.download":      { EN: "Download",    SW: "Pakua" },
+  "nav.designlab":     { EN: "Design Lab",  SW: "Maabara ya Muundo" },
   "nav.login":         { EN: "Log In",      SW: "Ingia" },
   "nav.getstarted":    { EN: "Get Started", SW: "Anza Sasa" },
 
@@ -102,6 +103,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "portal.marketplace": { EN: "Marketplace", SW: "Soko" },
   "portal.settings":    { EN: "Settings",    SW: "Mipangilio" },
   "portal.download":    { EN: "Download App",SW: "Pakua Programu" },
+  "portal.downloads":   { EN: "Downloads & POS", SW: "Vipakuzi na POS" },
   "portal.logout":      { EN: "Logout",      SW: "Toka" },
   "portal.language":    { EN: "Language",    SW: "Lugha" },
   "portal.branch":      { EN: "Active Branch",SW: "Tawi Amilifu" },
@@ -310,7 +312,7 @@ export const strings: Record<string, Record<Lang, string>> = {
   "mkt.outofstock":    { EN: "Out of stock", SW: "Hisa imeisha" },
   "mkt.lead":          { EN: "{n}d lead", SW: "Utoaji {n}siku" },
   "mkt.addtoquote":    { EN: "Add to Quote", SW: "Ongeza kwenye Nukuu" },
-  "mkt.added":         { EN: "Added ✓", SW: "Imeongezwa ✓" },
+  "mkt.added":         { EN: "Added", SW: "Imeongezwa" },
   "mkt.noresults":     { EN: "No products match your search.", SW: "Hakuna bidhaa zinazolingana na utafutaji wako." },
   "mkt.quote.title":   { EN: "Quote Request", SW: "Ombi la Nukuu" },
   "mkt.quote.submitted":{ EN: "Quote Submitted", SW: "Nukuu Imewasilishwa" },
@@ -398,16 +400,21 @@ export const strings: Record<string, Record<Lang, string>> = {
   "download.offline.first":{ EN: "Offline-first",     SW: "Offline-first" },
 
   // OS download card
-  "download.for.windows": { EN: "Download for Windows", SW: "Pakua kwa Windows" },
-  "download.for.macos":   { EN: "Download for macOS",   SW: "Pakua kwa macOS" },
-  "download.for.linux":   { EN: "Download for Linux",   SW: "Pakua kwa Linux" },
-  "download.for.android": { EN: "Download for Android", SW: "Pakua kwa Android" },
-  "download.req.windows": { EN: "Windows 10 or later",  SW: "Windows 10 au matoleo ya baadaye" },
-  "download.req.macos":   { EN: "macOS 11.0 or later",  SW: "macOS 11.0 au matoleo ya baadaye" },
-  "download.req.linux":   { EN: "Ubuntu 20.04 / glibc 2.31+", SW: "Ubuntu 20.04 / glibc 2.31+" },
-  "download.req.android": { EN: "Android 7.0 (API 24) or later", SW: "Android 7.0 (API 24) au matoleo ya baadaye" },
+  "download.for.windows": { EN: "Download Windows Installer", SW: "Pakua Kisakinishi cha Windows" },
+  "download.for.macos":   { EN: "Download for macOS",         SW: "Pakua kwa macOS" },
+  "download.for.linux":   { EN: "Download Debian Package",    SW: "Pakua Kifurushi cha Debian" },
+  "download.for.android": { EN: "Download for Android",       SW: "Pakua kwa Android" },
+  "download.for.pwa":     { EN: "Install Mobile PWA",         SW: "Sakini PWA ya Simu" },
+  "download.req.windows": { EN: "Windows 10 / 11 (64-bit) NSIS Setup", SW: "Windows 10 / 11 (64-bit) NSIS Setup" },
+  "download.req.macos":   { EN: "macOS 12.0+ (Apple Silicon & Intel)", SW: "macOS 12.0+ (Apple Silicon & Intel)" },
+  "download.req.linux":   { EN: "Ubuntu 20.04+, Debian 11+ (.deb & AppImage)", SW: "Ubuntu 20.04+, Debian 11+ (.deb na AppImage)" },
+  "download.req.android": { EN: "Android 8.0+ / PWA Browser", SW: "Android 8.0+ / Kivinjari cha PWA" },
+  "download.req.pwa":     { EN: "iOS, Android, iPadOS · 1-Tap Browser Install", SW: "iOS, Android, iPadOS · Usakinishaji wa Mguso 1" },
   "download.free.noaccount": { EN: "Free · No account needed", SW: "Bure · Hakuna akaunti inayohitajika" },
   "download.scroll.hint": { EN: "Scroll to explore",  SW: "Sogeza chini kuona zaidi" },
+  "download.portal.callout.title": { EN: "Looking for branch station provisioning?", SW: "Unatafuta usajili wa kituo cha tawi?" },
+  "download.portal.callout.desc":  { EN: "If you already run an active pharmacy group, generate station enrollment PINs directly inside your dashboard portal.", SW: "Ikiwa tayari una kikundi cha maduka ya dawa kinachofanya kazi, tengeneza PIN za vituo moja kwa moja ndani ya dashibodi yako." },
+  "download.portal.callout.btn":   { EN: "Go to Dashboard Downloads Portal", SW: "Nenda Sehemu ya Kupakua ya Dashibodi" },
 
   // Scroll overlay
   "download.scroll.continue": { EN: "Scroll to continue", SW: "Sogeza chini kuendelea" },
@@ -1030,4 +1037,31 @@ export const strings: Record<string, Record<Lang, string>> = {
   "hq.sidebar.messages":       { EN: "Messages",           SW: "Ujumbe" },
   "hq.sidebar.audit":          { EN: "Audit Log",          SW: "Kumbukumbu ya Ukaguzi" },
   "hq.sidebar.logout":         { EN: "Sign Out",           SW: "Ondoka" },
+
+  // Navigation additions
+  "nav.ranks":                 { EN: "Who It's For",       SW: "Kwa Nani" },
+  "nav.network":               { EN: "Network Map",        SW: "Ramani ya Mtandao" },
+
+  // 3-Rank Showcase (Landing Page)
+  "ranks.eyebrow":             { EN: "Built For 3 Core Operational Ranks", SW: "Imeundwa kwa Ngazi 3 Kuu za Uendeshaji" },
+  "ranks.title":               { EN: "One Operating System. Three Dedicated Workspaces.", SW: "Mfumo Mmoja. Sehemu Tatu Maalum za Kazi." },
+  "ranks.subtitle":            { EN: "Whether you own a multi-branch pharmacy group, run the daily counter & FEFO store, or supply wholesale stock nationwide — Cervos unifies every handoff.", SW: "Iwe unamiliki matawi ya maduka ya dawa, unaendesha mauzo ya kila siku na hisa za FEFO, au unasambaza bidhaa kwa jumla nchini kote — Cervos inaunganisha kila hatua." },
+
+  // Accounting & Financial Ledger
+  "acc.ledger":                { EN: "Accounting Ledger",                  SW: "Daftari la Hesabu" },
+  "acc.sales":                 { EN: "Sales & Invoicing",                  SW: "Mauzo na Ankara" },
+  "acc.gross_revenue":         { EN: "Gross Revenue",                      SW: "Mapato Ghafi" },
+  "acc.net_margin":            { EN: "Net Margin",                         SW: "Faida Halisi" },
+  "acc.tax_vat":               { EN: "Value Added Tax (18% VAT)",          SW: "Kodi ya Ongezeko la Thamani (18% VAT)" },
+  "acc.cogs":                  { EN: "Cost of Goods Sold (COGS)",          SW: "Gharama ya Bidhaa Zilizouzwa" },
+  "acc.receivables":           { EN: "Customer Invoices (Receivable)",     SW: "Ankara za Wateja (Madeni)" },
+  "acc.payables":              { EN: "Supplier Bills (Payable)",           SW: "Madeni ya Wauzaji (Kulipa)" },
+  "acc.cash_float":            { EN: "Cash on Hand & Till Float",          SW: "Fedha Taslimu na Salio la Keshia" },
+  "acc.mpesa_float":           { EN: "M-Pesa Float & Till Balance",        SW: "Salio la M-Pesa na Till" },
+  "acc.reconciliation":        { EN: "Daily Cash & Float Reconciliation",  SW: "Upatanisho wa Kila Siku wa Fedha" },
+  "acc.escrow":                { EN: "PayMe Escrow Wholesale Settlements", SW: "Malipo ya Amana ya PayMe" },
+  "acc.debit":                 { EN: "Debit",                              SW: "Deni" },
+  "acc.credit":                { EN: "Credit",                             SW: "Mikopo" },
+  "acc.balance":               { EN: "Balance",                            SW: "Salio" },
+  "acc.currency":              { EN: "Tanzanian Shilling (TZS)",           SW: "Shilingi ya Tanzania (TZS)" },
 };

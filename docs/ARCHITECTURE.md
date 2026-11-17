@@ -62,10 +62,10 @@ cervos-desktop/
       Marketplace.tsx Subscription.tsx Login.tsx Onboarding.tsx
     components/ Shell.tsx TopBar.tsx ...
   src-tauri/                # Rust shell + tauri.conf.json (bundle: nsis)
-scripts/
-  hq_schema_requirements.sql  # idempotent cloud schema (run in Supabase)
-sql/migrations/
-  branch_commands.sql         # command queue table
+sql/
+  00_hq_schema_requirements.sql  # idempotent cloud schema (run in Supabase)
+  migrations/
+    branch_commands.sql          # command queue table
 ```
 
 ---
@@ -94,7 +94,7 @@ wrapped in try/catch, so old databases self-heal new columns on next launch.
 
 ## 4. Cloud data model (Supabase Postgres)
 
-Defined/expected in `scripts/hq_schema_requirements.sql` (the operator must run
+Defined/expected in `sql/00_hq_schema_requirements.sql` (the operator must run
 this in the Supabase SQL editor — it is **not** applied automatically). Relevant
 tables for the endpoint sync:
 
@@ -281,7 +281,7 @@ HQ admin → POST /api/hq/commands {cmd:"lock_branch", branchId}
 - **Local SQLite**: owned by `database.ts` (self-migrating).
 - **Cloud Postgres**: owned by the operator. The endpoint does **not** create
   cloud tables. Run, in Supabase SQL editor:
-  1. `scripts/hq_schema_requirements.sql` — creates/extends `products`,
+  1. `sql/00_hq_schema_requirements.sql` — creates/extends `products`,
      `batches`, `accounts`, `branches` columns, indexes, RLS for other tables.
   2. `sql/migrations/branch_commands.sql` — the command queue table.
 - All statements are idempotent (`IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`).
@@ -332,7 +332,7 @@ HQ admin → POST /api/hq/commands {cmd:"lock_branch", branchId}
 
 1. Add the column/table to **local** `database.ts` (`CREATE` + idempotent
    `ALTER`).
-2. Add the matching **cloud** definition to `scripts/hq_schema_requirements.sql`.
+2. Add the matching **cloud** definition to `sql/00_hq_schema_requirements.sql`.
 3. In the write path, call `qs("my_table", rowId, op, cloudShapedPayload)` after
    the `Pe()` local write, and `runSyncCycle()` if you want prompt upload.
 4. In `applyPulledData()` (`sync.ts`), add a `for (const r of data.my_table) upsertLocal(...)`.

@@ -100,7 +100,7 @@ export default function Alerts() {
         {t('nav.alerts')}
       </h1>
 
-      {showBanner && !isAdmin && (
+      {showBanner && isAdmin && (
         <div className="mb-6 p-4 bg-error/10 border border-error/30 rounded-xl flex items-start gap-3">
           <span className="material-symbols-outlined text-error text-xl">warning</span>
           <div>
@@ -151,7 +151,7 @@ export default function Alerts() {
         </div>
       )}
 
-      {!showBanner && isAdmin && (
+      {!showBanner && isAdmin && notifications.length === 0 && (
         <div className="mt-6 text-center text-on-surface-variant">
           <span className="material-symbols-outlined text-5xl">check_circle</span>
           <p className="mt-2 font-medium">{t('alerts.noActiveAlerts')}</p>

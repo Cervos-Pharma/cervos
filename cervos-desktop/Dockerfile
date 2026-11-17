@@ -17,8 +17,8 @@ RUN npm ci
 # Install Tauri CLI (already included in the base image, but ensure latest)
 RUN cargo install --locked tauri-cli@2
 
-# Build Next.js application
-RUN npx next build
+# Build desktop/mobile static bundle
+RUN npm run build
 
 # Build Android APK (release, aarch64)
 RUN tauri android build --target aarch64

@@ -24,6 +24,24 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@cervos/core": [
+        "./packages/core/src/index.ts"
+      ],
+      "@cervos/db": [
+        "./packages/db/src/index.ts"
+      ],
+      "@cervos/intelligence": [
+        "./packages/intelligence/src/index.ts"
+      ],
+      "@cervos/ui": [
+        "./packages/ui/src/index.tsx"
+      ],
+      "@cervos/i18n": [
+        "./packages/i18n/src/index.ts"
+      ],
+      "@cervos/textify": [
+        "./packages/textify/src/index.ts"
       ]
     },
     "target": "ES2017"
@@ -38,6 +56,7 @@
   "exclude": [
     "node_modules",
     "cervos-desktop",
-    "cervos-supplier-desktop"
+    "cervos-supplier-desktop",
+    "apps"
   ]
 }

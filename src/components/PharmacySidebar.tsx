@@ -45,6 +45,14 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
   const router = useRouter();
   const { lang, setLang, t } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [orgMenuOpen, setOrgMenuOpen] = useState(false);
+
+  // Demo branches for the organization switcher
+  const ORG_BRANCHES = [
+    { id: "br-uzuri-cbd", name: "Kariakoo Flagship", subtitle: "Active POS · Station #1", active: true },
+    { id: "br-uzuri-upanga", name: "Upanga Dispensary", subtitle: "3 Active Operators", active: false },
+    { id: "br-uzuri-mik", name: "Mikocheni Central", subtitle: "2 Active Operators", active: false },
+  ];
 
   // Opened by the hamburger in page headers (<MobileMenuButton />).
   useEffect(() => {
@@ -76,6 +84,7 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
     { labelKey: "portal.operators",  href: "/dashboard/operators",   icon: "group" },
     { labelKey: "portal.orders",     href: "/dashboard/orders",      icon: "shopping_cart" },
     { labelKey: "portal.branches",    href: "/dashboard/branches",    icon: "storefront" },
+    { labelKey: "portal.downloads",   href: "/dashboard/downloads",   icon: "download" },
     { labelKey: "portal.network",     href: "/dashboard/network",     icon: "map" },
     { labelKey: "portal.reports",    href: "/dashboard/reports",    icon: "analytics" },
     { labelKey: "portal.billing",    href: "/dashboard/billing",     icon: "payments" },
@@ -84,60 +93,97 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
 
   const content = (
     <>
-      {/* Brand / account logo */}
-      <div className="px-6 mb-8 flex items-center gap-2">
-        {logoUrl ? (
-          /* Custom pharmacy logo — set during onboarding */
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-8 h-8 relative flex-shrink-0 rounded overflow-hidden border border-outline-variant/40">
-              <Image
-                src={logoUrl}
-                alt={accountName ?? "Pharmacy"}
-                fill
-                sizes="32px"
-                className="object-contain"
-              />
+      {/* Brand / account header */}
+      <div className="px-5 py-4 border-b border-outline-variant flex items-center justify-between gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 relative flex-shrink-0">
+            <Image
+              src="/cervos-mark.svg"
+              alt="Cervos"
+              width={32}
+              height={32}
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div className="min-w-0">
+            <span className="font-headline-md text-sm font-bold text-ink-deep block leading-tight">Cervos</span>
+            <span className="font-mono text-[10px] text-on-surface-variant uppercase tracking-wider">Pharmacy OS</span>
+          </div>
+        </Link>
+        <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold">
+          Verified
+        </span>
+      </div>
+
+      {/* Interactive Collapsible Organization & Branch Switcher */}
+      <div className="mx-3 mt-3">
+        <button
+          type="button"
+          onClick={() => setOrgMenuOpen((o) => !o)}
+          aria-expanded={orgMenuOpen}
+          className="w-full text-left p-2.5 rounded-lg border border-outline-variant bg-surface-container-low hover:bg-surface-container transition-colors flex items-center justify-between gap-2 group"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <p className="font-medium text-xs text-ink-deep truncate font-semibold">
+                {accountName ?? "Uzuri Pharmacy Group"}
+              </p>
             </div>
-            <div className="min-w-0">
-              <span className="font-headline-md font-bold text-on-surface block leading-none truncate text-sm">
-                {accountName ?? t("sidebar.pharmacy")}
-              </span>
-              <span className="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">
-                {t("sidebar.pharmacy_os")}
-              </span>
+            <p className="text-[11px] text-on-surface-variant truncate mt-0.5">
+              {branchName ?? "Kariakoo Flagship"}
+            </p>
+          </div>
+          <span
+            className={`material-symbols-outlined text-[18px] text-on-surface-variant transition-transform duration-200 shrink-0 ${
+              orgMenuOpen ? "rotate-180 text-primary" : "group-hover:text-ink-deep"
+            }`}
+          >
+            expand_more
+          </span>
+        </button>
+
+        {/* Collapsible Branches Dropdown */}
+        {orgMenuOpen && (
+          <div className="mt-1 p-1.5 rounded-lg border border-outline-variant bg-surface-base shadow-md space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
+            <p className="px-2 py-1 font-mono text-[9px] text-on-surface-variant uppercase tracking-wider">
+              Connected Branches
+            </p>
+            {ORG_BRANCHES.map((b) => (
+              <div
+                key={b.id}
+                className={`flex items-center justify-between p-2 rounded text-xs transition-colors ${
+                  b.active
+                    ? "bg-primary/10 text-primary font-semibold"
+                    : "text-ink-deep hover:bg-surface-container-low"
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="truncate">{b.name}</p>
+                  <p className="text-[10px] text-on-surface-variant truncate font-normal font-mono">{b.subtitle}</p>
+                </div>
+                {b.active && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                )}
+              </div>
+            ))}
+            <div className="pt-1 border-t border-outline-variant/60">
+              <Link
+                href="/dashboard/branches"
+                onClick={closeMobile}
+                className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-primary font-medium hover:underline"
+              >
+                <span className="material-symbols-outlined text-[14px]">add</span>
+                <span>Manage Branches</span>
+              </Link>
             </div>
           </div>
-        ) : (
-          /* Default Cervos branding */
-          <>
-            <div className="w-6 h-6 relative flex-shrink-0">
-              <Image
-                src="/logo.png"
-                alt="Cervos"
-                fill
-                sizes="24px"
-                className="object-contain"
-                style={{ mixBlendMode: "multiply" }}
-              />
-            </div>
-            <div>
-              <span className="font-headline-md font-bold text-on-surface block leading-none">Cervos</span>
-              <span className="font-label-md text-on-surface-variant uppercase tracking-wider text-[10px]">Pharmacy OS</span>
-            </div>
-          </>
         )}
       </div>
 
-      {/* Branch chip */}
-      {branchName && (
-        <div className="mx-4 mb-5 px-3 py-2 bg-surface-container rounded border border-outline-variant">
-          <p className="font-label-md text-on-surface-variant uppercase tracking-wider mb-0.5 text-[10px]">{t("portal.branch")}</p>
-          <p className="font-body-md font-medium text-on-surface truncate text-sm">{branchName}</p>
-        </div>
-      )}
-
-      {/* Nav — scrolls if items overflow */}
-      <nav className="flex-1 flex flex-col gap-0.5 px-3 overflow-y-auto min-h-0 scrollbar-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline-variant [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-outline-variant/80">
+      {/* Navigation */}
+      <nav className="flex-1 flex flex-col gap-0.5 px-3 py-3 overflow-y-auto min-h-0 scrollbar-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-outline-variant [&::-webkit-scrollbar-thumb]:rounded-full">
         {NAV.map(item => {
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
           return (
@@ -145,49 +191,48 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
               key={item.href}
               href={item.href}
               onClick={closeMobile}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors border-l-2 ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 active
-                  ? "text-primary font-bold bg-primary/8 border-primary"
-                  : "text-on-surface-variant hover:bg-surface-container border-transparent"
+                  ? "bg-primary/10 text-primary font-semibold"
+                  : "text-on-surface-variant hover:bg-surface-container-low hover:text-ink-deep"
               }`}
             >
               <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-              <span className="font-body-md text-sm">{t(item.labelKey)}</span>
+              <span className="truncate">{t(item.labelKey)}</span>
             </Link>
           );
         })}
-        {/* Download — no lock icon; any pharmacy user can access */}
         <Link
           href="/download"
           onClick={closeMobile}
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors border-l-2 mt-1 ${
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors mt-1 ${
             pathname === "/download"
-              ? "text-primary font-bold bg-primary/8 border-primary"
-              : "text-on-surface-variant hover:bg-surface-container border-transparent"
+              ? "bg-primary/10 text-primary font-semibold"
+              : "text-on-surface-variant hover:bg-surface-container-low hover:text-ink-deep"
           }`}
         >
           <span className="material-symbols-outlined text-[18px]">download</span>
-          <span className="font-body-md text-sm">{t("portal.download")}</span>
+          <span className="truncate">{t("portal.download")}</span>
         </Link>
       </nav>
 
-      {/* Footer — pinned */}
-      <div className="px-3 mt-auto flex flex-col border-t border-outline-variant pt-3 shrink-0 bg-surface">
+      {/* Footer */}
+      <div className="px-3 py-3 mt-auto flex flex-col gap-1 border-t border-outline-variant shrink-0 bg-surface-base">
         {accountName && (
-          <div className="px-3 py-2 mb-1">
-            <p className="text-[10px] font-label-md text-on-surface-variant uppercase tracking-wider">{t("sidebar.signed_in_as")}</p>
-            <p className="text-sm font-medium text-on-surface truncate">{accountName}</p>
+          <div className="px-3 py-1.5 mb-1">
+            <p className="text-[10px] font-mono text-on-surface-variant uppercase tracking-wider">{t("sidebar.signed_in_as")}</p>
+            <p className="text-xs font-semibold text-ink-deep truncate">{accountName}</p>
           </div>
         )}
-        <div className="flex items-center gap-2 px-3 py-2">
+        <div className="flex items-center gap-2 px-3 py-1.5">
           <span className="material-symbols-outlined text-[16px] text-on-surface-variant">translate</span>
-          <div className="flex gap-0.5 bg-surface-container rounded p-0.5">
+          <div className="flex gap-0.5 bg-surface-container-low border border-outline-variant rounded-md p-0.5">
             {(["EN", "SW"] as const).map(l => (
               <button
                 key={l}
                 onClick={() => setLang(l)}
-                className={`px-2.5 py-0.5 text-[11px] font-label-md rounded transition-colors ${
-                  lang === l ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-primary"
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors ${
+                  lang === l ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-ink-deep"
                 }`}
               >
                 {l}
@@ -197,10 +242,10 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-3 py-2.5 text-error hover:bg-error-container transition-colors w-full text-left rounded-md"
+          className="flex items-center gap-3 px-3 py-2 text-error hover:bg-error-container/60 transition-colors w-full text-left rounded-lg text-sm font-medium"
         >
           <span className="material-symbols-outlined text-[18px]">logout</span>
-          <span className="font-body-md text-sm">{t("portal.logout")}</span>
+          <span>{t("portal.logout")}</span>
         </button>
       </div>
     </>
@@ -208,15 +253,13 @@ export default function PharmacySidebar({ branchName, accountName, logoUrl }: Ph
 
   return (
     <>
-      {/* Mobile drawer — slide in/out below lg */}
       <MobileDrawer open={mobileOpen} onClose={closeMobile}>
-        <aside className="bg-surface h-full w-64 flex flex-col py-6 overflow-hidden">
+        <aside className="bg-surface-base h-full w-64 flex flex-col overflow-hidden">
           {content}
         </aside>
       </MobileDrawer>
 
-      {/* Fixed desktop sidebar — lg+ only */}
-      <aside className="hidden lg:flex bg-surface fixed left-0 top-0 h-full w-64 border-r border-outline-variant flex-col py-6 z-20 overflow-hidden">
+      <aside className="hidden lg:flex bg-surface-base fixed left-0 top-0 h-full w-64 border-r border-outline-variant flex-col z-20 overflow-hidden">
         {content}
       </aside>
     </>

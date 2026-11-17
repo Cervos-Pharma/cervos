@@ -1,12 +1,10 @@
 /**
  * @file lib/escrow.ts
- * @description Marketplace escrow settlement. After a buyer's Payme collection
- * completes (webhook), the order is confirmed and the supplier is paid out via
- * a Payme disbursement to their mobile-money wallet.
- *
- * NOTE: In the Payme sandbox, disbursements may be disabled per merchant —
- * when that happens we still record the payout as `processing` with a
- * `failure_reason`, and notify the supplier that payment is pending settlement.
+ * @description Marketplace escrow settlement.
+ *   1. On buyer Payme payment completion (`settleOrderPayout`), funds are held safely
+ *      in `escrow_held` status inside `disbursements` until delivery/GRN confirmation.
+ *   2. Once delivery/GRN completes (`releaseOrderEscrowPayout`), funds are released
+ *      to the supplier's Payme payout wallet via `initiateDisbursement`.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -17,19 +15,25 @@ interface PayableOrder {
   buyer_branch_id: string;
 }
 
-/**
- * Runs the settlement leg after an order payment completes:
- *   1. confirms the order (already `confirmed` on success — idempotent),
- *   2. resolves the supplier payout wallet (accounts.payme_wallet_number → payment_settings),
- *   3. records a `disbursements` row and pushes a Payme disbursement,
- *   4. notifies supplier + pharmacy of the payout status.
- */
 export async function settleOrderPayout(args: {
   service: SupabaseClient;
   payment: { id: string; reference: string; amount_tzs: number; account_id: string };
   order: PayableOrder;
 }): Promise<{ ok: boolean; message: string }> {
   const { service, payment, order } = args;
+
+  const { data: existingDisbursement } = await service
+    .from("disbursements")
+    .select("id, status")
+    .eq("order_id", order.id)
+    .maybeSingle();
+
+  if (existingDisbursement) {
+    return {
+      ok: true,
+      message: `Order escrow already recorded (${existingDisbursement.status}).`,
+    };
+  }
 
   const [
     { data: sellerAcct, error: sellerError },
@@ -58,47 +62,8 @@ export async function settleOrderPayout(args: {
 
   const disbursementRef = `DIS-${Date.now().toString(36).toUpperCase()}-${order.seller_id.slice(0, 4).toUpperCase()}`;
   const feeTzs = 0;
-  const amountTzs = Number(payment.amount_tzs) || 0;
+  const amountTzs = Math.round(Number(payment.amount_tzs) || 0);
 
-  if (!walletNumber) {
-    // No payout destination yet — leave the money pending and nudge the supplier.
-    const { error: dispInsertError } = await service.from("disbursements").insert({
-      payment_id: payment.id,
-      order_id: order.id,
-      account_id: payment.account_id,
-      supplier_id: order.seller_id,
-      reference: disbursementRef,
-      amount_tzs: amountTzs,
-      fee_tzs: feeTzs,
-      net_amount_tzs: amountTzs - feeTzs,
-      status: "pending",
-      failure_reason: "Supplier payout wallet not configured",
-    });
-    if (dispInsertError) return { ok: false, message: dispInsertError.message };
-
-    await service.from("notifications").insert([
-      {
-        account_id: order.seller_id,
-        kind: "payment",
-        title: "Order paid — add your payout wallet",
-        body: `Order ${order.order_reference} is paid and awaiting payout. Add your Payme wallet in Payment Settings to receive the funds.`,
-        route: "/supplier/settings",
-        read: false,
-      },
-      {
-        account_id: payment.account_id,
-        kind: "order",
-        title: "Order paid",
-        body: `Order ${order.order_reference} was paid. The supplier will be paid once they add their payout wallet.`,
-        route: "/dashboard/orders",
-        read: false,
-      },
-    ]);
-
-    return { ok: true, message: "Order confirmed. Supplier payout pending wallet setup." };
-  }
-
-  // Create the payout record BEFORE hitting Payme so a failure still leaves a trace.
   const { error: dispInsertError } = await service.from("disbursements").insert({
     payment_id: payment.id,
     order_id: order.id,
@@ -108,57 +73,122 @@ export async function settleOrderPayout(args: {
     amount_tzs: amountTzs,
     fee_tzs: feeTzs,
     net_amount_tzs: amountTzs - feeTzs,
-    msisdn: walletNumber,
-    channel: "CASHIN",
-    status: "pending",
+    msisdn: walletNumber || null,
+    channel: walletNumber ? "CASHIN" : null,
+    status: walletNumber ? "escrow_held" : "pending",
+    failure_reason: walletNumber ? null : "Supplier payout wallet not configured",
   });
+
   if (dispInsertError) return { ok: false, message: dispInsertError.message };
-
-  const { initiateDisbursement } = await import("@/lib/payme");
-  const { data: paymeData, error: paymeError } = await initiateDisbursement({
-    amount: amountTzs,
-    msisdn: walletNumber,
-    channel: "CASHIN",
-    reference: disbursementRef,
-  });
-
-  if (paymeError) {
-    await service
-      .from("disbursements")
-      .update({ status: "failed", failure_reason: paymeError })
-      .eq("reference", disbursementRef);
-    return { ok: false, message: paymeError };
-  }
-
-  await service
-    .from("disbursements")
-    .update({
-      provider_transaction_id: paymeData?.transaction_id || null,
-      status: paymeData?.payment_status === "COMPLETED" ? "completed" : "processing",
-      completed_at: paymeData?.payment_status === "COMPLETED" ? new Date().toISOString() : null,
-    })
-    .eq("reference", disbursementRef);
-
-  const payoutLabel = paymeData?.payment_status === "COMPLETED" ? "paid" : "payout initiated";
 
   await service.from("notifications").insert([
     {
       account_id: order.seller_id,
       kind: "payment",
-      title: "Supplier payout",
-      body: `Order ${order.order_reference} settlement ${payoutLabel} — TSh ${amountTzs.toLocaleString()}`,
+      title: walletNumber
+        ? "Order paid — held in escrow until delivery"
+        : "Order paid — add your payout wallet",
+      body: walletNumber
+        ? `Order ${order.order_reference} payment (TZS ${amountTzs.toLocaleString("en-US")}) is held in Cervos Escrow and releases automatically upon delivery/GRN confirmation.`
+        : `Order ${order.order_reference} is paid in escrow. Add your Payme wallet in Payment Settings to unlock release upon delivery.`,
       route: "/supplier/orders",
       read: false,
     },
     {
       account_id: payment.account_id,
       kind: "order",
-      title: "Order confirmed & settled",
-      body: `Order ${order.order_reference} is confirmed. The supplier has been ${payoutLabel} (TSh ${amountTzs.toLocaleString()}).`,
+      title: "Order confirmed in escrow",
+      body: `Order ${order.order_reference} payment (TZS ${amountTzs.toLocaleString("en-US")}) is secured in escrow until delivery confirmation.`,
       route: "/dashboard/orders",
       read: false,
     },
   ]);
 
-  return { ok: true, message: `Order confirmed and supplier ${payoutLabel}.` };
+  return {
+    ok: true,
+    message: walletNumber
+      ? "Order confirmed; funds held in escrow pending delivery."
+      : "Order confirmed; supplier wallet needed before escrow release.",
+  };
+}
+
+/**
+ * Releases a previously held escrow disbursement to the supplier's Payme wallet
+ * once delivery / POS GRN intake is confirmed.
+ */
+export async function releaseOrderEscrowPayout(args: {
+  service: SupabaseClient;
+  orderId: string;
+}): Promise<{ ok: boolean; message: string }> {
+  const { service, orderId } = args;
+
+  const { data: held } = await service
+    .from("disbursements")
+    .select("id, reference, amount_tzs, net_amount_tzs, msisdn, status, supplier_id, account_id")
+    .eq("order_id", orderId)
+    .in("status", ["escrow_held", "pending"])
+    .maybeSingle();
+
+  if (!held) {
+    return { ok: true, message: "No unreleased escrow record for this order." };
+  }
+
+  let walletNumber = (held.msisdn ?? "").trim();
+  if (!walletNumber) {
+    const [{ data: acct }, { data: settings }] = await Promise.all([
+      service
+        .from("accounts")
+        .select("payme_wallet_number")
+        .eq("id", held.supplier_id)
+        .maybeSingle(),
+      service
+        .from("payment_settings")
+        .select("payme_wallet_number")
+        .eq("account_id", held.supplier_id)
+        .maybeSingle(),
+    ]);
+    walletNumber =
+      (acct?.payme_wallet_number ?? "").trim() ||
+      (settings as { payme_wallet_number?: string | null } | null)?.payme_wallet_number?.trim() ||
+      "";
+  }
+
+  if (!walletNumber) {
+    await service
+      .from("disbursements")
+      .update({ status: "pending", failure_reason: "Supplier payout wallet not configured at delivery" })
+      .eq("id", held.id);
+    return { ok: false, message: "Supplier payout wallet not configured." };
+  }
+
+  const releaseAmount = Math.round(Number(held.net_amount_tzs ?? held.amount_tzs) || 0);
+  const { initiateDisbursement } = await import("@/lib/payme");
+  const { data: paymeData, error: paymeError } = await initiateDisbursement({
+    amount: releaseAmount,
+    msisdn: walletNumber,
+    channel: "CASHIN",
+    reference: held.reference,
+  });
+
+  if (paymeError) {
+    await service
+      .from("disbursements")
+      .update({ status: "failed", failure_reason: paymeError })
+      .eq("id", held.id);
+    return { ok: false, message: paymeError };
+  }
+
+  await service
+    .from("disbursements")
+    .update({
+      msisdn: walletNumber,
+      channel: "CASHIN",
+      provider_transaction_id: paymeData?.transaction_id || null,
+      status: paymeData?.payment_status === "COMPLETED" ? "completed" : "processing",
+      completed_at: paymeData?.payment_status === "COMPLETED" ? new Date().toISOString() : null,
+      failure_reason: null,
+    })
+    .eq("id", held.id);
+
+  return { ok: true, message: "Escrow payout released to supplier." };
 }

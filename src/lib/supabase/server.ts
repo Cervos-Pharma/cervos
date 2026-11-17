@@ -31,7 +31,7 @@
 
 import { createServerClient, type CookieMethodsServer } from "@supabase/ssr";
 import { createClient as createSupabaseClient, type SupabaseClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { createMockSupabase, mockUserForType } from "@/lib/mock/supabase";
 
@@ -71,11 +71,15 @@ function cookieMethods(cookieStore: Awaited<ReturnType<typeof cookies>>): Cookie
  * Returns a mock client wired to the `mock_user` cookie so role-switching works
  * server-side. `none` simulates a signed-out user (drives the auth redirects).
  */
-function mockServerClient(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+function mockServerClient(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  roleHint?: "supplier" | "pharmacy" | null
+) {
   const readRole = (): "pharmacy" | "supplier" | "none" => {
     const value = cookieStore.get("mock_user")?.value;
-    if (value === "supplier") return "supplier";
     if (value === "none") return "none";
+    if (roleHint) return roleHint;
+    if (value === "supplier") return "supplier";
     return "pharmacy";
   };
   return createMockSupabase({
@@ -113,7 +117,19 @@ function mockServerClient(cookieStore: Awaited<ReturnType<typeof cookies>>) {
  */
 export async function createClient(): Promise<SupabaseServerClient> {
   const cookieStore = await cookies();
-  if (IS_MOCK) return mockServerClient(cookieStore) as unknown as SupabaseServerClient;
+  if (IS_MOCK) {
+    let roleHint: "supplier" | "pharmacy" | null = null;
+    try {
+      const headerStore = await headers();
+      const explicitRole = headerStore.get("x-cervos-role");
+      if (explicitRole === "supplier" || explicitRole === "pharmacy") {
+        roleHint = explicitRole;
+      }
+    } catch {
+      // Outside request context
+    }
+    return mockServerClient(cookieStore, roleHint) as unknown as SupabaseServerClient;
+  }
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -125,7 +141,7 @@ export async function createClient(): Promise<SupabaseServerClient> {
  * Creates a service-role Supabase client for privileged server-side use.
  * BYPASSES Row Level Security — can read and write any row in any table.
  *
- * ⚠️ ONLY use this in HQ server actions (`lib/actions/hq.ts`) that have already
+ * WARNING: ONLY use this in HQ server actions (`lib/actions/hq.ts`) that have already
  * validated the HQ session cookie via `assertHQAuth()`. Never expose this client
  * to user-facing code or return its raw output to the browser.
  *

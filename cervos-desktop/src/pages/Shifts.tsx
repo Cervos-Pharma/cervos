@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { reconcileCashShift } from '@cervos/core'
 import { queryDb, executeDb, generateId } from '../lib/database'
 import { queueForSync } from '../lib/sync'
 import { useAuthStore } from '../lib/store'
@@ -18,6 +19,19 @@ export default function Shifts() {
     loadShifts()
   }, [])
 
+  async function computeShiftCashTotal(branchId: string, openedAt: string, closedAt?: string | null): Promise<number> {
+    const rows = closedAt
+      ? await queryDb(
+          `SELECT COALESCE(SUM(total), 0) AS cash_total FROM sales WHERE branch_id = ? AND payment_method = 'cash' AND created_at >= ? AND created_at <= ?`,
+          [branchId, openedAt, closedAt]
+        )
+      : await queryDb(
+          `SELECT COALESCE(SUM(total), 0) AS cash_total FROM sales WHERE branch_id = ? AND payment_method = 'cash' AND created_at >= ?`,
+          [branchId, openedAt]
+        )
+    return Number(rows[0]?.cash_total) || 0
+  }
+
   async function loadShifts() {
     if (!currentOperator) return
     const rows = await queryDb(
@@ -25,7 +39,12 @@ export default function Shifts() {
       [currentOperator.branch_id]
     )
     const open = rows.find((r: any) => !r.closed_at)
-    setActiveShift(open ?? null)
+    if (open) {
+      const cashSalesTotal = await computeShiftCashTotal(open.branch_id || currentOperator.branch_id, open.opened_at)
+      setActiveShift({ ...open, expected_cash: cashSalesTotal })
+    } else {
+      setActiveShift(null)
+    }
     setHistory(rows.filter((r: any) => r.closed_at))
 
     const ids = [...new Set(rows.map((r: any) => r.operator_id))]
@@ -55,16 +74,30 @@ export default function Shifts() {
   }
 
   async function handleCloseShift() {
-    if (!activeShift) return
+    if (!activeShift || !currentOperator) return
     const now = new Date().toISOString()
     const counted = parseFloat(countedCash) || 0
+    const cashSalesTotal = await computeShiftCashTotal(
+      activeShift.branch_id || currentOperator.branch_id,
+      activeShift.opened_at,
+      now
+    )
+    const recon = reconcileCashShift({
+      openingCashTzs: 0,
+      cashSalesTzs: cashSalesTotal,
+      declaredCashTzs: counted,
+    })
 
     await executeDb(
-      `UPDATE shifts SET closed_at = ?, counted_cash = ?, synced = 0 WHERE id = ?`,
-      [now, counted, activeShift.id]
+      `UPDATE shifts SET closed_at = ?, expected_cash = ?, counted_cash = ?, synced = 0 WHERE id = ?`,
+      [now, recon.expectedCashTzs, recon.declaredCashTzs, activeShift.id]
     )
     await queueForSync('shifts', activeShift.id, 'upsert', {
-      ...activeShift, closed_at: now, counted_cash: counted, synced: 0
+      ...activeShift,
+      closed_at: now,
+      expected_cash: recon.expectedCashTzs,
+      counted_cash: recon.declaredCashTzs,
+      synced: 0,
     })
     setShowCloseForm(false)
     setCountedCash('')

@@ -10,9 +10,17 @@ src-tauri/gen/
 dist-electron/
 
 # Environment variables — NEVER commit real secrets
-.env.local
-.env.production
-.env.*.local
+.env
+.env.*
+!.env.example
+!cervos-desktop/.env.example
+
+# Patch / editor / agent scratch cruft
+*.rej
+*.orig
+*.bak
+*~
+.freebuff/
 
 # Debug
 npm-debug.log*

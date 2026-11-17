@@ -1,8 +1,12 @@
-/* Material Symbols — self-hosted variable font (downloaded from Google Fonts,
-   served locally). The previous approach (remote `@import` from fonts.googleapis.com)
-   was silently dropped by the CSS bundler, so icons never loaded. Self-hosting
-   also keeps the app fully offline-capable in mock mode.
-   Font file: public/fonts/material-symbols-outlined.woff2 */
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url("/fonts/Outfit-SemiBold.ttf") format("truetype");
+}
+
+/* Material Symbols — self-hosted variable font */
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;
@@ -48,46 +52,37 @@
   }
 
   body {
-    background-color: #fcf8ff;
-    color: #1a1a2e;
+    background-color: #f8fafc;
+    color: #0f172a;
     font-family: "Inter", sans-serif;
   }
 }
 
 @layer components {
-  /* ── Canonical notched card (clip-path — the ONLY implementation) */
+  /* ── Clean rounded card surfaces (preserving class names across portals) */
   .custom-notch {
-    clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 24px, 100% 100%, 0 100%);
+    border-radius: 0.75rem;
   }
 
   .custom-notch-sm {
-    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+    border-radius: 0.625rem;
   }
 
-  /* HQ glassmorphism panel (auth page) */
+  /* Clean elevated auth/console card surface */
   .hud-panel {
-    background: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.08);
     backdrop-filter: blur(16px);
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 32px), calc(100% - 32px) 100%, 0 100%);
   }
 
   .hud-border {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    border: 1px solid #1a1a2e;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 32px), calc(100% - 32px) 100%, 0 100%);
+    display: none;
   }
 
   .hud-notch-line {
-    position: absolute;
-    bottom: 15px;
-    right: -6px;
-    width: 45px;
-    height: 1px;
-    background-color: #1a1a2e;
-    transform: rotate(-45deg);
-    pointer-events: none;
+    display: none;
   }
 
   /* Gaming spring button press */
@@ -112,9 +107,9 @@
 @layer utilities {
   /* Hero headline fluid type */
   .hero-headline {
-    font-size: clamp(48px, 6vw, 90px);
-    line-height: 1;
-    letter-spacing: -0.03em;
+    font-size: clamp(2.25rem, 4.2vw, 3.75rem);
+    line-height: 1.08;
+    letter-spacing: -0.025em;
   }
 
   /* Scrollbar hide */
@@ -238,11 +233,11 @@
   animation: shimmerSweep 0.55s ease-out forwards;
 }
 
-/* Leaflet CSS override — ensure map tiles display properly */
+/* Leaflet CSS overrides — prevent broken default icons & keep popups crisp */
 .leaflet-container {
   height: 100%;
   width: 100%;
-  background: #111318;
+  font-family: "Inter", sans-serif;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
@@ -259,7 +254,333 @@
   pointer-events: none !important;
 }
 
-/* Dark mode filter for OpenStreetMap raster tiles (no API key required) */
-.cervos-dark-tiles {
-  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+@keyframes cervos-pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.45; }
+  100% { transform: scale(1.9); opacity: 0;    }
+}
+
+@keyframes cervos-route-dash {
+  to { stroke-dashoffset: -24; }
+}
+
+.cervos-route-line {
+  animation: cervos-route-dash 1.8s linear infinite;
+}
+
+.cervos-popup-light .leaflet-popup-content-wrapper {
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid rgba(26, 26, 46, 0.12) !important;
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.14) !important;
+}
+.cervos-popup-light .leaflet-popup-tip {
+  background: #ffffff !important;
+}
+
+.cervos-popup-dark .leaflet-popup-content-wrapper {
+  border-radius: 10px !important;
+  background: #131926 !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45) !important;
+}
+.cervos-popup-dark .leaflet-popup-tip {
+  background: #131926 !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+}
+
+/* ── Bespoke Reference Animations & Surfaces ──────────────────────── */
+@keyframes floatCardSlow {
+  0%, 100% { transform: translateY(0px) rotate(var(--card-rot, -6deg)); }
+  50%       { transform: translateY(-10px) rotate(var(--card-rot, -6deg)); }
+}
+
+@keyframes orbitPulse {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-4px) scale(1.03); }
+}
+
+.animate-float-card {
+  animation: floatCardSlow 5s ease-in-out infinite;
+}
+
+.animate-orbit-node {
+  animation: orbitPulse 4s ease-in-out infinite;
+}
+
+@keyframes slowOrbitSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes slowCounterSpin {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+
+@keyframes floatGentle {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+
+.animate-orbit-ring {
+  animation: slowOrbitSpin 42s linear infinite;
+}
+
+.animate-orbit-ring-reverse {
+  animation: slowCounterSpin 34s linear infinite;
+}
+
+.animate-orbit-upright {
+  animation: slowCounterSpin 42s linear infinite;
+}
+
+.animate-orbit-upright-reverse {
+  animation: slowOrbitSpin 34s linear infinite;
+}
+
+.animate-float-gentle {
+  animation: floatGentle 6s ease-in-out infinite;
+}
+
+@keyframes letterFlipIn {
+  0% {
+    opacity: 0;
+    transform: perspective(450px) rotateX(-88deg) translateY(3px);
+  }
+  65% {
+    opacity: 1;
+    transform: perspective(450px) rotateX(10deg) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(450px) rotateX(0deg) translateY(0);
+  }
+}
+
+.animate-letter-flip {
+  display: inline-block;
+  transform-origin: 50% 50%;
+  animation: letterFlipIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes glimmerOnceSweep {
+  0%   { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+  20%  { opacity: 0.9; }
+  100% { transform: translateX(340%) skewX(-18deg); opacity: 0; }
+}
+
+.cta-glimmer-overlay {
+  position: absolute;
+  inset: 0;
+  width: 55%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.48) 50%, transparent 100%);
+  pointer-events: none;
+  animation: glimmerOnceSweep 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@view-transition {
+  navigation: auto;
+}
+
+@keyframes pageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: pageEnter 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes waylayPulse {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.42;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.92;
+  }
+}
+
+.animate-waylay-pulse {
+  animation: waylayPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes stageMorphPop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.015);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-stage-pop {
+  animation: stageMorphPop 0.78s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes radialDarkSwallow {
+  0% {
+    clip-path: circle(0% at 50% 54%);
+    opacity: 0.85;
+  }
+  100% {
+    clip-path: circle(150% at 50% 54%);
+    opacity: 1;
+  }
+}
+
+.animate-radial-swallow {
+  animation: radialDarkSwallow 0.82s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes globeDropPop {
+  0% {
+    opacity: 0;
+    transform: translateY(-34px) scale(0.88);
+  }
+  62% {
+    opacity: 1;
+    transform: translateY(5px) scale(1.025);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-globe-drop-pop {
+  animation: globeDropPop 0.95s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes hardwareRevolve {
+  0%, 100% {
+    transform: perspective(1400px) rotateY(-9deg) rotateX(3deg) translateY(0px);
+  }
+  50% {
+    transform: perspective(1400px) rotateY(9deg) rotateX(-2deg) translateY(-10px);
+  }
+}
+
+.animate-hardware-revolve {
+  animation: hardwareRevolve 11s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+@keyframes revolveCounterLeft {
+  0%, 100% {
+    transform: perspective(1300px) rotateY(22deg) rotateX(5deg) rotateZ(-4.5deg) translateY(0px);
+  }
+  50% {
+    transform: perspective(1300px) rotateY(9deg) rotateX(-2deg) rotateZ(-1.2deg) translateY(-14px);
+  }
+}
+
+.animate-revolve-left {
+  animation: revolveCounterLeft 9s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+@keyframes revolveCounterRight {
+  0%, 100% {
+    transform: perspective(1300px) rotateY(-22deg) rotateX(5deg) rotateZ(4.5deg) translateY(-12px);
+  }
+  50% {
+    transform: perspective(1300px) rotateY(-9deg) rotateX(-2deg) rotateZ(1.2deg) translateY(2px);
+  }
+}
+
+.animate-revolve-right {
+  animation: revolveCounterRight 9s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+@keyframes screenGlimmerSweep {
+  0%, 15% {
+    transform: translateX(-140%) rotate(22deg);
+    opacity: 0;
+  }
+  38% {
+    opacity: 0.75;
+  }
+  65%, 100% {
+    transform: translateX(220%) rotate(22deg);
+    opacity: 0;
+  }
+}
+
+.animate-screen-glimmer {
+  animation: screenGlimmerSweep 5.5s ease-in-out infinite;
+}
+
+@keyframes scanBeamSweep {
+  0%, 100% {
+    transform: translateY(6px);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translateY(88px);
+    opacity: 0.85;
+  }
+}
+
+.animate-scan-beam {
+  animation: scanBeamSweep 3.4s ease-in-out infinite;
+}
+
+@keyframes globeSoftAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-globe-appear {
+  animation: globeSoftAppear 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-orbit-ring,
+  .animate-orbit-ring-reverse,
+  .animate-orbit-upright,
+  .animate-orbit-upright-reverse,
+  .animate-float-gentle,
+  .animate-float-card,
+  .animate-orbit-node,
+  .animate-letter-flip,
+  .cta-glimmer-overlay,
+  .animate-page-enter,
+  .animate-waylay-pulse,
+  .animate-stage-pop,
+  .animate-radial-swallow,
+  .animate-globe-drop-pop,
+  .animate-globe-appear,
+  .animate-hardware-revolve,
+  .animate-revolve-left,
+  .animate-revolve-right,
+  .animate-screen-glimmer,
+  .animate-scan-beam {
+    animation: none;
+  }
 }

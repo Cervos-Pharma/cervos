@@ -175,19 +175,29 @@ export function verifyWebhookSignature(
   timestamp: string,
   signature: string
 ): boolean {
+  const secret = process.env.PAYME_APP_SECRET || APP_SECRET;
+  if (!secret || !signature) return false;
+
   const crypto = require("crypto");
   // Payme spec: Base64( HMAC_SHA256( Payload + X-Timestamp, Secret ) ) — base64
   // of the raw digest bytes, matching the X-Middleware-Signature header.
   const expected = crypto
-    .createHmac("sha256", APP_SECRET)
+    .createHmac("sha256", secret)
     .update(payload + timestamp)
     .digest("base64");
 
-  if (signature !== expected) return false;
+  try {
+    const sigBuf = Buffer.from(signature, "utf8");
+    const expBuf = Buffer.from(expected, "utf8");
+    if (sigBuf.length !== expBuf.length) return false;
+    if (!crypto.timingSafeEqual(sigBuf, expBuf)) return false;
+  } catch {
+    return false;
+  }
 
-  const fiveMinAgo = Math.floor(Date.now() / 1000) - 300;
-  const ts = parseInt(timestamp, 10);
-  if (isNaN(ts) || ts < fiveMinAgo) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const ts = Number.parseInt(timestamp, 10);
+  if (!Number.isFinite(ts) || ts < nowSec - 300 || ts > nowSec + 60) return false;
 
   return true;
 }

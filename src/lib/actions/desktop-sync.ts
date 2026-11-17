@@ -352,17 +352,17 @@ export async function getSyncData(since: string, accountId: string): Promise<Syn
       : Promise.resolve({ data: [] }),
     branchIds.length > 0
       ? (async () => {
-          const { data: branchSales } = await supabase
-            .from("sales")
-            .select("id")
-            .in("branch_id", branchIds)
-            .gt("created_at", since);
-          if (!branchSales || branchSales.length === 0) return { data: [] };
-          return supabase
-            .from("sale_items")
-            .select("id, sale_id, batch_id, quantity, unit_price, created_at")
-            .in("sale_id", branchSales.map((s: { id: string }) => s.id));
-        })()
+        const { data: branchSales } = await supabase
+          .from("sales")
+          .select("id")
+          .in("branch_id", branchIds)
+          .gt("created_at", since);
+        if (!branchSales || branchSales.length === 0) return { data: [] };
+        return supabase
+          .from("sale_items")
+          .select("id, sale_id, batch_id, quantity, unit_price, created_at")
+          .in("sale_id", branchSales.map((s: { id: string }) => s.id));
+      })()
       : Promise.resolve({ data: [] }),
     branchIds.length > 0
       ? supabase.from("operators").select("id, branch_id, name, pin_hash, role, created_at").in("branch_id", branchIds)
@@ -397,7 +397,24 @@ export async function acknowledgeSync(
   syncedAt: string,
   accountId: string
 ): Promise<{ error: string | null }> {
+  const authClient = await createClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
   const supabase = await createServiceClient();
+
+  const { data: ownedAccount } = await supabase
+    .from("accounts")
+    .select("id")
+    .eq("id", accountId)
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+
+  if (!ownedAccount) {
+    return { error: "Unauthorized" };
+  }
 
   const [{ error: branchError }, { error: cmdError }] = await Promise.all([
     supabase
@@ -409,6 +426,7 @@ export async function acknowledgeSync(
       .from("branch_commands")
       .update({ status: "acknowledged", acknowledged_at: new Date().toISOString() })
       .eq("branch_id", branchId)
+      .eq("account_id", accountId)
       .eq("status", "pending"),
   ]);
 

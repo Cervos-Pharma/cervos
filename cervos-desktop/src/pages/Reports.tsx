@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { deduplicateSalesRevenue } from '@cervos/core'
 import { queryDb, executeDb, generateId, nowIso } from '../lib/database'
 import { runSyncCycle, queueForSync } from '../lib/sync'
 import { useTranslation } from '../lib/i18n'
@@ -146,11 +147,20 @@ export default function Reports() {
       const sAt = syncRes.length > 0 ? JSON.parse(syncRes[0].value) : null
       setBranchInfo({ branchName: bName, centreName: cName, lastSyncedAt: sAt })
 
-      const totalRevenue = sales.reduce((sum: number, s: any) => sum + (s.total || 0), 0)
-      const totalSales = sales.length
+      const uniqueSalesMap = new Map<string, any>()
+      for (const row of sales) {
+        if (row.id && !uniqueSalesMap.has(row.id)) {
+          uniqueSalesMap.set(row.id, row)
+        }
+      }
+      const uniqueSales = Array.from(uniqueSalesMap.values())
+
+      const { totalRevenueTzs: totalRevenue, uniqueSaleCount: totalSales } = deduplicateSalesRevenue(
+        sales.map((s: any) => ({ saleId: s.id, saleTotalTzs: s.total || 0 }))
+      )
       const avgTransaction = totalSales > 0 ? totalRevenue / totalSales : 0
-      const totalTax = sales.reduce((sum: number, s: any) => sum + (s.tax || 0), 0)
-      const totalDiscount = sales.reduce((sum: number, s: any) => sum + (s.discount || 0), 0)
+      const totalTax = uniqueSales.reduce((sum: number, s: any) => sum + (s.tax || 0), 0)
+      const totalDiscount = uniqueSales.reduce((sum: number, s: any) => sum + (s.discount || 0), 0)
 
       // ── Finance (profit & loss) ─────────────────────────────────────
       // COGS: what the sold units cost the branch, from each sold batch's
@@ -178,7 +188,7 @@ export default function Reports() {
       const margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
 
       const paymentMap = new Map<string, number>()
-      for (const s of sales) {
+      for (const s of uniqueSales) {
         const method = s.payment_method || 'unknown'
         paymentMap.set(method, (paymentMap.get(method) || 0) + (s.total || 0))
       }
@@ -188,7 +198,7 @@ export default function Reports() {
       }))
 
       const dayMap = new Map<string, { revenue: number; sales: number }>()
-      for (const s of sales) {
+      for (const s of uniqueSales) {
         const day = s.created_at?.slice(0, 10) || ''
         const existing = dayMap.get(day) || { revenue: 0, sales: 0 }
         existing.revenue += s.total || 0
