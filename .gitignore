@@ -51,3 +51,8 @@ Thumbs.db
 hq-drop/
 private.key
 releases.manifest.json
+
+# Local test database snapshots
+.local-workspace-db.json
+*.log
+

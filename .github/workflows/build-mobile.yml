@@ -6,8 +6,6 @@ on:
     paths:
       - "apps/mobile/**"
       - "packages/core/**"
-    tags:
-      - "android-v*"
   workflow_dispatch: {}
 
 jobs:
@@ -16,6 +14,9 @@ jobs:
     defaults:
       run:
         working-directory: apps/mobile
+    outputs:
+      apk_url: ${{ steps.eas_build.outputs.apk_url }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,9 +24,6 @@ jobs:
         with:
           node-version: 20
 
-      # Straight eas-cli install instead of expo/expo-github-action: that
-      # wrapper was the only failing step (token itself verified working),
-      # and all we actually need is the CLI plus EXPO_TOKEN in the env.
       - name: Install EAS CLI
         run: npm install -g eas-cli@latest
 
@@ -35,22 +33,52 @@ jobs:
       - name: Type-check mobile app
         run: npx tsc --noEmit
 
-      - name: Build installable Android APK (EAS preview profile)
-        # --wait + --output: blocks until EAS finishes and writes the .apk
-        # straight to a stable filename for the release job.
-        run: >
-          eas build --platform android --profile preview
-          --non-interactive --wait --output Cervos-Pharma.apk
+      - name: Build Android APK via EAS (preview profile)
+        id: eas_build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL || 'https://cervos.online' }}
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-
-      - name: Verify APK
         run: |
-          test -s Cervos-Pharma.apk || { echo "No APK produced"; exit 1; }
-          ls -la Cervos-Pharma.apk
+          echo "Starting EAS cloud build for Android APK..."
+          eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --wait \
+            --json > eas_output.json 2> eas_stderr.log || {
+              echo "EAS Build failed with stderr:"
+              cat eas_stderr.log
+              exit 1
+            }
+
+          cat eas_stderr.log || true
+          echo "Build finished successfully. Parsing artifact URL..."
+
+          APK_URL=$(node -e "
+            const fs = require('fs');
+            try {
+              const raw = fs.readFileSync('eas_output.json', 'utf8');
+              const data = JSON.parse(raw);
+              const item = Array.isArray(data) ? data[0] : data;
+              const url = item?.artifacts?.buildUrl || item?.artifacts?.applicationArchiveUrl || item?.artifactUrl || '';
+              if (!url) throw new Error('No artifact URL found in EAS output');
+              process.stdout.write(url);
+            } catch (err) {
+              console.error('Error parsing EAS JSON:', err.message);
+              process.exit(1);
+            }
+          ")
+
+          echo "APK Download URL: $APK_URL"
+          echo "apk_url=$APK_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download APK from EAS
+        run: |
+          curl -fSL "${{ steps.eas_build.outputs.apk_url }}" -o Cervos-Pharma.apk
+          ls -lh Cervos-Pharma.apk
+          test -s Cervos-Pharma.apk || { echo "Downloaded APK is empty"; exit 1; }
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -59,8 +87,6 @@ jobs:
           path: apps/mobile/Cervos-Pharma.apk
           if-no-files-found: error
 
-  # Same rolling "installers" release the desktop workflow publishes to, so
-  # the site's download buttons hit one stable URL per file.
   release-apk:
     needs: build-android-apk
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -76,10 +102,8 @@ jobs:
       - name: Publish / update rolling release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # -R because this job has no git checkout: gh must not depend on
-        # local repo context to create/update the rolling release.
         run: |
-          gh release view installers -R Cervos-Pharma/cervos >/dev/null 2>&1 || \
+          gh release view installers -R Cervos-Pharma/cervos > /dev/null 2>&1 || \
             gh release create installers -R Cervos-Pharma/cervos --target main \
               --title "Cervos Installers" \
               --notes "Latest installers, rebuilt automatically from main." || true

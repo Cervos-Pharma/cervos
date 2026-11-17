@@ -239,6 +239,8 @@ export interface PharmacyDashboardProps {
     networkUnlocked: boolean;
     subscriptionActive: boolean;
     subscriptionPlan: string;
+    trialEndsAt?: string;
+    billingOverdue?: boolean;
     customization?: {
       brandLogoUrl?: string;
       brandAccent?: string;
@@ -1155,10 +1157,13 @@ export default function PharmacyDashboard({
     [sales, todayIso]
   );
 
-  const pnlSummary = useMemo(
-    () => profitAndLoss(sales, expenses, { days: 30, subscriptionMonthlyTzs: 45000 }),
-    [sales, expenses]
-  );
+  const pnlSummary = useMemo(() => {
+    // Clean slate accounts with zero operations or active trial window incur zero opex/deficit
+    const isCleanSlate = sales.length === 0 && expenses.length === 0;
+    const isTrialing = Boolean(account.trialEndsAt && new Date(account.trialEndsAt).getTime() > Date.now());
+    const monthlyFee = isCleanSlate || isTrialing || !account.subscriptionActive ? 0 : 45000;
+    return profitAndLoss(sales, expenses, { days: 30, subscriptionMonthlyTzs: monthlyFee });
+  }, [sales, expenses, account.trialEndsAt, account.subscriptionActive]);
 
   // Join Request Allocation state (Owners)
   const [allocCentreId, setAllocCentreId] = useState<string>(activeCentre?.id || centres[0]?.id || "");

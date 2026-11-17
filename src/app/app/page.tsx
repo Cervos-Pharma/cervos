@@ -62,6 +62,7 @@ interface AppWorkspaceData {
     subscriptionActive: boolean;
     subscriptionPlan: string;
     billingOverdue?: boolean;
+    trialEndsAt?: string;
     accessLock?: { locked: boolean; source: "hq" | "billing" | null; reason: string };
     customization?: {
       brandLogoUrl?: string;

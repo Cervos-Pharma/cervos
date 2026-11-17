@@ -30,6 +30,7 @@ import {
   newId,
   saveWorkspaceDb,
   suggestUniqueUsername,
+  warmDbFromSupabase,
   type WorkspaceRoleType,
 } from "@/lib/workspace/store";
 import { clearWorkspaceCookies, noStoreJson, setHttpCookie, setLangCookie } from "@/lib/workspace/cookies";
@@ -50,6 +51,9 @@ const ALLOWED_ROLES = new Set<WorkspaceRoleType>([
 ]);
 
 export async function POST(request: NextRequest) {
+  // Warm the in-memory DB from Supabase on cold start (non-blocking on subsequent calls)
+  await warmDbFromSupabase();
+
   const parsed = await parseJsonObject(request, "Invalid request format.");
   if (!parsed.ok) return parsed.response;
   const body = parsed.body;
@@ -381,13 +385,21 @@ export async function POST(request: NextRequest) {
     const db = getWorkspaceDb();
     const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanId);
 
-    let account = looksLikeEmail ? db.accounts.find((a) => a.email === cleanId) : undefined;
+    let account = looksLikeEmail ? db.accounts.find((a) => a.email.toLowerCase() === cleanId) : undefined;
     let profile = !looksLikeEmail
       ? db.profiles.find((p) => p.username?.toLowerCase() === cleanId)
       : undefined;
 
     if (!account && !profile && !looksLikeEmail) {
       account = db.accounts.find((a) => a.username?.toLowerCase() === cleanId);
+    }
+    if (!account && !profile && looksLikeEmail) {
+      account = db.accounts.find((a) => a.email.toLowerCase() === cleanId);
+    }
+    if (!account && !profile) {
+      account = db.accounts.find(
+        (a) => a.email.toLowerCase() === cleanId || a.username?.toLowerCase() === cleanId
+      );
     }
     if (profile && !account) {
       account = db.accounts.find((a) => a.id === profile!.accountId);
@@ -465,7 +477,8 @@ export async function POST(request: NextRequest) {
     const needsSecurityGate =
       account.onboardingDone &&
       Boolean(account.securityAnswerHash) &&
-      (isAdminIdentity ? !isBrowserTrusted : account.requireSecurityEveryTime && !isBrowserTrusted);
+      account.requireSecurityEveryTime &&
+      !isBrowserTrusted;
 
     const redirectTo = !account.onboardingDone
       ? "/app/onboarding"

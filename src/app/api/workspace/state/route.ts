@@ -46,6 +46,7 @@ import {
   pushHqMessage,
   saveWorkspaceDb,
   suggestUniqueUsername,
+  warmDbFromSupabase,
   SUPPLIER_CATALOG_SEED,
   type ProfileCapabilities,
   type WorkspaceExpenseRecord,
@@ -66,6 +67,9 @@ const ALLOWED_PROFILE_ROLES = new Set<WorkspaceProfileRole>([
 ]);
 
 export async function GET(request: NextRequest) {
+  // Warm in-memory DB from Supabase on cold start
+  await warmDbFromSupabase();
+
   const session = readWorkspaceAccountToken(request);
   if (!session) {
     return noStoreJson({ authenticated: false }, { status: 401 });

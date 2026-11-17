@@ -213,10 +213,11 @@ export default function ReportsIntelligenceView({
   const staff = useMemo(() => staffPerformance(scopedSales), [scopedSales]);
   const branches = useMemo(() => branchComparison(sales, batches, centres), [sales, batches, centres]);
   const suppliers = useMemo(() => supplierSpend(orders), [orders]);
-  const pnl = useMemo(
-    () => profitAndLoss(scopedSales, expenses, { days: windowDays, subscriptionMonthlyTzs: 45000 }),
-    [scopedSales, expenses, windowDays]
-  );
+  const pnl = useMemo(() => {
+    const isCleanSlate = scopedSales.length === 0 && expenses.length === 0;
+    const monthlyFee = isCleanSlate ? 0 : 45000;
+    return profitAndLoss(scopedSales, expenses, { days: windowDays, subscriptionMonthlyTzs: monthlyFee });
+  }, [scopedSales, expenses, windowDays]);
 
   const categoryBreakdown = useMemo(() => {
     const map = new Map<string, { category: string; revenue: number; profit: number; units: number }>();

@@ -80,7 +80,8 @@ function GateInner() {
         const matchingProfiles = data.profiles.filter((p) => p.centreId === firstCentre);
         setSelectedProfileId(matchingProfiles[0]?.id || data.profiles[0]?.id || "");
 
-        const skipSecurity = data.browserTrusted && requestedStage !== "security";
+        const skipSecurity =
+          (!data.account.requireSecurityEveryTime || data.browserTrusted) && requestedStage !== "security";
         if (!skipSecurity) {
           setStage("security");
         } else if (data.centres.length > 1 && requestedStage !== "profile") {

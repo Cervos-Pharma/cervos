@@ -22,6 +22,7 @@ import {
   isAccountAccessLocked,
   newId,
   saveWorkspaceDb,
+  warmDbFromSupabase,
 } from "@/lib/workspace/store";
 import { noStoreJson, setHttpCookie, setLangCookie } from "@/lib/workspace/cookies";
 import {
@@ -33,6 +34,9 @@ import {
 } from "@/lib/workspace/request-auth";
 
 export async function POST(request: NextRequest) {
+  // Ensure DB is warmed from Supabase on cold start
+  await warmDbFromSupabase();
+
   const session = readWorkspaceAccountToken(request);
   if (!session) {
     return noStoreJson({ error: "Session expired. Please sign in again." }, { status: 401 });
@@ -121,6 +125,14 @@ export async function POST(request: NextRequest) {
   account.securityAnswerHash = hashSecret(securityAnswer).hash;
   account.requireSecurityEveryTime = Boolean(body.requireSecurityEveryTime);
   account.onboardingDone = true;
+
+  // Start a 14-day free trial automatically on first onboarding completion.
+  // The app will show a "Start Trial / Pay Now" prompt; trialEndsAt lets us
+  // gate features after it expires without blocking onboarding itself.
+  if (!account.trialEndsAt && !account.subscriptionActive) {
+    const trialEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    account.trialEndsAt = trialEnd.toISOString();
+  }
 
   const rawCust =
     body.customization && typeof body.customization === "object" && !Array.isArray(body.customization)

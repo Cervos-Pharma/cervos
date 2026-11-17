@@ -59,7 +59,7 @@ export default function WorkspaceOnboardingPage() {
 
   const [loading, setLoading] = useState(true);
   const [showCalmIntro, setShowCalmIntro] = useState(true);
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [isFading, setIsFading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -147,7 +147,7 @@ export default function WorkspaceOnboardingPage() {
     return () => clearTimeout(timer);
   }, [loading, showCalmIntro]);
 
-  const transitionToStep = (next: 1 | 2 | 3 | 4) => {
+  const transitionToStep = (next: 1 | 2 | 3 | 4 | 5) => {
     setErrorMsg(null);
     setIsFading(true);
     setTimeout(() => {
@@ -272,7 +272,7 @@ export default function WorkspaceOnboardingPage() {
       } catch {
         // Ignore
       }
-      router.push(data.redirectTo || "/app");
+      transitionToStep(5);
     } catch {
       setErrorMsg("Network error. Please retry.");
     } finally {
@@ -1143,6 +1143,111 @@ export default function WorkspaceOnboardingPage() {
                           ? "Kamilisha & Fungua Duka"
                           : "Verify & Open Workspace"}{" "}
                       &rarr;
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 5: TRIAL OR PAY CHOICE */}
+            {step === 5 && (
+              <div className="space-y-6">
+                <div className="text-center space-y-2">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
+                    <IconCheck className="w-3.5 h-3.5 text-emerald-500" />
+                    {isSw ? "Usajili Umekamilika!" : "Setup Complete!"}
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-bold" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                    {isSw ? "Chagua Jinsi ya Kuanza" : "Choose How to Start"}
+                  </h1>
+                  <p className={`text-xs sm:text-sm max-w-md mx-auto ${mutedCls}`}>
+                    {isSw
+                      ? `Kituo cha ${centreName || fullName} kiko tayari. Unaweza kuanza mara moja kwa jaribio la siku 14 bure, au kulipa mpango kamili sasa.`
+                      : `${centreName || fullName} is ready. You can dive in immediately with a 14-day free trial, or activate a full commercial plan now.`}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  {/* OPTION A: FREE TRIAL */}
+                  <div
+                    onClick={() => {
+                      try {
+                        window.sessionStorage.setItem("cervos-just-logged-in", "1");
+                      } catch {
+                        // Ignore
+                      }
+                      router.push("/app");
+                    }}
+                    className={`rounded-xl border p-5 space-y-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg relative flex flex-col justify-between ${
+                      isDark ? "bg-slate-900/60 border-emerald-500/40 hover:border-emerald-500" : "bg-emerald-50/40 border-emerald-300 hover:border-emerald-500"
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500 text-white">
+                          {isSw ? "Inapendekezwa" : "Recommended"}
+                        </span>
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          {isSw ? "Siku 14 Bure" : "14 Days Free"}
+                        </span>
+                      </div>
+                      <h3 className="text-base font-bold">
+                        {isSw ? "Anza Jaribio Bure (Ruka Malipo)" : "Start 14-Day Free Trial (Skip Payment)"}
+                      </h3>
+                      <p className={`text-xs leading-relaxed ${mutedCls}`}>
+                        {isSw
+                          ? "Tumia mfumo wote: mauzo ya kaunta (POS), stoo na udhibiti wa dawa, risiti, na ripoti mara moja bila kutoa kadi wala malipo."
+                          : "Explore full counter POS, inventory stock control, shift receipts, and business reports right now with zero upfront payment."}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition-colors text-center"
+                    >
+                      {isSw ? "Tumia Jaribio Bure Sasa ->" : "Use Free Trial Now ->"}
+                    </button>
+                  </div>
+
+                  {/* OPTION B: PAY NOW */}
+                  <div
+                    onClick={() => {
+                      try {
+                        window.sessionStorage.setItem("cervos-just-logged-in", "1");
+                      } catch {
+                        // Ignore
+                      }
+                      router.push("/app/billing");
+                    }}
+                    className={`rounded-xl border p-5 space-y-4 cursor-pointer transition-all hover:scale-[1.01] hover:shadow-lg relative flex flex-col justify-between ${
+                      isDark ? "bg-slate-900/60 border-slate-700 hover:border-[#1039B9]" : "bg-white border-[#E2E8F0] hover:border-[#1039B9]"
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                          {isSw ? "Mpango Kamili" : "Full Plan"}
+                        </span>
+                        <span className="text-xs font-semibold" style={{ color: brandAccent }}>
+                          {isSw ? "Kuanzia 45,000 TZS/mwezi" : "From 45,000 TZS/mo"}
+                        </span>
+                      </div>
+                      <h3 className="text-base font-bold">
+                        {isSw ? "Lipa & Washa Kituo Sasa" : "Choose Plan & Pay Now"}
+                      </h3>
+                      <p className={`text-xs leading-relaxed ${mutedCls}`}>
+                        {isSw
+                          ? "Lipa kupitia M-Pesa, Tigo Lipa au Benki. Fungua mtandao wa ununuzi wa jumla na vibali vya uhakiki bila kusubiri."
+                          : "Activate full commercial licensing via M-Pesa, Tigo Lipa, or Bank. Unlocks wholesale B2B network ordering and verified status."}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="w-full py-2.5 px-4 rounded-lg text-white text-xs font-bold cursor-pointer transition-colors text-center"
+                      style={{ backgroundColor: brandAccent }}
+                    >
+                      {isSw ? "Chagua Mpango & Lipa ->" : "Choose Plan & Pay ->"}
                     </button>
                   </div>
                 </div>

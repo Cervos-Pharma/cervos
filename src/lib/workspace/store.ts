@@ -12,6 +12,11 @@ import {
 export { clampProfileCapabilities, ROLE_PERMISSION_RULES };
 export type { ProfileCapabilities, WorkspaceProfileRole };
 
+/** True when running on Vercel production (no writable local filesystem) */
+const IS_VERCEL = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
+/** True in demo/mock mode only */
+const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === "true" || process.env.CERVOS_MOCK_AUTH === "true";
+
 export type WorkspaceRoleType =
   | "pharmacy"
   | "supplier"
@@ -349,7 +354,81 @@ export interface WorkspaceDbSnapshot {
 }
 
 const DB_PATH = join(process.cwd(), ".next", "cache", "cervos-workspace-db.json");
-const g = globalThis as unknown as { __cervosWorkspaceDb?: WorkspaceDbSnapshot };
+const g = globalThis as unknown as {
+  __cervosWorkspaceDb?: WorkspaceDbSnapshot;
+  __cervosDbSupabaseSynced?: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// Supabase persistence helpers (fire-and-forget; never block the request path)
+// ---------------------------------------------------------------------------
+function getSupabaseServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  try {
+    // Dynamic require so this module works even without supabase-js in test env
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
+    return createClient(url, key, { auth: { persistSession: false } });
+  } catch {
+    return null;
+  }
+}
+
+/** Push current snapshot to Supabase workspace_db table (non-blocking). */
+function persistToSupabase(db: WorkspaceDbSnapshot): void {
+  const sb = getSupabaseServiceClient();
+  if (!sb) return;
+  void Promise.resolve(
+    sb.from("workspace_db")
+      .upsert({ shard: "main", snapshot: db, updated_at: new Date().toISOString() }, { onConflict: "shard" })
+  ).then(({ error }) => {
+    if (error) console.warn("[workspace/store] Supabase persist failed:", error.message);
+  }).catch(() => {});
+}
+
+/** Load snapshot from Supabase workspace_db table. Returns null if unavailable. */
+async function loadFromSupabase(): Promise<WorkspaceDbSnapshot | null> {
+  const sb = getSupabaseServiceClient();
+  if (!sb) return null;
+  try {
+    const { data, error } = await sb
+      .from("workspace_db")
+      .select("snapshot")
+      .eq("shard", "main")
+      .maybeSingle();
+    if (error) {
+      console.warn("[workspace/store] Supabase load failed:", error.message);
+      return null;
+    }
+    const snap = data?.snapshot as WorkspaceDbSnapshot | undefined;
+    if (snap && Array.isArray(snap.accounts) && snap.accounts.length > 0) return snap;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Call once during server boot to warm the in-memory DB from Supabase. */
+export async function warmDbFromSupabase(): Promise<void> {
+  if (g.__cervosDbSupabaseSynced) return;
+  const remote = await loadFromSupabase();
+  if (remote) {
+    // Only use remote if it has real (non-demo-seed) accounts or we have nothing locally
+    const hasRealAccounts = remote.accounts.some((a) => !a.id.startsWith("acc_demo_"));
+    if (hasRealAccounts || !g.__cervosWorkspaceDb) {
+      g.__cervosWorkspaceDb = remote;
+      // Also write local cache so subsequent in-process reads are fast
+      try {
+        const dir = dirname(DB_PATH);
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        writeFileSync(DB_PATH, JSON.stringify(remote, null, 2), "utf8");
+      } catch { /* read-only fs ok */ }
+    }
+  }
+  g.__cervosDbSupabaseSynced = true;
+}
 
 function buildInitialSeed(): WorkspaceDbSnapshot {
   const accountId = "acc_demo_kariakoo";
@@ -568,6 +647,9 @@ function backfillMissingUsernames(db: WorkspaceDbSnapshot): boolean {
     }
   }
 
+  // Demo accounts are only injected in mock/dev or test mode, never in production.
+  if (!IS_MOCK && process.env.NODE_ENV !== "test") return dirty;
+
   // Seed fresh standalone Arusha test org + Waiting/Approved Lounge test users
   if (!db.accounts.some((a) => a.id === "acc_demo_arusha")) {
     db.accounts.push({
@@ -697,36 +779,56 @@ export function getWorkspaceDb(): WorkspaceDbSnapshot {
     return g.__cervosWorkspaceDb;
   }
 
-  try {
-    if (existsSync(DB_PATH)) {
-      const parsed = JSON.parse(readFileSync(DB_PATH, "utf8")) as WorkspaceDbSnapshot;
-      if (parsed && Array.isArray(parsed.accounts)) {
-        if (backfillMissingUsernames(parsed)) {
-          saveWorkspaceDb(parsed);
+  // On Vercel, skip local file (ephemeral filesystem); rely on Supabase warm-up.
+  if (!IS_VERCEL) {
+    try {
+      if (existsSync(DB_PATH)) {
+        const parsed = JSON.parse(readFileSync(DB_PATH, "utf8")) as WorkspaceDbSnapshot;
+        if (
+          parsed &&
+          Array.isArray(parsed.accounts) &&
+          (parsed.accounts.length > 0 || process.env.NODE_ENV !== "test")
+        ) {
+          if (backfillMissingUsernames(parsed)) {
+            saveWorkspaceDb(parsed);
+          }
+          g.__cervosWorkspaceDb = parsed;
+          return parsed;
         }
-        g.__cervosWorkspaceDb = parsed;
-        return parsed;
       }
+    } catch {
+      // Fall back gracefully to seed
     }
-  } catch {
-    // Fall back gracefully to seed
   }
 
-  const seed = buildInitialSeed();
+  // Cold start with no data yet — start with an empty production slate.
+  // In test environment or mock mode, use initial seed so tests pass reliably.
+  const seed = IS_MOCK || process.env.NODE_ENV === "test" ? buildInitialSeed() : buildEmptyDb();
+  backfillMissingUsernames(seed);
   g.__cervosWorkspaceDb = seed;
   saveWorkspaceDb(seed);
   return seed;
 }
 
+/** Empty production DB — no demo data. Used on Vercel cold starts until Supabase warms up. */
+function buildEmptyDb(): WorkspaceDbSnapshot {
+  return { accounts: [], centres: [], profiles: [], passkeys: [] };
+}
+
 export function saveWorkspaceDb(db: WorkspaceDbSnapshot): void {
   g.__cervosWorkspaceDb = db;
-  try {
-    const dir = dirname(DB_PATH);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
-  } catch {
-    // Ignore read-only filesystem edge environments
+  // Local file (dev only; Vercel fs is ephemeral)
+  if (!IS_VERCEL) {
+    try {
+      const dir = dirname(DB_PATH);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(DB_PATH, JSON.stringify(db, null, 2), "utf8");
+    } catch {
+      // Ignore read-only filesystem edge environments
+    }
   }
+  // Always persist to Supabase (non-blocking background write)
+  persistToSupabase(db);
 }
 
 export function newId(prefix: string): string {
@@ -900,10 +1002,11 @@ export function ensureAccountDomainData(
   const isCleanStart = process.env.CERVOS_CLEAN_START === "true";
   const isDemoSeedAccount =
     !isCleanStart &&
+    IS_MOCK &&
     (accountId === "acc-amani-pharma" ||
       accountId === "acc-kigoma-disp" ||
-      process.env.NEXT_PUBLIC_MOCK_MODE === "true" ||
-      process.env.CERVOS_MOCK_AUTH === "true");
+      accountId === "acc_demo_kariakoo" ||
+      accountId === "acc_demo_arusha");
 
   if (!isDemoSeedAccount) {
     return false;
@@ -1507,6 +1610,7 @@ export function searchPublicOrganizations(
       const orgCentres = db.centres.filter((c) => c.accountId === a.id);
       return {
         id: a.id,
+        username: a.username,
         orgName: a.orgName,
         roleType: a.roleType,
         region: a.region,
@@ -1523,10 +1627,12 @@ export function searchPublicOrganizations(
         if (!regMatch) return false;
       }
       if (!q) return true;
+      const cleanQ = q.replace(/^@+/, "");
       return (
-        org.orgName.toLowerCase().includes(q) ||
-        org.region.toLowerCase().includes(q) ||
-        org.centres.some((c) => c.name.toLowerCase().includes(q) || c.region.toLowerCase().includes(q))
+        org.orgName.toLowerCase().includes(cleanQ) ||
+        org.region.toLowerCase().includes(cleanQ) ||
+        (org.username && org.username.toLowerCase().includes(cleanQ)) ||
+        org.centres.some((c) => c.name.toLowerCase().includes(cleanQ) || c.region.toLowerCase().includes(cleanQ))
       );
     })
     .sort((a, b) => {
@@ -1542,6 +1648,7 @@ export function isAccountAccessLocked(acc: WorkspaceAccount): {
   source: "hq" | "billing" | null;
   reason: string;
 } {
+  if (!acc) return { locked: false, source: null, reason: "" };
   if (acc.hqLock?.locked) {
     return {
       locked: true,
