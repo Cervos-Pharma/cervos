@@ -142,9 +142,11 @@ jobs:
       - name: Publish / update rolling release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # -R because this job has no git checkout: gh must not depend on
+        # local repo context to create/update the rolling release.
         run: |
-          gh release view installers >/dev/null 2>&1 || \
-            gh release create installers \
+          gh release view installers -R Cervos-Pharma/cervos >/dev/null 2>&1 || \
+            gh release create installers -R Cervos-Pharma/cervos --target main \
               --title "Cervos Installers" \
               --notes "Latest Windows installers, rebuilt automatically from main." || true
-          gh release upload installers dist/* --clobber
+          gh release upload installers dist/* -R Cervos-Pharma/cervos --clobber
