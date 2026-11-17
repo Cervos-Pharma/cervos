@@ -22,7 +22,7 @@ export default function SuspendedScreen({ reason }: { reason: string | null }) {
           {reason || t("susp.default_reason")}
         </p>
         <Link
-          href="/support"
+          href="/help"
           className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-on-primary font-label-md text-label-md"
         >
           <span className="material-symbols-outlined text-[16px]">support_agent</span>

@@ -21,7 +21,7 @@ export default function NotFound() {
             Go home
           </Link>
           <Link
-            href="/support"
+            href="/help"
             className="border border-outline-variant text-on-surface-variant font-label-md text-label-md px-6 py-2.5 rounded hover:bg-surface-container transition-colors"
           >
             Contact support

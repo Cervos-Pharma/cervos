@@ -7,18 +7,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: [
-          "/",
-          "/design-lab",
-          "/ecosystem",
-          "/download",
-          "/supplier/quote",
-          "/news",
-          "/support",
-          "/terms",
-          "/privacy",
-        ],
-        disallow: ["/hq/", "/dashboard/", "/branch/", "/api/"],
+        allow: "/",
+        // Private surfaces: operator console, workspace app, auth, and APIs.
+        disallow: ["/hq", "/app", "/auth", "/ops-v9k4m", "/api/"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

@@ -35,6 +35,12 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "no-store, no-cache, must-revalidate" },
         ],
       },
+      {
+        // Keep private app surfaces out of search indexes even if a crawler
+        // ignores robots.txt (belt-and-braces with robots.ts disallow).
+        source: "/(hq|app|auth|ops-v9k4m)/:path*",
+        headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+      },
     ];
   },
 };

@@ -168,7 +168,7 @@ export default function SupplierSidebar({ accountName, logoUrl }: SupplierSideba
           </div>
         </div>
         <Link
-          href="/support"
+          href="/help"
           onClick={closeMobile}
           className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-ink-deep hover:bg-surface-container-low transition-colors rounded-lg text-sm"
         >

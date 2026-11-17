@@ -99,7 +99,7 @@ export default function BranchSidebar({ branchName, pharmacyName }: BranchSideba
         <ul>
           <li>
             <Link
-              href="/support"
+              href="/help"
               onClick={closeMobile}
               className="flex items-center gap-3 px-6 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all font-label-md text-label-md"
             >

@@ -29,13 +29,6 @@ export const metadata: Metadata = {
     "tmda compliance",
     "pharmacy supply chain",
   ],
-  alternates: {
-    canonical: "https://cervos.online",
-    languages: {
-      "en": "https://cervos.online",
-      "sw": "https://cervos.online?lang=SW",
-    },
-  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
