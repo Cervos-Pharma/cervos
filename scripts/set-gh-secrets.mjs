@@ -3,11 +3,6 @@
  * Uses tweetsodium to encrypt values with the repo's public key
  */
 import sodium from 'tweetsodium';
-
-// Values are read from environment variables or .env.local to avoid committing secrets.
-// Run: node -r dotenv/config scripts/set-gh-secrets.mjs
-// Or set env vars: GH_PAT, EXPO_TOKEN, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
-//                  HQ_SECRET, WORKSPACE_SESSION_SECRET, TEXTIFY_API_KEY, PAYME_APP_SECRET
 import { readFileSync } from 'fs';
 
 function loadEnv() {
@@ -23,13 +18,28 @@ function loadEnv() {
 }
 
 const ENV = loadEnv();
-
-const PAT = ENV.GH_PAT || '';
+const PAT = ENV.GH_PAT || process.env.GH_PAT || '';
 const REPO = 'Cervos-Pharma/cervos';
-const KEY_ID = ENV.GH_KEY_ID || '';
-const PUBLIC_KEY = ENV.GH_PUBLIC_KEY || '';
 
-if (!PAT) { console.error('GH_PAT env var required'); process.exit(1); }
+if (!PAT) {
+  console.error('GH_PAT required');
+  process.exit(1);
+}
+
+// Fetch public key
+const keyResp = await fetch(`https://api.github.com/repos/${REPO}/actions/secrets/public-key`, {
+  headers: {
+    'Authorization': `token ${PAT}`,
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'cervos-setup',
+  },
+});
+if (!keyResp.ok) {
+  console.error('Failed to get public key:', keyResp.status, await keyResp.text());
+  process.exit(1);
+}
+const { key_id: KEY_ID, key: PUBLIC_KEY } = await keyResp.json();
+console.log(`Using Repo Public Key ID: ${KEY_ID}`);
 
 const secrets = {
   EXPO_TOKEN: ENV.EXPO_TOKEN || '',
@@ -38,6 +48,7 @@ const secrets = {
   NEXT_PUBLIC_SUPABASE_URL: ENV.NEXT_PUBLIC_SUPABASE_URL || '',
   NEXT_PUBLIC_SUPABASE_ANON_KEY: ENV.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
   SUPABASE_SERVICE_ROLE_KEY: ENV.SUPABASE_SERVICE_ROLE_KEY || '',
+  SUPABASE_ACCESS_TOKEN: ENV.SUPABASE_ACCESS_TOKEN || '',
   HQ_SECRET: ENV.HQ_SECRET || '',
   WORKSPACE_SESSION_SECRET: ENV.WORKSPACE_SESSION_SECRET || ENV.HQ_SECRET || '',
   TEXTIFY_API_KEY: ENV.TEXTIFY_API_KEY || '',
@@ -55,6 +66,10 @@ function encryptSecret(publicKeyBase64, secretValue) {
 }
 
 async function setSecret(name, value) {
+  if (!value) {
+    console.log(`  [SKIP empty] ${name}`);
+    return;
+  }
   const encrypted = encryptSecret(PUBLIC_KEY, value);
   const resp = await fetch(`https://api.github.com/repos/${REPO}/actions/secrets/${name}`, {
     method: 'PUT',
@@ -75,7 +90,6 @@ async function setSecret(name, value) {
 }
 
 async function setVariable(name, value) {
-  // Try update first, then create
   const patchResp = await fetch(`https://api.github.com/repos/${REPO}/actions/variables/${name}`, {
     method: 'PATCH',
     headers: {
