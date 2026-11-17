@@ -14,7 +14,13 @@ import {
   WS_ACCOUNT_COOKIE,
   WS_PROFILE_COOKIE,
 } from "@/lib/security/session";
-import { appendAuditLog, getWorkspaceDb, saveWorkspaceDb } from "@/lib/workspace/store";
+import {
+  appendAuditLog,
+  flushWorkspaceDb,
+  getWorkspaceDb,
+  saveWorkspaceDb,
+  warmDbFromSupabase,
+} from "@/lib/workspace/store";
 import { noStoreJson, setHttpCookie } from "@/lib/workspace/cookies";
 import {
   hasAnyInjection,
@@ -24,6 +30,7 @@ import {
 } from "@/lib/workspace/request-auth";
 
 export async function GET(request: NextRequest) {
+  await warmDbFromSupabase(true);
   const purposeParam = sanitizeText(request.nextUrl.searchParams.get("purpose"), 16);
   const purpose =
     purposeParam === "register" || purposeParam === "unlock" ? purposeParam : "login";
@@ -51,6 +58,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await warmDbFromSupabase(true);
   const parsed = await parseJsonObject(request, "Invalid passkey request.");
   if (!parsed.ok) return parsed.response;
   const body = parsed.body;
@@ -111,6 +119,7 @@ export async function POST(request: NextRequest) {
       action: `Enrolled biometric passkey (${label})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     return noStoreJson({ ok: true, passkey: { credentialId, label, profileId: requestedProfileId } });
   }

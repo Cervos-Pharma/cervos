@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (!rl.allowed) return rateLimitResponse(rl.resetAt);
 
   // Warm DB from Supabase so search returns real accounts (not just demo seed)
-  await warmDbFromSupabase();
+  await warmDbFromSupabase(true);
 
   const sp = request.nextUrl.searchParams;
   const db = getWorkspaceDb();

@@ -19,8 +19,10 @@ import {
 import {
   appendAuditLog,
   destinationForProfileRole,
+  flushWorkspaceDb,
   getWorkspaceDb,
   saveWorkspaceDb,
+  warmDbFromSupabase,
 } from "@/lib/workspace/store";
 import { noStoreJson, setHttpCookie } from "@/lib/workspace/cookies";
 import {
@@ -30,6 +32,7 @@ import {
 } from "@/lib/workspace/request-auth";
 
 export async function POST(request: NextRequest) {
+  await warmDbFromSupabase(true);
   const session = readWorkspaceAccountToken(request);
   if (!session) {
     return noStoreJson({ error: "Account authentication required." }, { status: 401 });
@@ -103,6 +106,7 @@ export async function POST(request: NextRequest) {
         : "Passed security question challenge",
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const profileToken =
       body.directUnlock && unlockTarget
@@ -179,6 +183,7 @@ export async function POST(request: NextRequest) {
       action: `Unlocked profile (${profile.role.replace(/_/g, " ")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const profileToken = createProfileCookieValue(account.id, profile.centreId, profile.id, profile.role);
     const res = noStoreJson({

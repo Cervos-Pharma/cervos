@@ -19,6 +19,7 @@ import {
   appendAuditLog,
   defaultProfileRoleForAccount,
   destinationForProfileRole,
+  flushWorkspaceDb,
   getHqUpdates,
   getWorkspaceDb,
   isUsernameTaken,
@@ -27,6 +28,7 @@ import {
   saveWorkspaceDb,
   searchPublicOrganizations,
   suggestUniqueUsername,
+  warmDbFromSupabase,
 } from "@/lib/workspace/store";
 
 function resolveJoinSession(request: NextRequest) {
@@ -40,6 +42,7 @@ function resolveJoinSession(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  await warmDbFromSupabase(true);
   const resolved = resolveJoinSession(request);
   if (!resolved) {
     return noStoreJson({ authenticated: false }, { status: 401 });
@@ -55,6 +58,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await warmDbFromSupabase(true);
   const resolved = resolveJoinSession(request);
   if (!resolved) {
     return noStoreJson({ error: "Lounge session not found." }, { status: 401 });
@@ -88,6 +92,7 @@ export async function POST(request: NextRequest) {
       action: `Accepted allocation & entered workspace as @${targetProf.username || targetProf.displayName}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const dest = destinationForProfileRole(targetProf.role, targetProf.isMasterAdmin);
     const accountToken = createAccountCookieValue(
@@ -145,6 +150,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, joinRequest: publicJoinRequestSummary(req) });
   }
 
@@ -230,6 +236,7 @@ export async function POST(request: NextRequest) {
       action: `Converted Lounge request into new organization (${orgName})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const accountToken = createAccountCookieValue(
       accountId,

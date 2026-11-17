@@ -18,6 +18,7 @@ import {
 } from "@/lib/security/session";
 import {
   appendAuditLog,
+  flushWorkspaceDb,
   getWorkspaceDb,
   isAccountAccessLocked,
   newId,
@@ -34,8 +35,8 @@ import {
 } from "@/lib/workspace/request-auth";
 
 export async function POST(request: NextRequest) {
-  // Ensure DB is warmed from Supabase on cold start
-  await warmDbFromSupabase();
+  // Ensure DB is synced from Supabase before mutating onboarding state
+  await warmDbFromSupabase(true);
 
   const session = readWorkspaceAccountToken(request);
   if (!session) {
@@ -207,6 +208,7 @@ export async function POST(request: NextRequest) {
   });
 
   saveWorkspaceDb(db);
+  await flushWorkspaceDb();
 
   const accountToken = createAccountCookieValue(
     account.id,

@@ -25,6 +25,7 @@ import {
   appendAuditLog,
   defaultProfileRoleForAccount,
   destinationForProfileRole,
+  flushWorkspaceDb,
   getWorkspaceDb,
   isUsernameTaken,
   newId,
@@ -51,8 +52,8 @@ const ALLOWED_ROLES = new Set<WorkspaceRoleType>([
 ]);
 
 export async function POST(request: NextRequest) {
-  // Warm the in-memory DB from Supabase on cold start (non-blocking on subsequent calls)
-  await warmDbFromSupabase();
+  // Always refresh snapshot from Supabase before reading/mutating auth state
+  await warmDbFromSupabase(true);
 
   const parsed = await parseJsonObject(request, "Invalid request format.");
   if (!parsed.ok) return parsed.response;
@@ -211,6 +212,7 @@ export async function POST(request: NextRequest) {
     });
 
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const accountToken = createAccountCookieValue(accountId, email, WORKSPACE_ACCOUNT_TTL_SEC, profileId);
     const res = noStoreJson({
@@ -337,6 +339,7 @@ export async function POST(request: NextRequest) {
       action: `Submitted join request as @${username} (${region})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const accountToken = createAccountCookieValue(`joinreq:${reqId}`, email, WORKSPACE_ACCOUNT_TTL_SEC);
     const res = noStoreJson({
@@ -465,6 +468,7 @@ export async function POST(request: NextRequest) {
       action: `Signed in directly as @${profile.username || account.email} (${profile.role.replace(/_/g, " ")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
 
     const ua = request.headers.get("user-agent") || "";
     const trustToken = readWorkspaceTrustedToken(request);

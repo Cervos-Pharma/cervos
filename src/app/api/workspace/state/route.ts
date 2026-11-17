@@ -35,6 +35,7 @@ import {
   appendAuditLog,
   clampProfileCapabilities,
   ensureAccountDomainData,
+  flushWorkspaceDb,
   getHqUpdates,
   getWorkspaceDb,
   isAccountAccessLocked,
@@ -67,8 +68,8 @@ const ALLOWED_PROFILE_ROLES = new Set<WorkspaceProfileRole>([
 ]);
 
 export async function GET(request: NextRequest) {
-  // Warm in-memory DB from Supabase on cold start
-  await warmDbFromSupabase();
+  // Always refresh snapshot from Supabase across serverless instances
+  await warmDbFromSupabase(true);
 
   const session = readWorkspaceAccountToken(request);
   if (!session) {
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
     null;
   if (activeCentreId && ensureAccountDomainData(db, account.id, activeCentreId)) {
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
   }
 
   // Gate / pre-unlock views must not expose operational or financial domain data before PIN unlock.
@@ -218,6 +220,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  await warmDbFromSupabase(true);
   const session = readWorkspaceAccountToken(request);
   if (!session) {
     return noStoreJson({ error: "Not authenticated." }, { status: 401 });
@@ -280,6 +283,7 @@ export async function POST(request: NextRequest) {
     }
     msg.acknowledged = true;
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true });
   }
 
@@ -312,6 +316,7 @@ export async function POST(request: NextRequest) {
         action: `Clocked IN shift at ${nowIso.slice(11, 16)}`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true, shift: created });
     } else {
       if (!openShift) {
@@ -329,6 +334,7 @@ export async function POST(request: NextRequest) {
         action: `Clocked OUT shift (${openShift.durationMinutes} min logged)`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true, shift: openShift });
     }
   }
@@ -376,6 +382,7 @@ export async function POST(request: NextRequest) {
       action: `Saved recurring customer order for ${customerName} (${items.length} item(s))`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, customer: created });
   }
 
@@ -412,6 +419,7 @@ export async function POST(request: NextRequest) {
       action: `Issued counter receipt (${paymentMethod.toUpperCase()}) for ${itemCount} item(s) - TZS ${total.toLocaleString("en-US")}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true });
   }
 
@@ -554,6 +562,7 @@ export async function POST(request: NextRequest) {
       action: `FEFO Dispense ${receiptNumber} (${paymentMethod.toUpperCase()}): ${allocatedSummary.join(", ")} - TZS ${totalTzs.toLocaleString("en-US")}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, totalTzs, allocated: allocatedSummary, receipt: saleRecord });
   }
 
@@ -575,12 +584,14 @@ export async function POST(request: NextRequest) {
       action: `Closed shift drawer (${result.status.toUpperCase()} · Expected TZS ${result.expectedCashTzs.toLocaleString("en-US")}, Variance TZS ${result.varianceTzs.toLocaleString("en-US")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, reconciliation: result });
   }
 
   if (action === "update_lang") {
     account.lang = body.lang === "SW" ? "SW" : "EN";
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     const res = noStoreJson({ ok: true, account: publicAccountSummary(account) });
     setLangCookie(res, account.lang);
     return res;
@@ -638,6 +649,7 @@ export async function POST(request: NextRequest) {
         : "Updated personal profile display preferences",
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, profile: publicProfileSummary(unlockedProfile) });
   }
 
@@ -685,6 +697,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true });
   }
 
@@ -694,6 +707,7 @@ export async function POST(request: NextRequest) {
       if (n.accountId === account.id) n.read = true;
     }
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true });
   }
 
@@ -747,6 +761,7 @@ export async function POST(request: NextRequest) {
       action: `Escalated wholesale order request (${item.productName} x${qty}) to Owner in branch chat`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({
       ok: true,
       escalatedToChat: true,
@@ -801,6 +816,7 @@ export async function POST(request: NextRequest) {
       action: `Placed wholesale order ${ref} (${item.productName} x${qty}) held in Kasri escrow (TZS ${totalTzs.toLocaleString("en-US")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, orderReference: ref });
   }
 
@@ -866,6 +882,7 @@ export async function POST(request: NextRequest) {
       action: `Confirmed GRN delivery ${order.orderReference} (${batchNumber}) & released Kasri escrow (TZS ${order.totalTzs.toLocaleString("en-US")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, batchNumber, expiryDate });
   }
 
@@ -904,6 +921,7 @@ export async function POST(request: NextRequest) {
         action: `${batch.quarantined ? "Quarantined" : "Restored"} lot ${batch.batchNumber} (${batch.brandName})`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true });
     }
 
@@ -920,6 +938,7 @@ export async function POST(request: NextRequest) {
         action: `Updated stock lot ${batch.batchNumber} (${batch.brandName}) quantity to ${nextQty}`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true });
     }
 
@@ -976,6 +995,7 @@ export async function POST(request: NextRequest) {
         action: `Added remote stock batch ${batchNumber}: ${brandName} (${qty} units, Exp ${expiryDate})`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true, batchNumber });
     }
 
@@ -1016,6 +1036,7 @@ export async function POST(request: NextRequest) {
         action: `Edited batch ${batch.batchNumber} (${batch.brandName}) details`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true, batch });
     }
 
@@ -1042,6 +1063,7 @@ export async function POST(request: NextRequest) {
       action: "Updated organization brand logo, accent, font scale & layout",
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, account: publicAccountSummary(account) });
   }
 
@@ -1117,6 +1139,7 @@ export async function POST(request: NextRequest) {
           : `Added centre location: ${name} (${region})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, centre, movedCount });
   }
 
@@ -1182,6 +1205,7 @@ export async function POST(request: NextRequest) {
       action: `Provisioned staff profile: ${displayName} (${roleRaw.replace(/_/g, " ")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, profile: publicProfileSummary(prof) });
   }
 
@@ -1214,6 +1238,7 @@ export async function POST(request: NextRequest) {
       action: `Uploaded ${docType} (${licenseNumber}) & unlocked Network access`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, account: publicAccountSummary(account) });
   }
 
@@ -1241,6 +1266,7 @@ export async function POST(request: NextRequest) {
       action: `Activated plan ${planName} via ${channel}${payerRef ? ` (${payerRef})` : ""} - Receipt ${payReceipt}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({
       ok: true,
       receiptNumber: payReceipt,
@@ -1270,6 +1296,7 @@ export async function POST(request: NextRequest) {
         : "Updated workspace security question preferences",
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     const res = noStoreJson({ ok: true, account: publicAccountSummary(account) });
     if (body.revokeTrustedBrowsers) {
       res.cookies.delete(WS_TRUSTED_COOKIE);
@@ -1335,6 +1362,7 @@ export async function POST(request: NextRequest) {
       action: `Remotely updated operator profile: ${target.displayName} (${target.role.replace(/_/g, " ")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, profile: publicProfileSummary(target) });
   }
 
@@ -1372,6 +1400,7 @@ export async function POST(request: NextRequest) {
         action: `Declined chat request: ${msg.attachment.title}`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true, status: "declined" });
     }
 
@@ -1431,6 +1460,7 @@ export async function POST(request: NextRequest) {
       action: `Approved chat request & placed ${ref} in Kasri escrow (TZS ${totalTzs.toLocaleString("en-US")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, status: "approved", orderReference: ref });
   }
 
@@ -1448,6 +1478,7 @@ export async function POST(request: NextRequest) {
       action: `Switched active oversight branch to ${targetCentre.name}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     const profileToken = createProfileCookieValue(
       account.id,
       targetCentre.id,
@@ -1501,6 +1532,7 @@ export async function POST(request: NextRequest) {
       action: `Logged ${category} expense: ${description} (TZS ${amountTzs.toLocaleString("en-US")})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, expense: record });
   }
 
@@ -1531,6 +1563,7 @@ export async function POST(request: NextRequest) {
       action: `Updated settlement channels (${settlementCycle.toUpperCase()}, ${bankName || "M-Pesa"})`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, paymentSettings: db.paymentSettings![account.id] });
   }
 
@@ -1565,6 +1598,7 @@ export async function POST(request: NextRequest) {
         action: `Declined access request from ${reqItem.requesterFullName} (@${reqItem.requesterUsername})`,
       });
       saveWorkspaceDb(db);
+    await flushWorkspaceDb();
       return noStoreJson({ ok: true, status: "declined" });
     }
 
@@ -1629,6 +1663,7 @@ export async function POST(request: NextRequest) {
       action: `Approved & allocated @${finalUsername} (${roleRaw.replace(/_/g, " ")}) to ${targetCentre.name}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({
       ok: true,
       status: "approved",
@@ -1662,6 +1697,7 @@ export async function POST(request: NextRequest) {
       action: `Posted reply to HQ action trail: ${title}`,
     });
     saveWorkspaceDb(db);
+    await flushWorkspaceDb();
     return noStoreJson({ ok: true, hqMessage: created });
   }
 

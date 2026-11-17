@@ -357,77 +357,127 @@ const DB_PATH = join(process.cwd(), ".next", "cache", "cervos-workspace-db.json"
 const g = globalThis as unknown as {
   __cervosWorkspaceDb?: WorkspaceDbSnapshot;
   __cervosDbSupabaseSynced?: boolean;
+  __cervosDbLastSyncMs?: number;
+  __cervosPersistPromise?: Promise<void>;
 };
 
 // ---------------------------------------------------------------------------
-// Supabase persistence helpers (fire-and-forget; never block the request path)
+// Supabase persistence helpers (REST fetch — zero Turbopack require issues)
 // ---------------------------------------------------------------------------
-function getSupabaseServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+function getSupabaseRestConfig(): { url: string; key: string } | null {
+  if (process.env.NODE_ENV === "test") return null;
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
   if (!url || !key) return null;
-  try {
-    // Dynamic require so this module works even without supabase-js in test env
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
-    return createClient(url, key, { auth: { persistSession: false } });
-  } catch {
-    return null;
-  }
+  return { url, key };
 }
 
-/** Push current snapshot to Supabase workspace_db table (non-blocking). */
-function persistToSupabase(db: WorkspaceDbSnapshot): void {
-  const sb = getSupabaseServiceClient();
-  if (!sb) return;
-  void Promise.resolve(
-    sb.from("workspace_db")
-      .upsert({ shard: "main", snapshot: db, updated_at: new Date().toISOString() }, { onConflict: "shard" })
-  ).then(({ error }) => {
-    if (error) console.warn("[workspace/store] Supabase persist failed:", error.message);
-  }).catch(() => {});
+/** Push current snapshot to Supabase workspace_db table and track the promise for flushing. */
+function persistToSupabase(db: WorkspaceDbSnapshot): Promise<void> {
+  const cfg = getSupabaseRestConfig();
+  if (!cfg) return Promise.resolve();
+  // Never overwrite Supabase with an uninitialized empty cold-start shell unless data actually existed
+  const hasContent = db.accounts.length > 0 || (db.joinRequests?.length ?? 0) > 0;
+  if (!hasContent && !g.__cervosDbSupabaseSynced) return Promise.resolve();
+
+  const writePromise = (async () => {
+    try {
+      const resp = await fetch(`${cfg.url}/rest/v1/workspace_db?on_conflict=shard`, {
+        method: "POST",
+        headers: {
+          apikey: cfg.key,
+          Authorization: `Bearer ${cfg.key}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal",
+        },
+        body: JSON.stringify({
+          shard: "main",
+          snapshot: db,
+          updated_at: new Date().toISOString(),
+        }),
+        cache: "no-store",
+      });
+      if (!resp.ok) {
+        const msg = await resp.text().catch(() => String(resp.status));
+        console.warn("[workspace/store] Supabase persist failed:", resp.status, msg.slice(0, 200));
+      } else {
+        g.__cervosDbLastSyncMs = Date.now();
+      }
+    } catch (err) {
+      console.warn("[workspace/store] Supabase persist error:", err instanceof Error ? err.message : String(err));
+    }
+  })();
+
+  g.__cervosPersistPromise = writePromise;
+  return writePromise;
+}
+
+/** Wait for any pending Supabase snapshot write to finish before returning a serverless response. */
+export async function flushWorkspaceDb(): Promise<void> {
+  if (g.__cervosPersistPromise) {
+    await g.__cervosPersistPromise;
+  }
 }
 
 /** Load snapshot from Supabase workspace_db table. Returns null if unavailable. */
 async function loadFromSupabase(): Promise<WorkspaceDbSnapshot | null> {
-  const sb = getSupabaseServiceClient();
-  if (!sb) return null;
+  const cfg = getSupabaseRestConfig();
+  if (!cfg) return null;
   try {
-    const { data, error } = await sb
-      .from("workspace_db")
-      .select("snapshot")
-      .eq("shard", "main")
-      .maybeSingle();
-    if (error) {
-      console.warn("[workspace/store] Supabase load failed:", error.message);
+    const resp = await fetch(`${cfg.url}/rest/v1/workspace_db?shard=eq.main&select=snapshot`, {
+      method: "GET",
+      headers: {
+        apikey: cfg.key,
+        Authorization: `Bearer ${cfg.key}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    });
+    if (!resp.ok) {
+      const msg = await resp.text().catch(() => String(resp.status));
+      console.warn("[workspace/store] Supabase load failed:", resp.status, msg.slice(0, 200));
       return null;
     }
-    const snap = data?.snapshot as WorkspaceDbSnapshot | undefined;
-    if (snap && Array.isArray(snap.accounts) && snap.accounts.length > 0) return snap;
+    const rows = (await resp.json()) as Array<{ snapshot?: WorkspaceDbSnapshot }>;
+    const snap = rows?.[0]?.snapshot;
+    if (snap && Array.isArray(snap.accounts) && (snap.accounts.length > 0 || (snap.joinRequests?.length ?? 0) > 0)) {
+      return snap;
+    }
     return null;
   } catch {
     return null;
   }
 }
 
-/** Call once during server boot to warm the in-memory DB from Supabase. */
-export async function warmDbFromSupabase(): Promise<void> {
-  if (g.__cervosDbSupabaseSynced) return;
+/**
+ * Warm/refresh the in-memory workspace DB from Supabase so separate serverless
+ * instances always see committed signups, onboarding, and PIN updates.
+ */
+export async function warmDbFromSupabase(force = false): Promise<void> {
+  if (process.env.NODE_ENV === "test") return;
+  if (g.__cervosPersistPromise) {
+    await g.__cervosPersistPromise;
+  }
+  const now = Date.now();
+  if (!force && g.__cervosDbSupabaseSynced && g.__cervosDbLastSyncMs && now - g.__cervosDbLastSyncMs < 1500) {
+    return;
+  }
   const remote = await loadFromSupabase();
   if (remote) {
-    // Only use remote if it has real (non-demo-seed) accounts or we have nothing locally
     const hasRealAccounts = remote.accounts.some((a) => !a.id.startsWith("acc_demo_"));
-    if (hasRealAccounts || !g.__cervosWorkspaceDb) {
+    if (hasRealAccounts || !g.__cervosWorkspaceDb || g.__cervosWorkspaceDb.accounts.length === 0) {
       g.__cervosWorkspaceDb = remote;
-      // Also write local cache so subsequent in-process reads are fast
-      try {
-        const dir = dirname(DB_PATH);
-        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-        writeFileSync(DB_PATH, JSON.stringify(remote, null, 2), "utf8");
-      } catch { /* read-only fs ok */ }
+      if (!IS_VERCEL) {
+        try {
+          const dir = dirname(DB_PATH);
+          if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+          writeFileSync(DB_PATH, JSON.stringify(remote, null, 2), "utf8");
+        } catch { /* read-only fs ok */ }
+      }
     }
   }
   g.__cervosDbSupabaseSynced = true;
+  g.__cervosDbLastSyncMs = Date.now();
 }
 
 function buildInitialSeed(): WorkspaceDbSnapshot {
@@ -802,11 +852,13 @@ export function getWorkspaceDb(): WorkspaceDbSnapshot {
   }
 
   // Cold start with no data yet — start with an empty production slate.
-  // In test environment or mock mode, use initial seed so tests pass reliably.
+  // Do NOT persist empty cold-start state to Supabase so we never overwrite real accounts.
   const seed = IS_MOCK || process.env.NODE_ENV === "test" ? buildInitialSeed() : buildEmptyDb();
   backfillMissingUsernames(seed);
   g.__cervosWorkspaceDb = seed;
-  saveWorkspaceDb(seed);
+  if (seed.accounts.length > 0) {
+    saveWorkspaceDb(seed);
+  }
   return seed;
 }
 
