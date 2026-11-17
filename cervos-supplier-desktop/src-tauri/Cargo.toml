@@ -1,6 +1,6 @@
 [package]
 name = "cervos-supplier"
-version = "0.1.0"
+version = "0.1.1"
 description = "Cervos Supplier Portal Desktop App"
 authors = ["Cervos"]
 license = ""

@@ -19,6 +19,10 @@ pub fn run() {
 
             let main_window = app.get_webview_window("main").expect("main window not found");
 
+            if let Some(icon) = app.default_window_icon() {
+                let _ = main_window.set_icon(icon.clone());
+            }
+
             #[cfg(debug_assertions)]
             {
                 main_window.open_devtools();

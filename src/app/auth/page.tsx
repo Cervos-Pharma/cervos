@@ -68,10 +68,43 @@ function AuthPageInner() {
   const [authErrorMsg, setAuthErrorMsg] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
   const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  const [pairedOrg, setPairedOrg] = useState<{
+    orgName: string;
+    activeProfileName?: string;
+    hasActiveProfile: boolean;
+  } | null>(null);
 
   useEffect(() => {
     setPasskeyAvailable(isPasskeySupported());
-  }, []);
+    const switchOrg = searchParams.get("switch_org") === "1";
+    const paramMode = searchParams.get("mode");
+    if (paramMode === "signup" || Boolean(searchParams.get("role"))) return;
+    fetch("/api/workspace/state", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (
+          d: {
+            authenticated?: boolean;
+            account?: { onboardingDone?: boolean; orgName?: string };
+            activeProfile?: { displayName?: string } | null;
+          } | null
+        ) => {
+          if (!d?.authenticated || !d.account?.onboardingDone) return;
+          if (!switchOrg && !d.activeProfile) {
+            router.replace("/app/gate?stage=profile");
+            return;
+          }
+          setPairedOrg({
+            orgName: d.account.orgName || "Cervos Workspace",
+            activeProfileName: d.activeProfile?.displayName,
+            hasActiveProfile: Boolean(d.activeProfile),
+          });
+        }
+      )
+      .catch(() => {
+        // Ignore silent session check failure
+      });
+  }, [router, searchParams]);
 
   // Quiet background location snap when user reaches personal identity step (fallback cleanly to region)
   useEffect(() => {
@@ -759,14 +792,20 @@ function AuthPageInner() {
                   : "opacity-100 max-h-24 mb-6"
               }`}
             >
-              <div className="grid grid-cols-2 gap-1 p-1 rounded-md bg-[#F8FAFC] border border-[#E2E8F0]">
+              <div
+                className={`grid grid-cols-2 gap-1 p-1 rounded-md border ${
+                  isDark ? "bg-[#11161F] border-slate-800" : "bg-[#F8FAFC] border-[#E2E8F0]"
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => switchMode("signin")}
                   className={`min-h-[44px] py-2.5 px-3 rounded text-xs font-semibold transition-all cursor-pointer ${
                     mode === "signin"
                       ? "bg-[#1039B9] text-white shadow-xs"
-                      : "text-slate-600 hover:text-[#0F172A]"
+                      : isDark
+                        ? "text-slate-300 hover:text-white"
+                        : "text-slate-600 hover:text-[#0F172A]"
                   }`}
                 >
                   <FlipText text={isSw ? "Ingia" : "Sign In"} flipKey={lang} />
@@ -777,7 +816,9 @@ function AuthPageInner() {
                   className={`min-h-[44px] py-2.5 px-3 rounded text-xs font-semibold transition-all cursor-pointer ${
                     mode === "signup"
                       ? "bg-[#1039B9] text-white shadow-xs"
-                      : "text-slate-600 hover:text-[#0F172A]"
+                      : isDark
+                        ? "text-slate-300 hover:text-white"
+                        : "text-slate-600 hover:text-[#0F172A]"
                   }`}
                 >
                   <FlipText text={isSw ? "Anza Sasa" : "Get Started"} flipKey={lang} />
@@ -792,12 +833,12 @@ function AuthPageInner() {
                   <IconCheck className="w-6 h-6" />
                 </div>
                 <h2
-                  className="text-2xl font-bold text-[#0F172A] mb-2"
+                  className={`text-2xl font-bold mb-2 ${isDark ? "text-white" : "text-[#0F172A]"}`}
                   style={{ fontFamily: "Outfit, Inter, sans-serif" }}
                 >
                   <FlipText text={isSw ? "Tayari!" : "All Set"} flipKey={lang} />
                 </h2>
-                <p className="text-sm text-slate-600 leading-relaxed mb-8">
+                <p className={`text-sm leading-relaxed mb-8 ${isDark ? "text-slate-300" : "text-slate-600"}`}>
                   <FlipText text={authDoneMsg} flipKey={lang} mode="words" />
                 </p>
                 <div className="flex flex-col gap-3">
@@ -831,14 +872,56 @@ function AuthPageInner() {
                 {/* -------------------------------------------------------- */}
                 {mode === "signin" && (
                   <form onSubmit={handleSignInSubmit} className="space-y-5">
+                    {pairedOrg && (
+                      <div
+                        className={`p-3.5 rounded-lg border space-y-2.5 ${
+                          isDark
+                            ? "border-[#38BDF8]/30 bg-[#1039B9]/15"
+                            : "border-[#1039B9]/25 bg-[#EFF6FF]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-bold uppercase tracking-wider text-[#1039B9] dark:text-[#38BDF8]">
+                              {isSw ? "TAASISI IMEUNGANISHWA" : "PAIRED WORKSPACE"}
+                            </div>
+                            <div className={`text-xs font-bold truncate ${isDark ? "text-white" : "text-[#0F172A]"}`}>
+                              {pairedOrg.orgName}
+                              {pairedOrg.activeProfileName ? ` · ${pairedOrg.activeProfileName}` : ""}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href="/app/gate?stage=profile"
+                            className="flex-1 min-h-[40px] px-3 py-2 rounded bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs font-semibold text-center flex items-center justify-center transition-colors"
+                          >
+                            {isSw ? "Fungua kwa PIN / Badili Wasifu" : "PIN Unlock / Switch Profile"} &rarr;
+                          </Link>
+                          {pairedOrg.hasActiveProfile && (
+                            <Link
+                              href="/app"
+                              className={`min-h-[40px] px-3 py-2 rounded border text-xs font-semibold flex items-center justify-center transition-colors ${
+                                isDark
+                                  ? "border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500"
+                                  : "border-[#E2E8F0] bg-white text-[#0F172A] hover:bg-slate-50"
+                              }`}
+                            >
+                              {isSw ? "Endelea" : "Resume"}
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <h1
-                        className="text-2xl font-bold text-[#0F172A] mb-1.5"
+                        className={`text-2xl font-bold mb-1.5 ${isDark ? "text-white" : "text-[#0F172A]"}`}
                         style={{ fontFamily: "Outfit, Inter, sans-serif" }}
                       >
                         <FlipText text={isSw ? "Karibu tena" : "Welcome back"} flipKey={lang} />
                       </h1>
-                      <p className="text-xs text-slate-500">
+                      <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                         <FlipText
                           text={
                             isSw
@@ -852,7 +935,7 @@ function AuthPageInner() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                      <label className={`block text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                         <FlipText text={isSw ? "Jina la Mtumiaji au Barua Pepe" : "Username or Email"} flipKey={lang} />
                       </label>
                       <input
@@ -862,12 +945,16 @@ function AuthPageInner() {
                         value={signinEmail}
                         onChange={(e) => setSigninEmail(e.target.value)}
                         placeholder="@amani, @baraka.mwenge or you@pharmacy.co.tz"
-                        className="w-full px-3.5 py-2.5 rounded border border-[#E2E8F0] bg-[#F8FAFC] text-sm text-[#0F172A] focus:outline-none focus:border-[#1039B9] focus:bg-white transition-colors"
+                        className={`w-full px-3.5 py-2.5 rounded border text-sm focus:outline-none transition-colors ${
+                          isDark
+                            ? "border-slate-700 bg-slate-900 text-white placeholder:text-slate-500 focus:border-[#38BDF8]"
+                            : "border-[#E2E8F0] bg-[#F8FAFC] text-[#0F172A] focus:border-[#1039B9] focus:bg-white"
+                        }`}
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                      <label className={`block text-[11px] font-semibold uppercase tracking-wider mb-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                         <FlipText text={isSw ? "Neno la Siri au PIN" : "Password or PIN"} flipKey={lang} />
                       </label>
                       <input
@@ -877,7 +964,11 @@ function AuthPageInner() {
                         value={signinPassword}
                         onChange={(e) => setSigninPassword(e.target.value)}
                         placeholder={isSw ? "Neno la siri au PIN ya tarakimu 4-6" : "Password or 4-6 digit PIN"}
-                        className="w-full px-3.5 py-2.5 rounded border border-[#E2E8F0] bg-[#F8FAFC] text-sm text-[#0F172A] focus:outline-none focus:border-[#1039B9] focus:bg-white transition-colors"
+                        className={`w-full px-3.5 py-2.5 rounded border text-sm focus:outline-none transition-colors ${
+                          isDark
+                            ? "border-slate-700 bg-slate-900 text-white placeholder:text-slate-500 focus:border-[#38BDF8]"
+                            : "border-[#E2E8F0] bg-[#F8FAFC] text-[#0F172A] focus:border-[#1039B9] focus:bg-white"
+                        }`}
                       />
                     </div>
 
@@ -903,7 +994,11 @@ function AuthPageInner() {
                         type="button"
                         disabled={authBusy}
                         onClick={handlePasskeySignIn}
-                        className="w-full min-h-[44px] py-2.5 rounded border border-[#E2E8F0] hover:border-[#1039B9] bg-white text-[#0F172A] text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        className={`w-full min-h-[44px] py-2.5 rounded border text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                          isDark
+                            ? "border-slate-700 hover:border-[#38BDF8] bg-slate-900 text-slate-100"
+                            : "border-[#E2E8F0] hover:border-[#1039B9] bg-white text-[#0F172A]"
+                        }`}
                       >
                         <svg className="w-4 h-4 text-[#1039B9]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                           <path

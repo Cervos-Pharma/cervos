@@ -4,7 +4,7 @@ export const WS_ACCOUNT_COOKIE = "cervos_ws_acct";
 export const WS_PROFILE_COOKIE = "cervos_ws_prof";
 export const WS_TRUSTED_COOKIE = "cervos_trusted_browser";
 
-export const WORKSPACE_ACCOUNT_TTL_SEC = 60 * 60 * 12;
+export const WORKSPACE_ACCOUNT_TTL_SEC = 60 * 60 * 24 * 30;
 export const WORKSPACE_PROFILE_TTL_SEC = 60 * 60 * 8;
 export const WORKSPACE_TRUSTED_TTL_SEC = 60 * 60 * 24 * 30;
 

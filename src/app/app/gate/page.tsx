@@ -199,7 +199,7 @@ function GateInner() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "signout" }),
     });
-    router.push("/auth?mode=signin");
+    router.push("/auth?mode=signin&switch_org=1");
   };
 
   const activeLang = langOverride ?? state?.account.lang ?? "EN";
@@ -305,7 +305,7 @@ function GateInner() {
             onClick={signOutAccount}
             className={`min-h-[44px] px-3.5 py-2 rounded-md border text-xs sm:text-[11px] font-semibold transition-colors cursor-pointer ${controlBtnCls}`}
           >
-            {isSw ? "Ondoka" : "Sign Out"}
+            {isSw ? "Badili Taasisi" : "Switch Org"}
           </button>
         </div>
       </div>

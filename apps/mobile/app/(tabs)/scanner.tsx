@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { parseGs1Barcode } from "@cervos/core";
+import { parseGs1Barcode } from "../../lib/core";
 import { useMobileSession } from "../../src/context/MobileSessionContext";
 import { CERVOS_COLORS, TOUCH_MIN_HEIGHT } from "../../src/theme/tokens";
 

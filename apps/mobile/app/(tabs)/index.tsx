@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { formatTzs } from "@cervos/core";
+import { formatTzs } from "../../lib/core";
 import { useMobileSession } from "../../src/context/MobileSessionContext";
 import { postWorkspaceAction } from "../../src/services/api";
 import { enqueueOfflineMutation, triggerLocalAlertNotification } from "../../src/services/offlineSync";

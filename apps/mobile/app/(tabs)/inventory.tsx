@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { formatTzs } from "@cervos/core";
+import { formatTzs } from "../../lib/core";
 import { useMobileSession } from "../../src/context/MobileSessionContext";
 import { CERVOS_COLORS, TOUCH_MIN_HEIGHT } from "../../src/theme/tokens";
 

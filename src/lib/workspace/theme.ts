@@ -7,8 +7,9 @@ export type WorkspaceTheme = "light" | "dark";
 const THEME_STORAGE_KEY = "cervos-ws-theme";
 
 /**
- * Resolves workspace Light/Dark mode: explicit saved user choice takes priority,
- * otherwise tracks OS system preference (`prefers-color-scheme`) defaulting to Light.
+ * Resolves workspace Light/Dark mode: defaults to Light on fresh open so
+ * auth/entry surfaces never open unexpectedly black, while honoring any
+ * explicit saved user theme toggle in localStorage.
  */
 export function useWorkspaceTheme() {
   const [theme, setTheme] = useState<WorkspaceTheme>("light");
@@ -18,31 +19,12 @@ export function useWorkspaceTheme() {
       const saved = localStorage.getItem(THEME_STORAGE_KEY);
       if (saved === "light" || saved === "dark") {
         setTheme(saved);
-        return;
-      }
-      if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-        setTheme("dark");
       } else {
         setTheme("light");
       }
     } catch {
       setTheme("light");
     }
-
-    const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
-    if (!mq) return;
-    const handleChange = (e: MediaQueryListEvent) => {
-      try {
-        const saved = localStorage.getItem(THEME_STORAGE_KEY);
-        if (!saved) {
-          setTheme(e.matches ? "dark" : "light");
-        }
-      } catch {
-        // Ignore storage restrictions
-      }
-    };
-    mq.addEventListener("change", handleChange);
-    return () => mq.removeEventListener("change", handleChange);
   }, []);
 
   const toggleTheme = () => {

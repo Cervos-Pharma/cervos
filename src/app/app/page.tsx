@@ -281,7 +281,7 @@ export default function WorkspaceHomePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "signout" }),
     });
-    router.replace("/auth?mode=signin");
+    router.replace("/auth?mode=signin&switch_org=1");
   };
 
   const paySubscription = async (planName?: string) => {

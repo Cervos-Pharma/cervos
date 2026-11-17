@@ -37,9 +37,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/cervos-company-logo-circular.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
-    shortcut: "/cervos-company-logo-circular.svg",
+    shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
