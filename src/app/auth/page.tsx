@@ -79,7 +79,7 @@ function AuthPageInner() {
     const switchOrg = searchParams.get("switch_org") === "1";
     const paramMode = searchParams.get("mode");
     if (paramMode === "signup" || Boolean(searchParams.get("role"))) return;
-    fetch("/api/workspace/state", { cache: "no-store" })
+    fetch("/api/workspace/state?probe=1", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then(
         (

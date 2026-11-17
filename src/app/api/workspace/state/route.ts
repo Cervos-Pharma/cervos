@@ -73,7 +73,8 @@ export async function GET(request: NextRequest) {
 
   const session = readWorkspaceAccountToken(request);
   if (!session) {
-    return noStoreJson({ authenticated: false }, { status: 401 });
+    const isProbe = request.nextUrl.searchParams.get("probe") === "1";
+    return noStoreJson({ authenticated: false }, { status: isProbe ? 200 : 401 });
   }
   if (session.accountId.startsWith("joinreq:")) {
     return noStoreJson({ authenticated: true, loungeOnly: true, redirectTo: "/app/lounge" });
