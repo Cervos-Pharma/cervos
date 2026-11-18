@@ -150,11 +150,10 @@ export default function HQLoungeAndUpdates({
                 key={st}
                 type="button"
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize cursor-pointer ${
-                  statusFilter === st
-                    ? "bg-[#1039B9] text-white"
-                    : `border ${chipCls} hover:border-[#1039B9]/40`
-                }`}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold capitalize cursor-pointer ${statusFilter === st
+                  ? "bg-[#1039B9] text-white"
+                  : `border ${chipCls} hover:border-[#1039B9]/40`
+                  }`}
               >
                 {st} <span className="font-mono text-[11px] opacity-80">({count})</span>
               </button>
@@ -185,13 +184,12 @@ export default function HQLoungeAndUpdates({
                           @{req.requesterUsername}
                         </span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            req.status === "pending"
-                              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                              : req.status === "approved" || req.status === "accepted"
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${req.status === "pending"
+                            ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                            : req.status === "approved" || req.status === "accepted"
                               ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
                               : "bg-red-500/15 text-red-700 dark:text-red-300"
-                          }`}
+                            }`}
                         >
                           {req.status}
                         </span>
@@ -325,8 +323,7 @@ export default function HQLoungeAndUpdates({
 
                   {req.status === "approved" && (
                     <div className="text-[11px] text-emerald-700 dark:text-emerald-300">
-                      Allocated to {req.allocatedCentreName} as {req.allocatedRole}
-                      {req.allocatedPinPreview ? ` (PIN ${req.allocatedPinPreview})` : ""}
+                      Allocated to {req.allocatedCentreName} as {req.allocatedRole} (Hash-secured PIN issued once on approval)
                     </div>
                   )}
 

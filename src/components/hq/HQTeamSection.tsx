@@ -432,6 +432,27 @@ export default function HQTeamSection({
 
                       {isMaster && (
                         <div className="flex flex-wrap gap-1.5">
+                          <select
+                            value={w.role}
+                            disabled={busy || w.role === "hq_master"}
+                            onChange={(e) =>
+                              void onRunAction(
+                                {
+                                  action: "update_hq_worker",
+                                  workerId: w.id,
+                                  role: e.target.value,
+                                },
+                                `Updated role for ${w.name}`
+                              )
+                            }
+                            className={`h-7 px-2 rounded-full text-[11px] font-semibold ${t.inputCls}`}
+                          >
+                            {HQ_ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {HQ_ROLE_METADATA[r].shortTag}
+                              </option>
+                            ))}
+                          </select>
                           <button
                             type="button"
                             disabled={createBusy || busy}
@@ -453,10 +474,28 @@ export default function HQTeamSection({
                                 `${w.status === "suspended" ? "Reactivated" : "Suspended"} ${w.name}`
                               )
                             }
-                            className="px-3 py-1 rounded-full border border-rose-500/35 bg-rose-500/10 text-rose-600 dark:text-rose-300 text-[11px] font-semibold cursor-pointer"
+                            className="px-3 py-1 rounded-full border border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[11px] font-semibold cursor-pointer"
                           >
                             {w.status === "suspended" ? "Reactivate" : "Suspend"}
                           </button>
+                          {w.role !== "hq_master" && (
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                void onRunAction(
+                                  {
+                                    action: "delete_hq_worker",
+                                    workerId: w.id,
+                                  },
+                                  `Removed HQ worker ${w.name}`
+                                )
+                              }
+                              className="px-3 py-1 rounded-full border border-rose-500/35 bg-rose-500/10 text-rose-600 dark:text-rose-300 text-[11px] font-semibold cursor-pointer"
+                            >
+                              Remove
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>

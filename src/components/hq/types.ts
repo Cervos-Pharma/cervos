@@ -10,6 +10,9 @@ export type AuditCategory =
 
 export type HqTab =
   | "overview"
+  | "decisions"
+  | "intelligence"
+  | "cases"
   | "support"
   | "team"
   | "fleet"
@@ -18,6 +21,206 @@ export type HqTab =
   | "onboarding"
   | "journal"
   | "comms";
+
+export type HqAutonomyMode = "off" | "suggest" | "auto_undo" | "auto";
+
+export interface HqPromiseMetric {
+  id:
+    | "zero_expired_dispensed"
+    | "never_stops_offline"
+    | "balanced_tills"
+    | "safe_kasri_restocking"
+    | "patient_privacy"
+    | "durable_adoption"
+    | "audit_integrity";
+  promise: string;
+  primaryLabel: string;
+  primaryValue: string;
+  targetLabel: string;
+  status: "healthy" | "warning" | "alert";
+  subMetrics: Array<{ label: string; value: string; target: string; ok: boolean }>;
+  provenance: {
+    eventCount: number;
+    firstSeq: number;
+    lastSeq: number;
+    projectionVersion: string;
+    chainHeadHash: string;
+  };
+}
+
+export interface HqReadinessGate {
+  id: "G-ID" | "G-HIST" | "G-COV" | "G-LABEL" | "G-GROUP";
+  label: string;
+  condition: string;
+  currentValue: string;
+  passed: boolean;
+  unlocks: string;
+  fallbackNote: string;
+}
+
+export interface HqModelScorecard {
+  id: string;
+  name: string;
+  unitAndHorizon: string;
+  version: string;
+  stage: "baseline_rules" | "quantile_gbm" | "calibrated_sim";
+  trainingWindow: string;
+  primaryMetricLabel: string;
+  modelScore: string;
+  baselineScore: string;
+  coveragePct: number;
+  psiDrift: number;
+  tzsImpact30d: number;
+  status: "champion" | "baseline_fallback" | "shadow";
+  lastErrorNote: string;
+  gateIds: string[];
+}
+
+export interface HqDecisionProposal {
+  id: string;
+  kind:
+    | "reorder_draft"
+    | "expiry_rescue"
+    | "churn_intervention"
+    | "support_reply"
+    | "billing_grace"
+    | "recall_quarantine"
+    | "anomaly_review";
+  orgId: string;
+  orgName: string;
+  branchId?: string;
+  branchName?: string;
+  tool: string;
+  args: Record<string, unknown>;
+  why: string;
+  evidence: {
+    eventRange: string;
+    eventIds: string[];
+    modelVersion: string;
+    featureSnapshot: string;
+  };
+  confidence: { p10: number; p50: number; p90: number; unit: string };
+  impact: { tzs: number; units: number; orgsTouched: number; branchesTouched: number };
+  reversibility: "reversible" | "compensatable" | "irreversible";
+  status: "proposed" | "approved" | "rejected" | "executed" | "reverted";
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface HqAgentProfile {
+  id: "support" | "billing" | "compliance" | "supply" | "analyst";
+  name: string;
+  roleTag: string;
+  allowedTools: string[];
+  forbiddenActions: string[];
+  escalatesWhen: string;
+  dailyTokenCap: number;
+  tokensUsedToday: number;
+  dailyToolCap: number;
+  toolCallsToday: number;
+  draftAcceptancePct: number;
+  wrongActionCount: number;
+}
+
+export interface HqRecallRecord {
+  id: string;
+  regulatorRef: string;
+  innName: string;
+  strength: string;
+  batchNumber: string;
+  manufacturerName: string;
+  severity: "class_i" | "class_ii" | "class_iii";
+  state: "issued" | "matched" | "notified" | "acknowledged" | "quarantined" | "closed";
+  matchedLotsCount: number;
+  affectedBranches: Array<{
+    branchId: string;
+    branchName: string;
+    orgName: string;
+    qtyHeld: number;
+    unitsSold: number;
+    patientRefsNotified: number;
+    quarantinedConfirmed: boolean;
+  }>;
+  issuedAt: string;
+}
+
+export interface HqPrivacyReleaseRecord {
+  id: string;
+  recipient: string;
+  project: string;
+  querySummary: string;
+  contributingOrgsCount: number;
+  minGroupSize: number;
+  maxDominanceSharePct: number;
+  epsilonSpent: number;
+  budgetRemaining: number;
+  status: "approved" | "blocked_small_cell";
+  createdAt: string;
+}
+
+export interface HqInvestigationCase {
+  id: string;
+  title: string;
+  category: "counterfeit_diversion" | "controlled_drug" | "till_anomaly" | "escrow_dispute";
+  status: "open" | "investigating" | "resolved";
+  severity: "normal" | "high" | "critical";
+  pinnedEntities: string[];
+  citedEventIds: string[];
+  notes: Array<{ id: string; author: string; body: string; createdAt: string }>;
+  createdAt: string;
+}
+
+export interface HqProductAliasRecord {
+  id: string;
+  orgId: string;
+  orgName: string;
+  rawText: string;
+  masterId: string;
+  masterLabel: string;
+  confidence: number;
+  status: "auto" | "review_queue" | "reviewed" | "rejected" | "unresolved";
+}
+
+export interface HqSpineEventItem {
+  globalSeq: number;
+  eventId: string;
+  orgId: string;
+  legacyOrgId: string;
+  branchId?: string;
+  actorKind: "staff" | "hq" | "agent" | "system" | "device" | "webhook";
+  type: string;
+  piiClass: "none" | "pseudonymous" | "personal" | "sensitive";
+  receivedAt: string;
+  hlc: string;
+  hash: string;
+  source: string;
+}
+
+export interface HqSpineTelemetry {
+  totalEvents: number;
+  globalSeqHead: number;
+  chainVerified: boolean;
+  chainHeadHash: string;
+  mappedProductSharePct: number;
+  mappedSalesSharePct: number;
+  projectionLagSeq: number;
+  legacyMappedEntitiesCount: number;
+  accessStateCounts: Record<"trial" | "active" | "grace" | "overdue" | "locked" | "suspended", number>;
+  escrowInvariantDeltaTzs: number;
+  orgHealthScores: Array<{
+    accountId: string;
+    orgName: string;
+    region: string;
+    score: number;
+    churnRisk30dPct: number;
+    accessState: string;
+    topReasons: string[];
+    recommendedPlaybook: string;
+  }>;
+  recentEvents?: HqSpineEventItem[];
+  productMastersCount?: number;
+  productAliases?: HqProductAliasRecord[];
+}
 
 export interface HqPackageRecord {
   id: string;
@@ -394,4 +597,14 @@ export interface HqFleetPayload {
   supportTickets?: HqSupportTicketRecord[];
   hqTeamNotes?: HqTeamNoteItem[];
   notificationEnv: HqNotificationEnv;
+  spine?: HqSpineTelemetry;
+  promiseBoard?: HqPromiseMetric[];
+  readinessGates?: HqReadinessGate[];
+  modelScorecards?: HqModelScorecard[];
+  proposals?: HqDecisionProposal[];
+  autonomyConfig?: Record<string, HqAutonomyMode>;
+  agents?: HqAgentProfile[];
+  recalls?: HqRecallRecord[];
+  privacyReleases?: HqPrivacyReleaseRecord[];
+  cases?: HqInvestigationCase[];
 }

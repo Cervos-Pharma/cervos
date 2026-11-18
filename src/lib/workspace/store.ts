@@ -13,6 +13,7 @@ import {
   type HqWorkerCapabilities,
   type HqWorkerRole,
 } from "@/lib/hq-workers";
+import type { WorkspaceSpineStore } from "@/lib/spine/types";
 
 export { clampProfileCapabilities, ROLE_PERMISSION_RULES, clampHqCapabilities };
 export type { ProfileCapabilities, WorkspaceProfileRole, HqWorkerCapabilities, HqWorkerRole };
@@ -532,6 +533,7 @@ export interface WorkspaceDbSnapshot {
   hqTeamNotes?: HqTeamNoteRecord[];
   savedCustomers?: SavedCustomerPreset[];
   shiftLogs?: WorkspaceShiftLog[];
+  spine?: WorkspaceSpineStore;
 }
 
 const DB_PATH = join(process.cwd(), ".next", "cache", "cervos-workspace-db.json");

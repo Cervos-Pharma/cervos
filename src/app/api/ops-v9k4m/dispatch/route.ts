@@ -37,6 +37,22 @@ import {
   clampProfileCapabilities,
   type WorkspaceProfileRole,
 } from "@/lib/workspace/permissions";
+import {
+  appendSpineEvent,
+  authorizeRegistryAction,
+  buildAgentCrewProfiles,
+  buildModelScorecards,
+  buildPromiseBoard,
+  buildSpineTelemetrySummary,
+  emitRegistryCommandEvent,
+  ensureSpineBackfill,
+  evaluateReadinessGates,
+  executePrivacyGatewayQuery,
+  generateAgentDraftProposals,
+  issueAndTraceRecall,
+  runRedTeamSyntheticDrill,
+  verifyOrgHashChain,
+} from "@/lib/spine";
 import { hasAnyInjection, parseJsonObject, sanitizeBatchImageUrl } from "@/lib/workspace/request-auth";
 import {
   appendAuditLog,
@@ -413,7 +429,6 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
     allocatedCentreId: r.allocatedCentreId,
     allocatedCentreName: r.allocatedCentreName,
     allocatedRole: r.allocatedRole,
-    allocatedPinPreview: r.allocatedPinPreview,
     declineReason: r.declineReason,
     createdAt: r.createdAt,
     reviewedAt: r.reviewedAt,
@@ -534,6 +549,12 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
   }
 
   const currentWorker = resolveSessionWorker(db, auth);
+  const spine = ensureSpineBackfill(db);
+  const readinessGates = evaluateReadinessGates(db);
+  const modelScorecards = buildModelScorecards(db, readinessGates);
+  const promiseBoard = buildPromiseBoard(db);
+  const spineTelemetry = buildSpineTelemetrySummary(db);
+  const agents = buildAgentCrewProfiles(db);
   const hqWorkers = (db.hqWorkers ?? []).map(publicHqWorkerSummary);
   const supportTickets: WorkspaceSupportTicket[] = [...(db.supportTickets ?? [])].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -599,6 +620,16 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
     supportTickets,
     hqTeamNotes,
     notificationEnv: getNotificationEnvStatus(),
+    spine: spineTelemetry,
+    promiseBoard,
+    readinessGates,
+    modelScorecards,
+    proposals: spine.proposals,
+    autonomyConfig: spine.autonomyConfig,
+    agents,
+    recalls: spine.recalls,
+    privacyReleases: spine.privacyReleases,
+    cases: spine.cases,
   };
 }
 
@@ -609,6 +640,19 @@ export async function GET(request: NextRequest) {
   }
 
   await warmDbFromSupabase();
+  const verifyChainParam = request.nextUrl.searchParams.get("verifyChain")?.trim();
+  if (verifyChainParam === "1") {
+    const db = getWorkspaceDb();
+    const spine = ensureSpineBackfill(db);
+    const filterOrg = request.nextUrl.searchParams.get("orgId")?.trim() || undefined;
+    const proof = verifyOrgHashChain(spine.events, filterOrg);
+    return noStoreJson({
+      ...proof,
+      globalSeqHead: spine.globalSeqCounter,
+      verifiedAt: new Date().toISOString(),
+    });
+  }
+
   const scope = request.nextUrl.searchParams.get("scope")?.trim();
   if (scope === "fleet") {
     return noStoreJson(await buildFleetPayload(auth));
@@ -673,12 +717,28 @@ export async function POST(request: NextRequest) {
   }
   const requiredPerm = ACTION_PERMISSION_MAP[action];
   if (requiredPerm && !canHqWorker(sessionWorker.role, sessionWorker.capabilities, requiredPerm)) {
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      payload: { deniedPerm: requiredPerm },
+      failedReason: `Clearance denied: missing ${requiredPerm}`,
+    });
     return noStoreJson(
       {
         error: `Clearance denied: ${HQ_ROLE_METADATA[sessionWorker.role].label} lacks ${requiredPerm} permission.`,
       },
       { status: 403 }
     );
+  }
+  const regCheck = authorizeRegistryAction(action, sessionWorker.role, sessionWorker.capabilities);
+  if (!regCheck.allowed) {
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      payload: {},
+      failedReason: regCheck.reason,
+    });
+    return noStoreJson({ error: regCheck.reason }, { status: 403 });
   }
   const actorName = sanitizeText(body.senderName, 80) || sessionWorker.name || auth.operator;
 
@@ -1011,9 +1071,16 @@ export async function POST(request: NextRequest) {
     reqItem.allocatedCentreName = targetCentre.name;
     reqItem.allocatedRole = finalRole;
     reqItem.allocatedProfileId = profId;
-    reqItem.allocatedPinPreview = pinStr;
+    delete reqItem.allocatedPinPreview;
     reqItem.reviewedAt = new Date().toISOString();
 
+    emitRegistryCommandEvent(db, {
+      action: "review_join_request",
+      actorId: sessionWorker.id,
+      legacyOrgId: reqItem.targetAccountId,
+      legacyBranchId: targetCentre.id,
+      payload: { profileId: profId, username: finalUsername, role: finalRole },
+    });
     appendAuditLog(db, {
       accountId: reqItem.targetAccountId,
       actor: actorName,
@@ -1021,7 +1088,7 @@ export async function POST(request: NextRequest) {
       action: `HQ approved & allocated @${finalUsername} to ${targetCentre.name}`,
     });
     await persistDb(db);
-    return noStoreJson({ ok: true, status: "approved", profileId: profId });
+    return noStoreJson({ ok: true, status: "approved", profileId: profId, oneTimePin: pinStr });
   }
 
   // Target selection (`ALL` supported for send_message)
@@ -1756,5 +1823,226 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ ok: true, note });
   }
 
+  // -------------------------------------------------------------------------
+  // Ontology & Intelligence Layer Registry Actions (Spine v1)
+  // -------------------------------------------------------------------------
+  const spine = ensureSpineBackfill(db);
+
+  if (action === "run_agent_drafts") {
+    const proposals = generateAgentDraftProposals(db);
+    await persistDb(db);
+    return noStoreJson({ ok: true, proposals });
+  }
+
+  if (action === "approve_proposal" || action === "reject_proposal" || action === "revert_proposal") {
+    const proposalId = sanitizeText(body.proposalId, 60);
+    const prop = spine.proposals.find((p) => p.id === proposalId);
+    if (!prop) {
+      return noStoreJson({ error: "Proposal not found." }, { status: 404 });
+    }
+    if (action === "approve_proposal") {
+      if (prop.status !== "proposed") {
+        return noStoreJson({ error: "Proposal is already resolved." }, { status: 400 });
+      }
+      prop.status = "executed";
+      emitRegistryCommandEvent(db, {
+        action,
+        actorId: sessionWorker.id,
+        legacyOrgId: prop.orgId,
+        legacyBranchId: prop.branchId,
+        payload: { proposalId: prop.id, tool: prop.tool, tzs: prop.impact.tzs },
+      });
+    } else if (action === "reject_proposal") {
+      prop.status = "rejected";
+      emitRegistryCommandEvent(db, {
+        action,
+        actorId: sessionWorker.id,
+        legacyOrgId: prop.orgId,
+        payload: { proposalId: prop.id },
+      });
+    } else {
+      if (prop.reversibility === "irreversible") {
+        return noStoreJson({ error: "Irreversible proposals cannot be reverted." }, { status: 400 });
+      }
+      prop.status = "reverted";
+      emitRegistryCommandEvent(db, {
+        action,
+        actorId: sessionWorker.id,
+        legacyOrgId: prop.orgId,
+        payload: { proposalId: prop.id },
+      });
+    }
+    await persistDb(db);
+    return noStoreJson({ ok: true, proposal: prop });
+  }
+
+  if (action === "set_autonomy_mode") {
+    const kind = sanitizeText(body.kind, 40);
+    const mode = sanitizeText(body.mode, 20);
+    if (mode !== "off" && mode !== "suggest" && mode !== "auto_undo" && mode !== "auto") {
+      return noStoreJson({ error: "Invalid autonomy mode." }, { status: 400 });
+    }
+    if ((kind === "billing_grace" || kind === "recall_quarantine") && (mode === "auto" || mode === "auto_undo")) {
+      return noStoreJson(
+        { error: "Financial locks and clinical recalls require a human gate." },
+        { status: 403 }
+      );
+    }
+    spine.autonomyConfig[kind] = mode;
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      payload: { kind, mode },
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, autonomyConfig: spine.autonomyConfig });
+  }
+
+  if (action === "issue_recall") {
+    const regulatorRef = sanitizeText(body.regulatorRef, 60) || `TMDA-${Date.now().toString(36).toUpperCase()}`;
+    const innName = sanitizeText(body.innName, 100);
+    const batchNumber = sanitizeText(body.batchNumber, 60) || "AUTO";
+    if (innName.length < 3) {
+      return noStoreJson({ error: "INN or product name is required." }, { status: 400 });
+    }
+    const recall = issueAndTraceRecall(db, { regulatorRef, innName, batchNumber });
+    await persistDb(db);
+    return noStoreJson({ ok: true, recall });
+  }
+
+  if (action === "confirm_recall_quarantine") {
+    const recallId = sanitizeText(body.recallId, 60);
+    const branchId = sanitizeText(body.branchId, 80);
+    const recall = spine.recalls.find((r) => r.id === recallId);
+    if (!recall) {
+      return noStoreJson({ error: "Recall record not found." }, { status: 404 });
+    }
+    const targetBranch = recall.affectedBranches.find((b) => b.branchId === branchId);
+    if (!targetBranch) {
+      return noStoreJson({ error: "Affected branch not found in recall." }, { status: 404 });
+    }
+    targetBranch.quarantinedConfirmed = true;
+    for (const bat of db.batches ?? []) {
+      if (
+        bat.centreId === branchId &&
+        (recall.batchNumber === "ALL-LOTS" || bat.batchNumber.toLowerCase() === recall.batchNumber.toLowerCase())
+      ) {
+        bat.quarantined = true;
+      }
+    }
+    if (recall.affectedBranches.every((b) => b.quarantinedConfirmed)) {
+      recall.state = "quarantined";
+    }
+    appendSpineEvent(db, {
+      legacyOrgId: db.centres.find((c) => c.id === branchId)?.accountId || db.accounts[0]?.id || "hq_org",
+      legacyBranchId: branchId,
+      actorId: sessionWorker.id,
+      actorKind: "hq",
+      type: "recall.quarantine_confirmed",
+      idempotencyKey: `recall:q:${recall.id}:${branchId}`,
+      payload: { recallId: recall.id, branchId },
+      piiClass: "none",
+      source: "hq",
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, recall });
+  }
+
+  if (action === "approve_product_alias") {
+    const aliasId = sanitizeText(body.aliasId, 60);
+    const alias = spine.productAliases.find((a) => a.id === aliasId);
+    if (!alias) {
+      return noStoreJson({ error: "Product alias not found." }, { status: 404 });
+    }
+    alias.status = "reviewed";
+    alias.confidence = 1.0;
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      legacyOrgId: alias.orgId,
+      payload: { aliasId: alias.id, masterId: alias.masterId },
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, alias });
+  }
+
+  if (action === "release_privacy_aggregate") {
+    const recipient = sanitizeText(body.recipient, 100);
+    const project = sanitizeText(body.project, 120);
+    const region = sanitizeText(body.region, 60) || "ALL";
+    const epsilon = Number(body.epsilon ?? 0.5);
+    if (recipient.length < 2 || project.length < 2) {
+      return noStoreJson({ error: "Recipient and project name required." }, { status: 400 });
+    }
+    const release = executePrivacyGatewayQuery(db, { recipient, project, region, epsilon });
+    await persistDb(db);
+    return noStoreJson({ ok: true, release });
+  }
+
+  if (action === "create_investigation_case") {
+    const title = sanitizeText(body.title, 160);
+    if (title.length < 4) {
+      return noStoreJson({ error: "Case title is too short." }, { status: 400 });
+    }
+    const category:
+      | "counterfeit_diversion"
+      | "controlled_drug"
+      | "till_anomaly"
+      | "escrow_dispute" =
+      body.category === "controlled_drug" ||
+      body.category === "counterfeit_diversion" ||
+      body.category === "escrow_dispute"
+        ? body.category
+        : "till_anomaly";
+    const newCase = {
+      id: newId("case"),
+      title,
+      category,
+      status: "investigating" as const,
+      severity: "high" as const,
+      pinnedEntities: db.accounts.slice(0, 1).map((a) => a.orgName),
+      citedEventIds: spine.events.slice(-2).map((e) => e.eventId),
+      notes: [],
+      createdAt: new Date().toISOString(),
+    };
+    spine.cases.unshift(newCase);
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      payload: { caseId: newCase.id, category },
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, caseRecord: newCase });
+  }
+
+  if (action === "add_case_note") {
+    const caseId = sanitizeText(body.caseId, 60);
+    const noteBody = sanitizeText(body.body, 800);
+    const targetCase = spine.cases.find((c) => c.id === caseId);
+    if (!targetCase || noteBody.length < 2) {
+      return noStoreJson({ error: "Case not found or note too short." }, { status: 400 });
+    }
+    targetCase.notes.push({
+      id: newId("cnote"),
+      author: sessionWorker.name,
+      body: noteBody,
+      createdAt: new Date().toISOString(),
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, caseRecord: targetCase });
+  }
+
+  if (action === "run_red_team_drill") {
+    const report = runRedTeamSyntheticDrill(db);
+    await persistDb(db);
+    return noStoreJson({ ok: true, report });
+  }
+
+  emitRegistryCommandEvent(db, {
+    action: action || "unknown",
+    actorId: sessionWorker.id,
+    payload: {},
+    failedReason: "Unsupported ops dispatch action",
+  });
   return noStoreJson({ error: "Unsupported ops dispatch action." }, { status: 400 });
 }

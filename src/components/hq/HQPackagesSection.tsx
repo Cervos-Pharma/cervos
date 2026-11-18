@@ -391,6 +391,41 @@ export default function HQPackagesSection({
                 className={`w-full h-9 px-3 rounded-xl border font-mono ${inputCls}`}
               />
             </label>
+
+            {draft.audience === "supplier" && (
+              <>
+                <label className="space-y-1">
+                  <span className={`font-semibold ${mutedCls}`}>Max Suppliers</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={draft.maxSuppliers ?? ""}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        maxSuppliers: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${inputCls}`}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className={`font-semibold ${mutedCls}`}>Max Connected Pharmacies</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={draft.maxConnectedPharmacies ?? ""}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        maxConnectedPharmacies: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className={`w-full h-9 px-3 rounded-xl border font-mono ${inputCls}`}
+                  />
+                </label>
+              </>
+            )}
           </div>
 
           <label className="block space-y-1 text-xs">
