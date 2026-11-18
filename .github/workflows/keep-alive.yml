@@ -27,3 +27,20 @@ jobs:
           echo "$body" | grep -q '"ok":true' || { echo "Health reported degraded"; exit 1; }
           echo "Checking custom domain https://cervos.online/api/health (non-blocking info)"
           curl -sS -m 10 https://cervos.online/api/health || true
+
+      - name: Trigger Daily 18:00+ EAT Owner Summary SMS & Digest
+        env:
+          HQ_SECRET: ${{ secrets.HQ_SECRET }}
+        run: |
+          if [ -z "$HQ_SECRET" ]; then
+            echo "HQ_SECRET secret not configured; skipping daily-summary ping."
+            exit 0
+          fi
+          UTC_HOUR=$(date -u +%H)
+          if [ "$UTC_HOUR" -ge 15 ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Triggering /api/cron/daily-summary at UTC hour $UTC_HOUR..."
+            curl -sS -m 20 -H "x-ops-key: $HQ_SECRET" https://cervos-pharma.vercel.app/api/cron/daily-summary || true
+            curl -sS -m 20 -H "x-ops-key: $HQ_SECRET" https://cervos.online/api/cron/daily-summary || true
+          else
+            echo "Skipping evening summary SMS before 15:00 UTC (18:00 EAT); current UTC hour=$UTC_HOUR"
+          fi

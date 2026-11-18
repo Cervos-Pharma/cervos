@@ -283,6 +283,8 @@ export interface HqFleetCentre {
   lat?: number;
   lng?: number;
   isPrimary: boolean;
+  status?: "active" | "paused" | "archived";
+  excludedFromRollup?: boolean;
   staffCount: number;
   createdAt: string;
 }
@@ -330,6 +332,12 @@ export interface HqFleetAccount {
     licenseNumber: string;
     fileName: string;
     uploadedAt: string;
+    fileDataUrl?: string;
+    mimeType?: string;
+    status?: "pending" | "verified" | "rejected";
+    reviewedBy?: string;
+    reviewedAt?: string;
+    reviewNote?: string;
   }>;
   createdAt: string;
   trustGeneration: number;

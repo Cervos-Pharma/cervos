@@ -22,6 +22,7 @@ import {
   getWorkspaceDb,
   isAccountAccessLocked,
   newId,
+  sanitizeCertificateProof,
   saveWorkspaceDb,
   warmDbFromSupabase,
 } from "@/lib/workspace/store";
@@ -120,6 +121,7 @@ export async function POST(request: NextRequest) {
   const docType = sanitizeText(body.docType, 100) || "Operating License";
 
   account.fullName = fullName;
+  account.ownerPhone = phone;
   account.lang = lang;
   account.region = region;
   account.securityQuestion = securityQuestion;
@@ -142,6 +144,7 @@ export async function POST(request: NextRequest) {
   account.customization = sanitizeBrandCustomization(rawCust, account.customization ?? {});
 
   if (!skipCompliance && licenseNumber.length >= 3 && certificateFileName.length >= 3) {
+    const proof = sanitizeCertificateProof(body.certificateDataUrl, body.certificateMimeType);
     account.certificates = [
       {
         id: newId("cert"),
@@ -149,6 +152,8 @@ export async function POST(request: NextRequest) {
         licenseNumber,
         fileName: certificateFileName,
         uploadedAt: new Date().toISOString(),
+        ...proof,
+        status: "verified",
       },
     ];
     account.verificationStatus = "verified";

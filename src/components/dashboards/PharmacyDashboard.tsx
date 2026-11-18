@@ -275,9 +275,29 @@ export interface PharmacyDashboardProps {
     };
   };
   activeCentre:
-  | { id: string; name: string; region: string; address: string; lat?: number; lng?: number }
+  | {
+      id: string;
+      name: string;
+      region: string;
+      address: string;
+      lat?: number;
+      lng?: number;
+      isPrimary?: boolean;
+      status?: "active" | "paused" | "archived";
+      excludedFromRollup?: boolean;
+    }
   | undefined;
-  centres: Array<{ id: string; name: string; region: string; address: string; lat?: number; lng?: number }>;
+  centres: Array<{
+    id: string;
+    name: string;
+    region: string;
+    address: string;
+    lat?: number;
+    lng?: number;
+    isPrimary?: boolean;
+    status?: "active" | "paused" | "archived";
+    excludedFromRollup?: boolean;
+  }>;
   profiles: DashboardStaffProfile[];
   filteredLogs: PharmacyDashboardAuditEntry[];
   batches: DashboardBatch[];
@@ -885,6 +905,25 @@ export default function PharmacyDashboard({
         setBranchAddrInput("");
         setBranchPhoneInput("");
         setBranchAssignIds([]);
+        await onRefreshState();
+      }
+    } finally {
+      setBranchBusy(false);
+    }
+  };
+
+  const handleManageCentre = async (
+    centreId: string,
+    op: "pause" | "resume" | "archive" | "restore" | "toggle_exclude" | "delete"
+  ) => {
+    setBranchBusy(true);
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "manage_centre", centreId, op }),
+      });
+      if (res.ok) {
         await onRefreshState();
       }
     } finally {
@@ -4525,63 +4564,143 @@ export default function PharmacyDashboard({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {(orgBranchComparison.length > 0 ? orgBranchComparison : branchComparison(sales, batches, centres)).map((b) => {
-                    const ctr = centres.find((c) => c.id === b.centreId);
-                    const staffCount = profiles.filter((p) => p.centreId === b.centreId).length;
-                    return (
-                      <div
-                        key={b.centreId}
-                        className={`rounded-[24px] border p-5 flex flex-col justify-between gap-4 hover:-translate-y-0.5 transition-all ${cardCls}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="text-base font-bold">{b.name}</div>
-                            <div className={`text-xs mt-0.5 ${mutedCls}`}>
-                              {ctr?.region || account.region} &middot; {staffCount} {isSw ? "wahudumu" : "staff"}
+                  {(() => {
+                    const compList =
+                      orgBranchComparison.length > 0
+                        ? orgBranchComparison
+                        : branchComparison(sales, batches, centres);
+                    return centres.map((ctr) => {
+                      const b = compList.find((x) => x.centreId === ctr.id) ?? {
+                        centreId: ctr.id,
+                        name: ctr.name,
+                        revenue: 0,
+                        profit: 0,
+                        tx: 0,
+                        marginPct: 0,
+                        stockAtCost: 0,
+                        turnover: 0,
+                      };
+                      const staffCount = profiles.filter((p) => p.centreId === ctr.id).length;
+                      const isPaused = ctr.status === "paused";
+                      const isArchived = ctr.status === "archived";
+                      const isExcluded = Boolean(ctr.excludedFromRollup);
+                      return (
+                        <div
+                          key={ctr.id}
+                          className={`rounded-[24px] border p-5 flex flex-col justify-between gap-4 hover:-translate-y-0.5 transition-all ${cardCls} ${
+                            isArchived ? "opacity-70" : ""
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="text-base font-bold flex flex-wrap items-center gap-1.5">
+                                <span>{ctr.name}</span>
+                                {isPaused && (
+                                  <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[9px] uppercase">
+                                    {isSw ? "Imesitishwa" : "Paused"}
+                                  </span>
+                                )}
+                                {isArchived && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-500 text-[9px] uppercase">
+                                    {isSw ? "Kumbukumbu" : "Archived"}
+                                  </span>
+                                )}
+                                {isExcluded && (
+                                  <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-300 text-[9px] uppercase">
+                                    {isSw ? "Imetengwa" : "Excluded"}
+                                  </span>
+                                )}
+                              </div>
+                              <div className={`text-xs mt-0.5 ${mutedCls}`}>
+                                {ctr.region || account.region} &middot; {staffCount} {isSw ? "wahudumu" : "staff"}
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm font-bold tabular-nums">{formatTzs(b.revenue)}</div>
+                              <div className="text-[10px] text-emerald-500 font-semibold">{b.turnover}x turn</div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-sm font-bold tabular-nums">{formatTzs(b.revenue)}</div>
-                            <div className="text-[10px] text-emerald-500 font-semibold">{b.turnover}x turn</div>
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-2.5 text-xs">
-                          <div className={`p-2.5 rounded-xl border ${chipCls}`}>
-                            <div className={`text-[10px] ${mutedCls}`}>{isSw ? "Faida" : "Margin"}</div>
-                            <div className="font-bold text-emerald-500 mt-0.5">{b.marginPct}%</div>
+                          <div className="grid grid-cols-2 gap-2.5 text-xs">
+                            <div className={`p-2.5 rounded-xl border ${chipCls}`}>
+                              <div className={`text-[10px] ${mutedCls}`}>{isSw ? "Faida" : "Margin"}</div>
+                              <div className="font-bold text-emerald-500 mt-0.5">{b.marginPct}%</div>
+                            </div>
+                            <div className={`p-2.5 rounded-xl border ${chipCls}`}>
+                              <div className={`text-[10px] ${mutedCls}`}>{isSw ? "Stoo" : "Stock"}</div>
+                              <div className="font-bold tabular-nums mt-0.5">{formatTzs(b.stockAtCost)}</div>
+                            </div>
                           </div>
-                          <div className={`p-2.5 rounded-xl border ${chipCls}`}>
-                            <div className={`text-[10px] ${mutedCls}`}>{isSw ? "Stoo" : "Stock"}</div>
-                            <div className="font-bold tabular-nums mt-0.5">{formatTzs(b.stockAtCost)}</div>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (onSwitchCentre && b.centreId !== activeCentre?.id) {
-                                await onSwitchCentre(b.centreId);
-                              }
-                              onSetOrgScope?.("branch");
-                            }}
-                            className="flex-1 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer min-h-[44px]"
-                            style={{ backgroundColor: accent }}
-                          >
-                            {isSw ? `Ingia ${b.name}` : `Open ${b.name}`} &rarr;
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => openReport("people")}
-                            className={`px-3.5 py-2.5 rounded-full border text-xs font-semibold cursor-pointer min-h-[44px] ${chipCls}`}
-                          >
-                            {isSw ? "Ripoti" : "Reports"}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (onSwitchCentre && ctr.id !== activeCentre?.id) {
+                                  await onSwitchCentre(ctr.id);
+                                }
+                                onSetOrgScope?.("branch");
+                              }}
+                              className="flex-1 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer min-h-[44px]"
+                              style={{ backgroundColor: accent }}
+                            >
+                              {isSw ? `Ingia ${ctr.name}` : `Open ${ctr.name}`} &rarr;
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openReport("people")}
+                              className={`px-3.5 py-2.5 rounded-full border text-xs font-semibold cursor-pointer min-h-[44px] ${chipCls}`}
+                            >
+                              {isSw ? "Ripoti" : "Reports"}
+                            </button>
+                          </div>
+
+                          {canManageAdmin && (
+                            <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-500/15">
+                              <button
+                                type="button"
+                                disabled={branchBusy}
+                                onClick={() =>
+                                  void handleManageCentre(ctr.id, isPaused || isArchived ? "resume" : "pause")
+                                }
+                                className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                              >
+                                {isPaused || isArchived ? (isSw ? "Endelea" : "Resume") : (isSw ? "Sitisha" : "Pause")}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={branchBusy}
+                                onClick={() => void handleManageCentre(ctr.id, "toggle_exclude")}
+                                className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                              >
+                                {isExcluded ? (isSw ? "Jumuisha" : "Include") : (isSw ? "Tenga" : "Exclude")}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={branchBusy}
+                                onClick={() =>
+                                  void handleManageCentre(ctr.id, isArchived ? "restore" : "archive")
+                                }
+                                className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                              >
+                                {isArchived ? (isSw ? "Rejesha" : "Restore") : (isSw ? "Hifadhi" : "Archive")}
+                              </button>
+                              {!ctr.isPrimary && centres.length > 1 && (
+                                <button
+                                  type="button"
+                                  disabled={branchBusy}
+                                  onClick={() => void handleManageCentre(ctr.id, "delete")}
+                                  className="px-2.5 py-1 rounded-full border border-rose-500/40 text-rose-500 text-[10px] font-semibold cursor-pointer"
+                                >
+                                  {isSw ? "Futa" : "Delete"}
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
 
                   {/* + Add New Branch Card Slot */}
                   <button
@@ -5328,28 +5447,92 @@ export default function PharmacyDashboard({
                     <div className="space-y-2">
                       {centres.map((c) => {
                         const isActive = c.id === activeCentre?.id;
+                        const isPaused = c.status === "paused";
+                        const isArchived = c.status === "archived";
+                        const isExcluded = Boolean(c.excludedFromRollup);
                         return (
-                          <div key={c.id} className={`p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
-                            <div>
-                              <div className="font-semibold">{c.name}</div>
-                              <div className={`text-[11px] ${mutedCls}`}>
-                                {c.address} &middot; {c.region}
+                          <div key={c.id} className={`p-3.5 rounded-2xl border text-xs space-y-2 ${chipCls}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div>
+                                <div className="font-semibold flex flex-wrap items-center gap-1.5">
+                                  <span>{c.name}</span>
+                                  {isPaused && (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[9px] uppercase">
+                                      Paused
+                                    </span>
+                                  )}
+                                  {isArchived && (
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-500 text-[9px] uppercase">
+                                      Archived
+                                    </span>
+                                  )}
+                                  {isExcluded && (
+                                    <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-300 text-[9px] uppercase">
+                                      Excluded
+                                    </span>
+                                  )}
+                                </div>
+                                <div className={`text-[11px] ${mutedCls}`}>
+                                  {c.address} &middot; {c.region}
+                                </div>
                               </div>
+                              {isActive ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-[#E2F575] text-[#111317] text-[10px] font-bold">
+                                  Synced
+                                </span>
+                              ) : canManageAdmin && onSwitchCentre ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onSwitchCentre(c.id)}
+                                  className="px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer hover:opacity-80"
+                                  style={{ borderColor: accent, color: accent }}
+                                >
+                                  Inspect &rarr;
+                                </button>
+                              ) : null}
                             </div>
-                            {isActive ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-[#E2F575] text-[#111317] text-[10px] font-bold">
-                                Synced
-                              </span>
-                            ) : canManageAdmin && onSwitchCentre ? (
-                              <button
-                                type="button"
-                                onClick={() => onSwitchCentre(c.id)}
-                                className="px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer hover:opacity-80"
-                                style={{ borderColor: accent, color: accent }}
-                              >
-                                Inspect &rarr;
-                              </button>
-                            ) : null}
+                            {canManageAdmin && (
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                <button
+                                  type="button"
+                                  disabled={branchBusy}
+                                  onClick={() =>
+                                    void handleManageCentre(c.id, isPaused || isArchived ? "resume" : "pause")
+                                  }
+                                  className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold cursor-pointer ${cardCls}`}
+                                >
+                                  {isPaused || isArchived ? "Resume" : "Pause"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={branchBusy}
+                                  onClick={() => void handleManageCentre(c.id, "toggle_exclude")}
+                                  className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold cursor-pointer ${cardCls}`}
+                                >
+                                  {isExcluded ? "Include" : "Exclude"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={branchBusy}
+                                  onClick={() =>
+                                    void handleManageCentre(c.id, isArchived ? "restore" : "archive")
+                                  }
+                                  className={`px-2 py-0.5 rounded-full border text-[10px] font-semibold cursor-pointer ${cardCls}`}
+                                >
+                                  {isArchived ? "Restore" : "Archive"}
+                                </button>
+                                {!c.isPrimary && centres.length > 1 && (
+                                  <button
+                                    type="button"
+                                    disabled={branchBusy}
+                                    onClick={() => void handleManageCentre(c.id, "delete")}
+                                    className="px-2 py-0.5 rounded-full border border-rose-500/40 text-rose-500 text-[10px] font-semibold cursor-pointer"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

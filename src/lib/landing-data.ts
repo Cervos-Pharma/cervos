@@ -25,7 +25,7 @@ export function getDownloadBuilds(isSw: boolean) {
         ? "Programu kamili ya Android yenye skana ya kamera, stoo ya FEFO, risiti, vibali na sync ya moja kwa moja."
         : "Full native Android app with camera barcode/QR scanner, FEFO stockroom, receipts, permits & offline sync.",
       cta: isSw ? "Pakua Android APK" : "Download Android APK",
-      href: "https://github.com/Cervos-Pharma/cervos/releases/latest/download/Cervos-Pharma.apk",
+      href: "https://github.com/Cervos-Pharma/cervos/releases/download/installers/Cervos-Pharma.apk",
       featured: true,
     },
     {
@@ -36,7 +36,7 @@ export function getDownloadBuilds(isSw: boolean) {
         ? "Kisakinishi cha Windows (NSIS .exe) kwa kaunta ya kasi hata mtandao ukikatika na kutoa risiti papo hapo."
         : "Native Windows NSIS installer (.exe) for offline counter checkout, thermal printing & multi-branch sync.",
       cta: isSw ? "Pakua Kwa Windows (.exe)" : "Download Windows Installer",
-      href: "https://github.com/Cervos-Pharma/cervos/releases/latest/download/Cervos-POS-Setup.exe",
+      href: "https://github.com/Cervos-Pharma/cervos/releases/download/installers/Cervos-POS-Setup.exe",
       featured: true,
     },
     {

@@ -99,6 +99,8 @@ export default function WorkspaceOnboardingPage() {
   const [docType, setDocType] = useState("Pharmacy Operating Permit");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [certificateFileName, setCertificateFileName] = useState("");
+  const [certificateDataUrl, setCertificateDataUrl] = useState("");
+  const [certificateMimeType, setCertificateMimeType] = useState("");
   const [mpesaPaybill, setMpesaPaybill] = useState("");
   const [tigoLipaNumber, setTigoLipaNumber] = useState("");
   const [bankName, setBankName] = useState("");
@@ -257,6 +259,8 @@ export default function WorkspaceOnboardingPage() {
           docType,
           licenseNumber,
           certificateFileName,
+          certificateDataUrl: certificateDataUrl || undefined,
+          certificateMimeType: certificateMimeType || undefined,
           customization: {
             brandLogoUrl: brandLogoUrl || undefined,
             brandAccent,
@@ -1116,6 +1120,10 @@ export default function WorkspaceOnboardingPage() {
                     <CertificateDropzone
                       fileName={certificateFileName}
                       onFileSelect={setCertificateFileName}
+                      onFileDataSelect={(dataUrl, mime) => {
+                        setCertificateDataUrl(dataUrl);
+                        setCertificateMimeType(mime);
+                      }}
                       isDark={isDark}
                       isSw={isSw}
                     />

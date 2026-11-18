@@ -6,10 +6,13 @@ import { IconCheck } from "@/components/LandingIcons";
 interface CertificateDropzoneProps {
   fileName: string;
   onFileSelect: (fileName: string) => void;
+  onFileDataSelect?: (dataUrl: string, mimeType: string) => void;
   isDark?: boolean;
   isSw?: boolean;
   accept?: string;
 }
+
+const MAX_INLINE_PROOF_BYTES = 2 * 1024 * 1024;
 
 /**
  * Refined drag-and-drop upload zone for pharmacy/supplier regulatory certificates.
@@ -18,6 +21,7 @@ interface CertificateDropzoneProps {
 export default function CertificateDropzone({
   fileName,
   onFileSelect,
+  onFileDataSelect,
   isDark = false,
   isSw = false,
   accept = ".pdf,.jpg,.jpeg,.png",
@@ -31,6 +35,19 @@ export default function CertificateDropzone({
     onFileSelect(file.name);
     const kb = file.size / 1024;
     setFileSizeLabel(kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`);
+    if (onFileDataSelect) {
+      if (file.size <= MAX_INLINE_PROOF_BYTES) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            onFileDataSelect(reader.result, file.type || "application/octet-stream");
+          }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        onFileDataSelect("", file.type || "");
+      }
+    }
   };
 
   return (
@@ -80,6 +97,7 @@ export default function CertificateDropzone({
               type="button"
               onClick={() => {
                 onFileSelect("");
+                onFileDataSelect?.("", "");
                 setFileSizeLabel("");
                 if (inputRef.current) inputRef.current.value = "";
               }}

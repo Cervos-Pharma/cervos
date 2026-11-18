@@ -693,6 +693,7 @@ export default function HQConsoleClient({
 
           {data && activeTab === "cases" && (
             <HQCaseAndPrivacySection
+              accounts={data.accounts}
               recalls={data.recalls ?? []}
               cases={data.cases ?? []}
               privacyReleases={data.privacyReleases ?? []}

@@ -36,7 +36,16 @@ interface SettingsState {
       themePref?: "light" | "dark" | "system";
     };
   };
-  centres: Array<{ id: string; name: string; region: string; address: string; phone: string }>;
+  centres: Array<{
+    id: string;
+    name: string;
+    region: string;
+    address: string;
+    phone: string;
+    isPrimary?: boolean;
+    status?: "active" | "paused" | "archived";
+    excludedFromRollup?: boolean;
+  }>;
   activeCentreId?: string | null;
   profiles: Array<{ id: string; centreId: string; displayName: string; role: string; isMasterAdmin: boolean }>;
   passkeys: Array<{ credentialId: string; label: string; createdAt: string }>;
@@ -101,6 +110,8 @@ function WorkspaceSettingsInner() {
   const [docType, setDocType] = useState("Pharmacy Operating Permit");
   const [licenseNum, setLicenseNum] = useState("");
   const [certFileName, setCertFileName] = useState("");
+  const [certDataUrl, setCertDataUrl] = useState("");
+  const [certMimeType, setCertMimeType] = useState("");
 
   const [brandAccent, setBrandAccent] = useState("#1039B9");
   const [orgFontScale, setOrgFontScale] = useState<"compact" | "standard" | "large">("standard");
@@ -259,12 +270,16 @@ function WorkspaceSettingsInner() {
           docType,
           licenseNumber: licenseNum,
           fileName: certFileName,
+          fileDataUrl: certDataUrl || undefined,
+          mimeType: certMimeType || undefined,
         },
         "Certificates saved. Network access is now unlocked."
       )
     ) {
       setLicenseNum("");
       setCertFileName("");
+      setCertDataUrl("");
+      setCertMimeType("");
     }
   };
 
@@ -918,6 +933,10 @@ function WorkspaceSettingsInner() {
                 <CertificateDropzone
                   fileName={certFileName}
                   onFileSelect={setCertFileName}
+                  onFileDataSelect={(dataUrl, mime) => {
+                    setCertDataUrl(dataUrl);
+                    setCertMimeType(mime);
+                  }}
                   isDark={isDark}
                   isSw={isSw}
                 />
@@ -975,19 +994,126 @@ function WorkspaceSettingsInner() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {state.centres
                   .filter((c) => matchesSearch(searchQuery, c.name, c.region, c.address, c.phone))
-                  .map((c) => (
-                  <div
-                    key={c.id}
-                    className={`p-3.5 rounded-2xl border text-xs ${
-                      isDark ? "bg-slate-900/70 border-slate-800" : "bg-[#F8FAFC] border-[#E2E8F0]"
-                    }`}
-                  >
-                    <div className="font-bold">{c.name}</div>
-                    <div className={`mt-0.5 ${mutedCls}`}>
-                      {c.address} &middot; {c.region}
-                    </div>
-                  </div>
-                ))}
+                  .map((c) => {
+                    const isPaused = c.status === "paused";
+                    const isArchived = c.status === "archived";
+                    const isExcluded = Boolean(c.excludedFromRollup);
+                    return (
+                      <div
+                        key={c.id}
+                        className={`p-3.5 rounded-2xl border text-xs space-y-2.5 ${
+                          isDark ? "bg-slate-900/70 border-slate-800" : "bg-[#F8FAFC] border-[#E2E8F0]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-bold flex flex-wrap items-center gap-1.5">
+                              <span>{c.name}</span>
+                              {c.isPrimary && (
+                                <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-[#1039B9] dark:text-sky-300 text-[9px]">
+                                  PRIMARY
+                                </span>
+                              )}
+                              {isPaused && (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[9px]">
+                                  PAUSED
+                                </span>
+                              )}
+                              {isArchived && (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-500 text-[9px]">
+                                  ARCHIVED
+                                </span>
+                              )}
+                              {isExcluded && (
+                                <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-600 dark:text-purple-300 text-[9px]">
+                                  EXCLUDED
+                                </span>
+                              )}
+                            </div>
+                            <div className={`mt-0.5 ${mutedCls}`}>
+                              {c.address} &middot; {c.region}
+                            </div>
+                          </div>
+                        </div>
+                        {isManagerRole && (
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              disabled={savingAction === "manage_centre"}
+                              onClick={() =>
+                                postAction(
+                                  {
+                                    action: "manage_centre",
+                                    centreId: c.id,
+                                    op: isPaused || isArchived ? "resume" : "pause",
+                                  },
+                                  isPaused || isArchived ? `Resumed branch ${c.name}.` : `Paused branch ${c.name}.`
+                                )
+                              }
+                              className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${
+                                isPaused || isArchived
+                                  ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-300"
+                                  : "border-amber-500/40 text-amber-600 dark:text-amber-300"
+                              }`}
+                            >
+                              {isPaused || isArchived ? "Resume" : "Pause"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={savingAction === "manage_centre"}
+                              onClick={() =>
+                                postAction(
+                                  { action: "manage_centre", centreId: c.id, op: "toggle_exclude" },
+                                  isExcluded
+                                    ? `Included ${c.name} in rollups & daily digest.`
+                                    : `Excluded ${c.name} from rollups & daily digest.`
+                                )
+                              }
+                              className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${
+                                isDark ? "border-slate-700 text-slate-300" : "border-[#E2E8F0] text-slate-700"
+                              }`}
+                            >
+                              {isExcluded ? "Include" : "Exclude"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={savingAction === "manage_centre"}
+                              onClick={() =>
+                                postAction(
+                                  {
+                                    action: "manage_centre",
+                                    centreId: c.id,
+                                    op: isArchived ? "restore" : "archive",
+                                  },
+                                  isArchived ? `Restored branch ${c.name}.` : `Archived branch ${c.name}.`
+                                )
+                              }
+                              className={`px-2.5 py-1 rounded-full border text-[11px] font-semibold cursor-pointer ${
+                                isDark ? "border-slate-700 text-slate-300" : "border-[#E2E8F0] text-slate-700"
+                              }`}
+                            >
+                              {isArchived ? "Restore" : "Archive"}
+                            </button>
+                            {!c.isPrimary && state.centres.length > 1 && (
+                              <button
+                                type="button"
+                                disabled={savingAction === "manage_centre"}
+                                onClick={() =>
+                                  postAction(
+                                    { action: "manage_centre", centreId: c.id, op: "delete" },
+                                    `Deleted branch ${c.name}.`
+                                  )
+                                }
+                                className="px-2.5 py-1 rounded-full border border-rose-500/40 text-rose-500 text-[11px] font-semibold cursor-pointer"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
               </div>
               <form onSubmit={handleAddCentre} className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <input

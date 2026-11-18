@@ -153,6 +153,23 @@ export default function HQMessageComposer({
           </div>
 
           <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void onRunAction(
+                  {
+                    action: "trigger_daily_summary",
+                    accountId: targetAccountId,
+                    force: true,
+                  },
+                  "Dispatched Nama daily owner summary SMS & in-app digest"
+                )
+              }
+              className="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+            >
+              Send Daily Owner Summary Now (Nama)
+            </button>
             {TEMPLATES.map((tpl) => (
               <button
                 key={tpl.label}

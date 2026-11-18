@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/mobile/**"
       - "packages/core/**"
+      - ".github/workflows/build-mobile.yml"
   workflow_dispatch: {}
 
 jobs:
@@ -33,7 +34,7 @@ jobs:
       - name: Type-check mobile app
         run: npx tsc --noEmit
 
-      - name: Build Android APK via EAS (preview profile)
+      - name: Build Android APK via EAS (production profile)
         id: eas_build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -44,7 +45,7 @@ jobs:
           echo "Starting EAS cloud build for Android APK..."
           eas build \
             --platform android \
-            --profile preview \
+            --profile production \
             --non-interactive \
             --wait \
             --json > eas_output.json 2> eas_stderr.log || {
@@ -89,7 +90,7 @@ jobs:
 
   release-apk:
     needs: build-android-apk
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -64,9 +64,9 @@ export default function BranchMap({ branches }: Props) {
 
         const map = L.map(el, { zoomControl: true }).setView([-6.369, 34.8888], 6);
         const tileLayer = L.tileLayer(
-          "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+          "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
           {
-            attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+            attribution: "&copy; OpenStreetMap contributors",
             maxZoom: 19,
           }
         );

@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { COMMERCIAL_PLAN_CATALOG, formatTzs } from "@cervos/core";
 import { matchesSearch } from "@/lib/search";
 import { hqSurfaceTokens } from "./hqSurface";
+import ComplianceProofViewerModal from "./ComplianceProofViewerModal";
 import type { HqAuditEvent, HqFleetAccount, HqPackageRecord } from "./types";
 
 interface HQFleetSectionProps {
@@ -66,6 +67,11 @@ export default function HQFleetSection({
 
   // Inline PIN reset draft per operator
   const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
+  const [verifyNote, setVerifyNote] = useState("");
+  const [inspectedProof, setInspectedProof] = useState<{
+    org: HqFleetAccount;
+    cert: HqFleetAccount["certificates"][number] | null;
+  } | null>(null);
 
   const t = hqSurfaceTokens(isDark);
   const cardCls = t.panelCls;
@@ -470,31 +476,129 @@ export default function HQFleetSection({
                 </div>
 
                 <div className={`rounded-xl border p-4 space-y-3 ${chipCls}`}>
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-bold uppercase tracking-wider">Subscription &amp; Verification</span>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() =>
-                        onRunAction(
-                          {
-                            action: "toggle_network_verify",
-                            accountId: selectedOrg.id,
-                            verified: selectedOrg.verificationStatus !== "verified",
-                          },
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
                           selectedOrg.verificationStatus === "verified"
-                            ? `Paused verification for ${selectedOrg.orgName}`
-                            : `Verified permits for ${selectedOrg.orgName}`
-                        )
-                      }
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${
-                        selectedOrg.verificationStatus === "verified"
-                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                          : "bg-slate-500/15 text-slate-600 dark:text-slate-300"
-                      }`}
-                    >
-                      {selectedOrg.verificationStatus === "verified" ? "Verified (Click to Pause)" : "Unverified (Verify Now)"}
-                    </button>
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                        }`}
+                      >
+                        {selectedOrg.verificationStatus === "verified" ? "Verified" : "Unverified"}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          onRunAction(
+                            {
+                              action: "toggle_network_verify",
+                              accountId: selectedOrg.id,
+                              verified: true,
+                              note: verifyNote.trim() || undefined,
+                            },
+                            `Marked ${selectedOrg.orgName} verified`
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        Mark Verified
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          onRunAction(
+                            {
+                              action: "toggle_network_verify",
+                              accountId: selectedOrg.id,
+                              verified: false,
+                              note: verifyNote.trim() || undefined,
+                            },
+                            `Marked ${selectedOrg.orgName} unverified`
+                          )
+                        }
+                        className="px-2.5 py-1 rounded-lg border border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        Mark Unverified
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Uploaded Compliance Proofs & Permit Documents */}
+                  <div className={`rounded-lg border p-3 space-y-2 ${cardCls}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider">
+                        Uploaded Compliance Proofs ({selectedOrg.certificates.length})
+                      </span>
+                      {selectedOrg.certificates.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setInspectedProof({ org: selectedOrg, cert: null })}
+                          className="text-[11px] font-semibold text-[#1039B9] dark:text-sky-400 hover:underline cursor-pointer"
+                        >
+                          Inspect Record &rarr;
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedOrg.certificates.length === 0 ? (
+                      <div className={`text-xs ${mutedCls}`}>
+                        No operating permit or compliance proof uploaded by this organization yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {selectedOrg.certificates.map((cert) => {
+                          const certStatus =
+                            cert.status ??
+                            (selectedOrg.verificationStatus === "verified" ? "verified" : "pending");
+                          return (
+                            <div
+                              key={cert.id}
+                              className={`p-2.5 rounded-lg border flex flex-wrap items-center justify-between gap-2 text-xs ${chipCls}`}
+                            >
+                              <div className="min-w-0">
+                                <div className="font-bold flex flex-wrap items-center gap-1.5">
+                                  <span>{cert.docType}</span>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold ${
+                                      certStatus === "verified"
+                                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                        : certStatus === "rejected"
+                                          ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                                          : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                                    }`}
+                                  >
+                                    {certStatus}
+                                  </span>
+                                </div>
+                                <div className={`text-[11px] font-mono ${mutedCls}`}>
+                                  {cert.licenseNumber} &middot; {cert.fileName} &middot; {cert.uploadedAt.slice(0, 10)}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setInspectedProof({ org: selectedOrg, cert })}
+                                className="px-2.5 py-1 rounded-lg bg-[#1039B9] text-white text-[11px] font-semibold cursor-pointer shrink-0"
+                              >
+                                View / Read Proof
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <input
+                      type="text"
+                      value={verifyNote}
+                      onChange={(e) => setVerifyNote(e.target.value)}
+                      maxLength={240}
+                      placeholder="Optional compliance review note / rejection reason..."
+                      className={`w-full h-8 px-2.5 rounded-lg border text-xs ${inputCls}`}
+                    />
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -607,11 +711,26 @@ export default function HQFleetSection({
                     <div key={ctr.id} className={`rounded-xl border p-3.5 space-y-2.5 ${chipCls}`}>
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <div className="text-xs font-bold">
-                            {ctr.name}{" "}
+                          <div className="text-xs font-bold flex flex-wrap items-center gap-1.5">
+                            <span>{ctr.name}</span>
                             {ctr.isPrimary && (
-                              <span className="ml-1 px-1.5 py-0.5 rounded bg-[#1039B9]/15 text-[#1039B9] dark:text-sky-300 text-[9px]">
+                              <span className="px-1.5 py-0.5 rounded bg-[#1039B9]/15 text-[#1039B9] dark:text-sky-300 text-[9px]">
                                 PRIMARY
+                              </span>
+                            )}
+                            {ctr.status === "paused" && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[9px]">
+                                PAUSED
+                              </span>
+                            )}
+                            {ctr.status === "archived" && (
+                              <span className="px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-600 dark:text-slate-300 text-[9px]">
+                                ARCHIVED
+                              </span>
+                            )}
+                            {ctr.excludedFromRollup && (
+                              <span className="px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-700 dark:text-purple-300 text-[9px]">
+                                EXCLUDED
                               </span>
                             )}
                           </div>
@@ -649,15 +768,17 @@ export default function HQFleetSection({
                                 action: "branch_command",
                                 accountId: selectedOrg.id,
                                 centreId: ctr.id,
-                                cmd: "unlock_branch",
+                                cmd: ctr.status === "paused" || ctr.status === "archived" ? "resume_branch" : "pause_branch",
                                 reason: branchCmdReason.trim() || undefined,
                               },
-                              `Unlocked branch ${ctr.name}`
+                              ctr.status === "paused" || ctr.status === "archived"
+                                ? `Resumed branch ${ctr.name}`
+                                : `Paused branch ${ctr.name}`
                             )
                           }
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[11px] font-semibold cursor-pointer"
                         >
-                          Unlock Branch
+                          {ctr.status === "paused" || ctr.status === "archived" ? "Resume Branch" : "Pause Branch"}
                         </button>
                         <button
                           type="button"
@@ -668,16 +789,58 @@ export default function HQFleetSection({
                                 action: "branch_command",
                                 accountId: selectedOrg.id,
                                 centreId: ctr.id,
-                                cmd: "lock_branch",
-                                reason: branchCmdReason.trim() || "Locked by HQ operator",
+                                cmd: "toggle_exclude_branch",
+                                reason: branchCmdReason.trim() || undefined,
                               },
-                              `Locked branch ${ctr.name}`
+                              `${ctr.excludedFromRollup ? "Included" : "Excluded"} ${ctr.name}`
                             )
                           }
-                          className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-700 dark:text-red-300 text-[11px] font-semibold cursor-pointer"
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${cardCls}`}
                         >
-                          Lock Branch
+                          {ctr.excludedFromRollup ? "Include in Totals" : "Exclude from Totals"}
                         </button>
+                        {ctr.status !== "archived" && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              onRunAction(
+                                {
+                                  action: "branch_command",
+                                  accountId: selectedOrg.id,
+                                  centreId: ctr.id,
+                                  cmd: "archive_branch",
+                                  reason: branchCmdReason.trim() || "Archived by HQ",
+                                },
+                                `Archived branch ${ctr.name}`
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${cardCls}`}
+                          >
+                            Archive
+                          </button>
+                        )}
+                        {!ctr.isPrimary && selectedOrg.centres.length > 1 && (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() =>
+                              onRunAction(
+                                {
+                                  action: "branch_command",
+                                  accountId: selectedOrg.id,
+                                  centreId: ctr.id,
+                                  cmd: "delete_branch",
+                                  reason: branchCmdReason.trim() || "Deleted by HQ",
+                                },
+                                `Deleted branch ${ctr.name}`
+                              )
+                            }
+                            className="px-2.5 py-1 rounded-lg bg-red-500/15 text-red-700 dark:text-red-300 text-[11px] font-semibold cursor-pointer"
+                          >
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -873,6 +1036,31 @@ export default function HQFleetSection({
           </>
         )}
       </div>
+
+      {inspectedProof && (
+        <ComplianceProofViewerModal
+          org={inspectedProof.org}
+          certificate={inspectedProof.cert}
+          isDark={isDark}
+          busy={busy}
+          onClose={() => setInspectedProof(null)}
+          onVerifyDecision={async (verified, note, certificateId) => {
+            const ok = await onRunAction(
+              {
+                action: "toggle_network_verify",
+                accountId: inspectedProof.org.id,
+                verified,
+                certificateId,
+                note: note || undefined,
+              },
+              verified
+                ? `Verified compliance proof for ${inspectedProof.org.orgName}`
+                : `Marked ${inspectedProof.org.orgName} unverified`
+            );
+            if (ok) setInspectedProof(null);
+          }}
+        />
+      )}
     </div>
   );
 }

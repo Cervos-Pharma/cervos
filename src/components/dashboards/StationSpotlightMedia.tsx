@@ -71,11 +71,13 @@ export default function StationSpotlightMedia({
 
   const zoom = 15;
   const { tileX, tileY, offsetX, offsetY } = tileCoords(lat, lng, zoom);
-  const mapTheme = isDark ? "dark_all" : "light_all";
   const tileSize = 256;
   // Center the exact branch lat/lng pixel at 50% / 50% of the 3x3 tile canvas
   const shiftX = tileSize + offsetX;
   const shiftY = tileSize + offsetY;
+  const osmFilterCls = isDark
+    ? "invert hue-rotate-180 brightness-95 contrast-90"
+    : "saturate-75 brightness-105";
 
   const firstName = (profileName || "").split(" ")[0] || orgName;
   const hour = new Date().getHours();
@@ -181,7 +183,7 @@ export default function StationSpotlightMedia({
           slide === 1 ? "opacity-100 scale-100" : "opacity-0 scale-105 pointer-events-none"
         }`}
       >
-        {/* Clean offline vector underlay + live Carto tile mosaic centered on branch [lat, lng] */}
+        {/* Clean offline vector underlay + live OpenStreetMap tile mosaic centered on branch [lat, lng] */}
         <div
           className="absolute inset-0"
           style={{
@@ -197,24 +199,30 @@ export default function StationSpotlightMedia({
             }}
           >
             {[-1, 0, 1].flatMap((dy) =>
-              [-1, 0, 1].map((dx) => (
-                <img
-                  key={`${dx}_${dy}`}
-                  src={`https://a.basemaps.cartocdn.com/${mapTheme}/${zoom}/${tileX + dx}/${tileY + dy}.png`}
-                  alt=""
-                  width={tileSize}
-                  height={tileSize}
-                  loading="lazy"
-                  onError={(e) => {
-                    const el = e.currentTarget;
-                    if (!el.dataset.osmFallback) {
-                      el.dataset.osmFallback = "1";
-                      el.src = `https://tile.openstreetmap.org/${zoom}/${tileX + dx}/${tileY + dy}.png`;
-                    }
-                  }}
-                  className="w-[256px] h-[256px] block opacity-95"
-                />
-              ))
+              [-1, 0, 1].map((dx) => {
+                const sub = ["a", "b", "c"][Math.abs(dx + dy * 3) % 3];
+                const tx = tileX + dx;
+                const ty = tileY + dy;
+                return (
+                  <img
+                    key={`${dx}_${dy}`}
+                    src={`https://${sub}.tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`}
+                    alt=""
+                    width={tileSize}
+                    height={tileSize}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      if (!el.dataset.osmFallback) {
+                        el.dataset.osmFallback = "1";
+                        el.src = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
+                      }
+                    }}
+                    className={`w-[256px] h-[256px] block opacity-95 ${osmFilterCls}`}
+                  />
+                );
+              })
             )}
           </div>
         </div>

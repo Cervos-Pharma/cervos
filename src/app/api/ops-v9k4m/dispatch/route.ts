@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import type { NextRequest } from "next/server";
+import { runDailyOwnerDigest } from "@/lib/workspace/daily-summary";
 import {
   extractHqTokenFromRequest,
   HQ_COOKIE_NAME,
@@ -209,6 +210,7 @@ const ACTION_PERMISSION_MAP: Partial<Record<string, keyof HqWorkerCapabilities>>
   delete_hq_update: "canPublishEditorial",
   send_message: "canBroadcastComms",
   delete_hq_message: "canBroadcastComms",
+  trigger_daily_summary: "canBroadcastComms",
   label_anomaly_alert: "canAnswerSupport",
   update_health_weights: "canManageHqTeam",
   create_proposal_from_model: "canAnswerSupport",
@@ -358,6 +360,8 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
         lat: c.lat,
         lng: c.lng,
         isPrimary: c.isPrimary,
+        status: c.status ?? "active",
+        excludedFromRollup: Boolean(c.excludedFromRollup),
         staffCount: profiles.filter((p) => p.centreId === c.id).length,
         createdAt: c.createdAt,
       })),
@@ -922,6 +926,19 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ ok: true, packages: next });
   }
 
+  if (action === "trigger_daily_summary") {
+    const requestedTarget = sanitizeText(body.accountId, 80);
+    const targetAccId =
+      requestedTarget && requestedTarget !== "ALL" && !requestedTarget.startsWith("ROLE:")
+        ? requestedTarget
+        : undefined;
+    const result = await runDailyOwnerDigest({
+      force: body.force === false ? false : true,
+      targetAccountId: targetAccId,
+    });
+    return noStoreJson(result);
+  }
+
   if (action === "resolve_escrow") {
     const orderId = sanitizeText(body.orderId, 80);
     const decision = body.decision === "cancel" ? "cancel" : "release";
@@ -1346,18 +1363,64 @@ export async function POST(request: NextRequest) {
 
   if (action === "toggle_network_verify") {
     const verified = Boolean(body.verified);
+    const certificateId = sanitizeText(body.certificateId, 80);
+    const note = sanitizeText(body.note, 240);
+    const nowIso = new Date().toISOString();
+
     targetAccount.verificationStatus = verified ? "verified" : "skipped";
     targetAccount.networkUnlocked = verified;
+
+    if (Array.isArray(targetAccount.certificates) && targetAccount.certificates.length > 0) {
+      let matched = false;
+      for (const cert of targetAccount.certificates) {
+        if (!certificateId || cert.id === certificateId) {
+          cert.status = verified ? "verified" : "rejected";
+          cert.reviewedBy = actorName;
+          cert.reviewedAt = nowIso;
+          if (note) cert.reviewNote = note;
+          else if (verified) cert.reviewNote = undefined;
+          matched = true;
+        }
+      }
+      if (certificateId && !matched) {
+        for (const cert of targetAccount.certificates) {
+          cert.status = verified ? "verified" : "rejected";
+          cert.reviewedBy = actorName;
+          cert.reviewedAt = nowIso;
+          if (note) cert.reviewNote = note;
+        }
+      }
+    }
+
     appendAuditLog(db, {
       accountId: targetAccount.id,
       actor: actorName,
       category: "COMPLIANCE",
       action: verified
-        ? "HQ verified compliance permits and unlocked wholesale preview"
-        : "HQ paused compliance verification flag",
+        ? `HQ verified compliance proofs & unlocked Network access${note ? ` (${note})` : ""}`
+        : `HQ marked compliance proof unverified/paused${note ? ` (${note})` : ""}`,
+    });
+    pushHqMessage(db, {
+      accountId: targetAccount.id,
+      title: verified ? "Compliance Permits Verified" : "Compliance Verification Paused / Unverified",
+      swTitle: verified ? "Vibali vya Uzingatiaji Vimethibitishwa" : "Uthibitisho wa Vibali Umesitishwa",
+      body: verified
+        ? `Your operating permits have been reviewed and verified by Compliance.${note ? ` Note: ${note}` : ""}`
+        : `Compliance could not verify your current permit submission.${note ? ` Reason: ${note}` : " Please review and re-upload your permit in Org Settings."}`,
+      swBody: verified
+        ? `Vibali vyako vimekaguliwa na kuthibitishwa na Kitengo cha Uzingatiaji.${note ? ` Maelezo: ${note}` : ""}`
+        : `Kitengo cha Uzingatiaji hakikuweza kuthibitisha vibali vyako.${note ? ` Sababu: ${note}` : " Tafadhali pakia cheti sahihi kwenye Mipangilio ya Shirika."}`,
+      severity: verified ? "info" : "action",
+      ctaLabel: verified ? "Open Network" : "Upload Permit",
+      ctaTarget: verified ? "network" : "overview",
+      senderName: `${actorName} (Compliance)`,
     });
     await persistDb(db);
-    return noStoreJson({ ok: true, verificationStatus: targetAccount.verificationStatus });
+    return noStoreJson({
+      ok: true,
+      verificationStatus: targetAccount.verificationStatus,
+      certificates: targetAccount.certificates,
+    });
   }
 
   if (action === "update_subscription") {
@@ -1401,13 +1464,54 @@ export async function POST(request: NextRequest) {
     const centreId = sanitizeText(body.centreId, 80);
     const cmd = sanitizeText(body.cmd, 40);
     const reason = sanitizeText(body.reason, 220);
-    const allowedCmds = new Set(["force_sync", "lock_branch", "unlock_branch", "suspend_branch"]);
+    const allowedCmds = new Set([
+      "force_sync",
+      "lock_branch",
+      "unlock_branch",
+      "suspend_branch",
+      "pause_branch",
+      "resume_branch",
+      "archive_branch",
+      "toggle_exclude_branch",
+      "delete_branch",
+    ]);
     if (!allowedCmds.has(cmd)) {
       return noStoreJson({ error: "Invalid branch command." }, { status: 400 });
     }
-    const centre = db.centres.find((c) => c.id === centreId && c.accountId === targetAccount.id);
+    const orgCentres = db.centres.filter((c) => c.accountId === targetAccount.id);
+    const centre = orgCentres.find((c) => c.id === centreId);
     if (!centre) {
       return noStoreJson({ error: "Branch not found on organization." }, { status: 404 });
+    }
+
+    if (cmd === "pause_branch" || cmd === "suspend_branch" || cmd === "lock_branch") {
+      centre.status = "paused";
+      centre.pausedReason = reason || "Paused by Cervos HQ";
+    } else if (cmd === "resume_branch" || cmd === "unlock_branch") {
+      centre.status = "active";
+      centre.pausedReason = undefined;
+    } else if (cmd === "archive_branch") {
+      if (centre.isPrimary && orgCentres.filter((c) => c.status !== "archived").length <= 1) {
+        return noStoreJson({ error: "Cannot archive the only active primary branch." }, { status: 400 });
+      }
+      centre.status = "archived";
+      centre.excludedFromRollup = true;
+      centre.pausedReason = reason || "Archived by Cervos HQ";
+    } else if (cmd === "toggle_exclude_branch") {
+      centre.excludedFromRollup = !Boolean(centre.excludedFromRollup);
+    } else if (cmd === "delete_branch") {
+      if (centre.isPrimary || orgCentres.length <= 1) {
+        return noStoreJson({ error: "Cannot delete an organization's primary branch." }, { status: 400 });
+      }
+      const fallback = orgCentres.find((c) => c.id !== centre.id && c.isPrimary) ?? orgCentres.find((c) => c.id !== centre.id);
+      if (fallback) {
+        for (const prof of db.profiles) {
+          if (prof.accountId === targetAccount.id && prof.centreId === centre.id) {
+            prof.centreId = fallback.id;
+          }
+        }
+      }
+      db.centres = db.centres.filter((c) => c.id !== centre.id);
     }
 
     if (canQuerySupabaseTables()) {
@@ -1420,9 +1524,9 @@ export async function POST(request: NextRequest) {
           reason: reason || null,
           status: "pending",
         });
-        if (cmd === "lock_branch" || cmd === "suspend_branch") {
+        if (cmd === "lock_branch" || cmd === "suspend_branch" || cmd === "pause_branch" || cmd === "archive_branch") {
           await supabase.from("branches").update({ subscription_status: "locked", locked_reason: reason || "hq_command" }).eq("id", centre.id);
-        } else if (cmd === "unlock_branch") {
+        } else if (cmd === "unlock_branch" || cmd === "resume_branch") {
           await supabase.from("branches").update({ subscription_status: "active", locked_reason: null }).eq("id", centre.id);
         }
       } catch {
@@ -1434,9 +1538,9 @@ export async function POST(request: NextRequest) {
       accountId: targetAccount.id,
       actor: actorName,
       category: "SECURITY",
-      action: `HQ queued '${cmd}' on branch ${centre.name}${reason ? ` (${reason})` : ""}`,
+      action: `HQ executed '${cmd}' on branch ${centre.name}${reason ? ` (${reason})` : ""}`,
     });
-    if (cmd === "lock_branch" || cmd === "suspend_branch") {
+    if (cmd === "lock_branch" || cmd === "suspend_branch" || cmd === "pause_branch" || cmd === "archive_branch") {
       pushHqMessage(db, {
         accountId: targetAccount.id,
         title: `Branch Command: ${centre.name}`,

@@ -37,6 +37,12 @@ export interface CertificateRecord {
   licenseNumber: string;
   fileName: string;
   uploadedAt: string;
+  fileDataUrl?: string;
+  mimeType?: string;
+  status?: "pending" | "verified" | "rejected";
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNote?: string;
 }
 
 export interface PasskeyCredentialRecord {
@@ -58,7 +64,30 @@ export interface WorkspaceCentre {
   lat?: number;
   lng?: number;
   isPrimary: boolean;
+  status?: "active" | "paused" | "archived";
+  excludedFromRollup?: boolean;
+  pausedReason?: string;
   createdAt: string;
+}
+
+/** Validates an inline certificate proof data URL (PNG/JPG/WEBP/PDF <= 2.8 MB). */
+export function sanitizeCertificateProof(
+  rawDataUrl: unknown,
+  rawMimeType: unknown
+): { fileDataUrl?: string; mimeType?: string } {
+  const raw = typeof rawDataUrl === "string" ? rawDataUrl.trim() : "";
+  if (
+    !raw ||
+    raw.length > 2_800_000 ||
+    !/^data:(image\/(png|jpeg|jpg|webp)|application\/pdf);base64,/i.test(raw)
+  ) {
+    return {};
+  }
+  const mime =
+    typeof rawMimeType === "string" && rawMimeType.trim().length > 0
+      ? rawMimeType.trim().slice(0, 60)
+      : raw.slice(5, raw.indexOf(";"));
+  return { fileDataUrl: raw, mimeType: mime };
 }
 
 export interface WorkspaceProfile {
@@ -2441,7 +2470,7 @@ export function checkPharmacyPlanQuota(
   const planName = matchedPkg?.name || account.subscriptionPlan || "Community Standard";
   const used =
     resource === "branch"
-      ? db.centres.filter((c) => c.accountId === account.id).length
+      ? db.centres.filter((c) => c.accountId === account.id && c.status !== "archived").length
       : db.profiles.filter((p) => p.accountId === account.id).length;
   const limit = resource === "branch" ? (matchedPkg?.maxBranches ?? null) : (matchedPkg?.maxOperators ?? null);
 

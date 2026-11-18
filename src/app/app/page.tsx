@@ -79,7 +79,17 @@ interface AppWorkspaceData {
       themePref?: "light" | "dark" | "system";
     };
   };
-  centres: Array<{ id: string; name: string; region: string; address: string; lat?: number; lng?: number }>;
+  centres: Array<{
+    id: string;
+    name: string;
+    region: string;
+    address: string;
+    lat?: number;
+    lng?: number;
+    isPrimary?: boolean;
+    status?: "active" | "paused" | "archived";
+    excludedFromRollup?: boolean;
+  }>;
   profiles: DashboardStaffProfile[];
   auditLogs: AuditLogEntry[];
   batches?: DashboardBatch[];

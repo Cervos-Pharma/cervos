@@ -52,6 +52,7 @@ import {
   publicProfileSummary,
   pushHqMessage,
   recordCustomDrugCategory,
+  sanitizeCertificateProof,
   saveWorkspaceDb,
   suggestUniqueUsername,
   warmDbFromSupabase,
@@ -280,8 +281,13 @@ export async function GET(request: NextRequest) {
   const sales = activeCaps.canViewOrgReports
     ? branchSalesAll
     : branchSalesAll.filter((s) => s.profileId === activeProfile.id);
+  const includedCentres = centres.filter((c) => !c.excludedFromRollup && c.status !== "archived");
   const orgBranchComparison = activeCaps.canViewOrgReports
-    ? branchComparison(allAccountSales, allAccountBatches, centres)
+    ? branchComparison(
+        allAccountSales,
+        allAccountBatches,
+        includedCentres.length > 0 ? includedCentres : centres
+      )
     : [];
   const wholesaleOrders = (db.wholesaleOrders ?? []).filter(
     (o) => o.accountId === account.id && matchesActiveCentre(o.centreId)
@@ -535,6 +541,16 @@ export async function POST(request: NextRequest) {
     if (!callerCaps.canSellPos) {
       return noStoreJson(
         { error: "This profile role does not have Counter POS permission." },
+        { status: 403 }
+      );
+    }
+    const activeCtr = db.centres.find((c) => c.id === effectiveCentreId && c.accountId === account.id);
+    if (activeCtr && (activeCtr.status === "paused" || activeCtr.status === "archived")) {
+      return noStoreJson(
+        {
+          error:
+            "This branch is currently paused or archived. Resume it in Branch Settings before recording sales.",
+        },
         { status: 403 }
       );
     }
@@ -1372,6 +1388,9 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
     db.centres.push(centre);
+    if (phone && !account.ownerPhone) {
+      account.ownerPhone = phone;
+    }
     const assignIds = Array.isArray(body.assignProfileIds)
       ? (body.assignProfileIds as unknown[]).map((x) => sanitizeText(x, 80)).filter(Boolean)
       : [];
@@ -1395,6 +1414,100 @@ export async function POST(request: NextRequest) {
     saveWorkspaceDb(db);
     await flushWorkspaceDb();
     return noStoreJson({ ok: true, centre, movedCount });
+  }
+
+  if (action === "manage_centre") {
+    if (!callerCaps.canManageTeam) {
+      return noStoreJson({ error: "Branch management requires owner authority." }, { status: 403 });
+    }
+    const centreId = sanitizeText(body.centreId, 80);
+    const op = sanitizeText(body.op, 30);
+    const reason = sanitizeText(body.reason, 200);
+    const accountCentres = db.centres.filter((c) => c.accountId === account.id);
+    const targetCentre = accountCentres.find((c) => c.id === centreId);
+    if (!targetCentre) {
+      return noStoreJson({ error: "Branch not found on this organization." }, { status: 404 });
+    }
+
+    if (op === "pause") {
+      targetCentre.status = "paused";
+      targetCentre.pausedReason = reason || "Paused by organization owner";
+      appendAuditLog(db, {
+        accountId: account.id,
+        actor: unlockedProfile.displayName,
+        category: "SETUP",
+        action: `Paused branch operations for ${targetCentre.name}`,
+      });
+    } else if (op === "resume" || op === "restore") {
+      targetCentre.status = "active";
+      targetCentre.pausedReason = undefined;
+      if (op === "restore") {
+        targetCentre.excludedFromRollup = false;
+      }
+      appendAuditLog(db, {
+        accountId: account.id,
+        actor: unlockedProfile.displayName,
+        category: "SETUP",
+        action: `${op === "restore" ? "Restored" : "Resumed"} branch ${targetCentre.name}`,
+      });
+    } else if (op === "archive") {
+      if (targetCentre.isPrimary && accountCentres.filter((c) => c.status !== "archived").length <= 1) {
+        return noStoreJson(
+          { error: "Cannot archive your only active primary branch." },
+          { status: 400 }
+        );
+      }
+      targetCentre.status = "archived";
+      targetCentre.excludedFromRollup = true;
+      targetCentre.pausedReason = reason || "Archived by organization owner";
+      appendAuditLog(db, {
+        accountId: account.id,
+        actor: unlockedProfile.displayName,
+        category: "SETUP",
+        action: `Archived branch ${targetCentre.name} and excluded it from totals`,
+      });
+    } else if (op === "toggle_exclude") {
+      targetCentre.excludedFromRollup = !Boolean(targetCentre.excludedFromRollup);
+      appendAuditLog(db, {
+        accountId: account.id,
+        actor: unlockedProfile.displayName,
+        category: "SETUP",
+        action: `${targetCentre.excludedFromRollup ? "Excluded" : "Included"} ${targetCentre.name} ${targetCentre.excludedFromRollup ? "from" : "in"} org rollups & daily digest`,
+      });
+    } else if (op === "delete") {
+      if (targetCentre.isPrimary || accountCentres.length <= 1) {
+        return noStoreJson(
+          { error: "The primary branch cannot be deleted. Add or select another branch first." },
+          { status: 400 }
+        );
+      }
+      const fallbackCentre = accountCentres.find((c) => c.id !== targetCentre.id && c.isPrimary) ?? accountCentres.find((c) => c.id !== targetCentre.id);
+      if (fallbackCentre) {
+        for (const prof of db.profiles) {
+          if (prof.accountId === account.id && prof.centreId === targetCentre.id) {
+            prof.centreId = fallbackCentre.id;
+          }
+        }
+      }
+      db.centres = db.centres.filter((c) => c.id !== targetCentre.id);
+      appendAuditLog(db, {
+        accountId: account.id,
+        actor: unlockedProfile.displayName,
+        category: "SETUP",
+        action: `Deleted branch ${targetCentre.name} (staff reassigned to ${fallbackCentre?.name || "primary"})`,
+      });
+    } else {
+      return noStoreJson({ error: "Unsupported branch lifecycle operation." }, { status: 400 });
+    }
+
+    saveWorkspaceDb(db);
+    await flushWorkspaceDb();
+    return noStoreJson({
+      ok: true,
+      op,
+      centreId: targetCentre.id,
+      centres: db.centres.filter((c) => c.accountId === account.id),
+    });
   }
 
   if (action === "add_profile") {
@@ -1509,12 +1622,15 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const proof = sanitizeCertificateProof(body.fileDataUrl, body.mimeType);
     account.certificates.push({
       id: newId("cert"),
       docType,
       licenseNumber,
       fileName,
       uploadedAt: new Date().toISOString(),
+      ...proof,
+      status: "verified",
     });
     account.verificationStatus = "verified";
     account.networkUnlocked = true;

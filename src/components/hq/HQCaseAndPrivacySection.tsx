@@ -2,7 +2,9 @@
 
 import { useState, type FormEvent } from "react";
 import { hqSurfaceTokens } from "./hqSurface";
+import ComplianceProofViewerModal from "./ComplianceProofViewerModal";
 import type {
+  HqFleetAccount,
   HqInvestigationCase,
   HqPrivacyReleaseRecord,
   HqProductAliasRecord,
@@ -10,6 +12,7 @@ import type {
 } from "./types";
 
 interface HQCaseAndPrivacySectionProps {
+  accounts?: HqFleetAccount[];
   recalls: HqRecallRecord[];
   cases: HqInvestigationCase[];
   privacyReleases: HqPrivacyReleaseRecord[];
@@ -21,6 +24,7 @@ interface HQCaseAndPrivacySectionProps {
 }
 
 export default function HQCaseAndPrivacySection({
+  accounts = [],
   recalls,
   cases,
   privacyReleases,
@@ -31,7 +35,14 @@ export default function HQCaseAndPrivacySection({
   busy,
 }: HQCaseAndPrivacySectionProps) {
   const t = hqSurfaceTokens(isDark);
-  const [subTab, setSubTab] = useState<"recalls" | "cases" | "privacy" | "aliases">("recalls");
+  const [subTab, setSubTab] = useState<"proofs" | "recalls" | "cases" | "privacy" | "aliases">("proofs");
+  const [proofFilter, setProofFilter] = useState<"all" | "uploaded" | "verified" | "unverified">("all");
+  const [proofSearch, setProofSearch] = useState("");
+  const [proofNotes, setProofNotes] = useState<Record<string, string>>({});
+  const [inspectedProof, setInspectedProof] = useState<{
+    org: HqFleetAccount;
+    cert: HqFleetAccount["certificates"][number] | null;
+  } | null>(null);
 
   // Recall Issue Form (populated purely from operator entry or quick-pick DB ProductMaster aliases)
   const [regRef, setRegRef] = useState("");
@@ -108,6 +119,7 @@ export default function HQCaseAndPrivacySection({
         <div className={`inline-flex flex-wrap rounded-2xl p-1 gap-1 ${t.wellCls}`}>
           {(
             [
+              { id: "proofs", label: `Compliance Proofs (${accounts.filter((a) => a.certificates.length > 0).length}/${accounts.length})` },
               { id: "recalls", label: `TMDA Recalls (${recalls.length})` },
               { id: "cases", label: `Case Board (${cases.length})` },
               { id: "privacy", label: `Privacy Gateway (${privacyReleases.length})` },
@@ -127,6 +139,202 @@ export default function HQCaseAndPrivacySection({
           ))}
         </div>
       </section>
+
+      {/* SUBTAB 0: COMPLIANCE PROOFS & PERMIT VERIFICATION QUEUE */}
+      {subTab === "proofs" && (
+        <section className={`p-5 space-y-4 ${t.panelCls}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                Compliance Proof Review &amp; Verification
+              </h3>
+              <p className={`text-xs ${t.mutedCls}`}>
+                Read and inspect operating permits uploaded by pharmacies, clinics, and suppliers, then mark them Verified or Unverified.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                value={proofSearch}
+                onChange={(e) => setProofSearch(e.target.value)}
+                placeholder="Search org, permit #, filename..."
+                className={`h-8 px-3 rounded-full text-xs w-52 ${t.inputCls}`}
+              />
+              {(
+                [
+                  { id: "all", label: "All Orgs" },
+                  { id: "uploaded", label: "Has Proofs" },
+                  { id: "verified", label: "Verified" },
+                  { id: "unverified", label: "Unverified" },
+                ] as const
+              ).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setProofFilter(f.id)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${
+                    proofFilter === f.id ? t.primaryBtnCls : t.pillCls
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {accounts
+              .filter((org) => {
+                if (proofFilter === "uploaded" && org.certificates.length === 0) return false;
+                if (proofFilter === "verified" && org.verificationStatus !== "verified") return false;
+                if (proofFilter === "unverified" && org.verificationStatus === "verified") return false;
+                const q = proofSearch.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  org.orgName.toLowerCase().includes(q) ||
+                  org.fullName.toLowerCase().includes(q) ||
+                  org.email.toLowerCase().includes(q) ||
+                  org.region.toLowerCase().includes(q) ||
+                  org.certificates.some(
+                    (c) =>
+                      c.licenseNumber.toLowerCase().includes(q) ||
+                      c.fileName.toLowerCase().includes(q) ||
+                      c.docType.toLowerCase().includes(q)
+                  )
+                );
+              })
+              .map((org) => {
+                const draftNote = proofNotes[org.id] ?? "";
+                return (
+                  <div key={org.id} className={`p-4 space-y-3 text-xs ${t.wellCls}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="font-bold text-sm">{org.orgName}</div>
+                        <div className={`text-[11px] ${t.mutedCls}`}>
+                          {org.roleType} &middot; {org.fullName} &middot; {org.region}
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          org.verificationStatus === "verified"
+                            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                        }`}
+                      >
+                        {org.verificationStatus === "verified" ? "Verified" : "Unverified"}
+                      </span>
+                    </div>
+
+                    {org.certificates.length === 0 ? (
+                      <div className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${t.cardBorderCls}`}>
+                        <span className={t.mutedCls}>No permit document uploaded yet.</span>
+                        <button
+                          type="button"
+                          onClick={() => setInspectedProof({ org, cert: null })}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${t.pillCls}`}
+                        >
+                          Inspect Record
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {org.certificates.map((cert) => {
+                          const certStatus =
+                            cert.status ??
+                            (org.verificationStatus === "verified" ? "verified" : "pending");
+                          return (
+                            <div
+                              key={cert.id}
+                              className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${t.cardBorderCls}`}
+                            >
+                              <div className="min-w-0">
+                                <div className="font-bold flex flex-wrap items-center gap-1.5">
+                                  <span>{cert.docType}</span>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold ${
+                                      certStatus === "verified"
+                                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                                        : certStatus === "rejected"
+                                          ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                                          : "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                                    }`}
+                                  >
+                                    {certStatus}
+                                  </span>
+                                </div>
+                                <div className={`text-[11px] font-mono ${t.mutedCls}`}>
+                                  {cert.licenseNumber} &middot; {cert.fileName} &middot; {cert.uploadedAt.slice(0, 10)}
+                                </div>
+                                {cert.reviewNote && (
+                                  <div className={`text-[10px] italic mt-0.5 ${t.mutedCls}`}>
+                                    Note: {cert.reviewNote}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setInspectedProof({ org, cert })}
+                                className={`px-3 py-1 rounded-full text-[11px] font-semibold cursor-pointer shrink-0 ${t.primaryBtnCls}`}
+                              >
+                                View / Read Proof
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={draftNote}
+                        onChange={(e) => setProofNotes((prev) => ({ ...prev, [org.id]: e.target.value }))}
+                        placeholder="Optional compliance review note..."
+                        className={`flex-1 min-w-[150px] h-8 px-2.5 rounded-lg text-xs ${t.inputCls}`}
+                      />
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void onRunAction(
+                            {
+                              action: "toggle_network_verify",
+                              accountId: org.id,
+                              verified: true,
+                              note: draftNote.trim() || undefined,
+                            },
+                            `Verified compliance proofs for ${org.orgName}`
+                          )
+                        }
+                        className="h-8 px-3 rounded-full bg-emerald-600 text-white text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        Mark Verified
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void onRunAction(
+                            {
+                              action: "toggle_network_verify",
+                              accountId: org.id,
+                              verified: false,
+                              note: draftNote.trim() || undefined,
+                            },
+                            `Marked ${org.orgName} unverified`
+                          )
+                        }
+                        className="h-8 px-3 rounded-full border border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[11px] font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        Mark Unverified
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </section>
+      )}
 
       {/* SUBTAB 1: TMDA RECALLS & LOT LINEAGE GRAPH */}
       {subTab === "recalls" && (
@@ -488,6 +696,30 @@ export default function HQCaseAndPrivacySection({
             ))}
           </div>
         </section>
+      )}
+      {inspectedProof && (
+        <ComplianceProofViewerModal
+          org={inspectedProof.org}
+          certificate={inspectedProof.cert}
+          isDark={isDark}
+          busy={busy}
+          onClose={() => setInspectedProof(null)}
+          onVerifyDecision={async (verified, note, certificateId) => {
+            const ok = await onRunAction(
+              {
+                action: "toggle_network_verify",
+                accountId: inspectedProof.org.id,
+                verified,
+                certificateId,
+                note: note || undefined,
+              },
+              verified
+                ? `Verified compliance proof for ${inspectedProof.org.orgName}`
+                : `Marked ${inspectedProof.org.orgName} unverified`
+            );
+            if (ok) setInspectedProof(null);
+          }}
+        />
       )}
     </div>
   );
