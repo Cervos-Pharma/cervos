@@ -118,6 +118,26 @@ function RailItemIcon({ id, active }: { id: string; active?: boolean }) {
   }
 }
 
+function resolvePrimaryMobileAction(navItems: WorkspaceNavItem[], profileRole: string): WorkspaceNavItem | undefined {
+  const roleLower = (profileRole || "").toLowerCase();
+  const findAny = (ids: string[]) => ids.map((id) => navItems.find((n) => n.id === id)).find(Boolean);
+
+  if (roleLower.includes("accountant") || roleLower.includes("finance")) {
+    return findAny(["billing", "reports", "operations", "network"]) ?? navItems[1] ?? navItems[0];
+  }
+  if (roleLower.includes("warehouse") || roleLower.includes("dispatch") || roleLower.includes("store")) {
+    return findAny(["inventory", "operations", "network", "reports"]) ?? navItems[1] ?? navItems[0];
+  }
+  if (roleLower.includes("supplier") || roleLower.includes("wholesale")) {
+    return findAny(["network", "billing", "operations", "reports"]) ?? navItems[1] ?? navItems[0];
+  }
+  if (roleLower.includes("research") || roleLower.includes("investor")) {
+    return findAny(["reports", "billing", "network"]) ?? navItems[1] ?? navItems[0];
+  }
+  // Pharmacy owner / pharmacist / cashier primary daily station = POS (`operations`), falling back on org hub
+  return findAny(["operations", "billing", "reports", "inventory"]) ?? navItems[1] ?? navItems[0];
+}
+
 export default function WorkspaceShell({
   orgName,
   centreName,
@@ -198,6 +218,16 @@ export default function WorkspaceShell({
       return next;
     });
   };
+
+  // Propagate fontScale and brandAccent into document CSS root variables so all `rem` text & surfaces react immediately
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.fontSize = fontScale === "compact" ? "13.5px" : fontScale === "large" ? "18.5px" : "16px";
+    root.style.setProperty("--cv-accent", brandAccent);
+    return () => {
+      root.style.fontSize = "";
+    };
+  }, [fontScale, brandAccent]);
 
   const surfaceBg = isDark ? "bg-[#090C12] text-slate-100" : "bg-[#F5F6F8] text-[#111317]";
   const railPillCls = isDark
@@ -329,6 +359,32 @@ export default function WorkspaceShell({
             </div>
 
             <div className="space-y-2 pt-4 border-t border-slate-200/20">
+              <div className="grid grid-cols-3 gap-1.5 pb-1">
+                <button
+                  type="button"
+                  onClick={onToggleTheme}
+                  className={`py-2 px-2 rounded-xl border text-[11px] font-semibold cursor-pointer ${railPillCls}`}
+                >
+                  {isDark ? (isSw ? "Mwanga" : "Light") : (isSw ? "Giza" : "Dark")}
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleLang}
+                  className={`py-2 px-2 rounded-xl border text-[11px] font-semibold cursor-pointer ${railPillCls}`}
+                >
+                  {lang}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    setHelpOpen(true);
+                  }}
+                  className={`py-2 px-2 rounded-xl border text-[11px] font-semibold cursor-pointer ${railPillCls}`}
+                >
+                  {isSw ? "Mwongozo" : "Guide"}
+                </button>
+              </div>
               <Link
                 href="/app/download"
                 onClick={() => setSidebarOpen(false)}
@@ -356,52 +412,107 @@ export default function WorkspaceShell({
         </div>
       )}
 
-      {/* TOP FLOATING NAVIGATION HEADER (std.jpg Pill Tabs + Right Controls) */}
-      <header className="relative z-30 w-full max-w-[1440px] mx-auto px-4 sm:px-7 pt-4 pb-2 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 sm:gap-5 min-w-0">
+      {/* TOP NAVIGATION HEADER: Responsive 375px Mobile Flow & Full Desktop Bar */}
+      <header className="relative z-30 w-full max-w-[1440px] mx-auto px-3.5 sm:px-7 pt-3.5 pb-2 flex items-center justify-between gap-2 sm:gap-3">
+        {/* Left: Compact Org + Branch Identity (smoothly yields space on <lg when animated search expands) */}
+        <Link
+          href="/app"
+          className={`flex items-center gap-2 min-w-0 transition-all duration-300 ${
+            mobileSearchOpen ? "max-w-[44px] sm:max-w-none overflow-hidden" : "flex-1 lg:flex-initial"
+          }`}
+        >
+          <div className="relative w-9 h-9 rounded-full overflow-hidden ring-1 ring-slate-200/80 bg-white shrink-0 shadow-2xs">
+            <Image
+              src={brandLogoUrl || "/cervos-company-logo-circular.svg"}
+              alt={orgName}
+              fill
+              className="object-contain p-1"
+              unoptimized={Boolean(brandLogoUrl)}
+            />
+          </div>
+          <div className={`leading-tight min-w-0 transition-opacity duration-200 ${mobileSearchOpen ? "hidden sm:block" : "block"}`}>
+            <div className="text-xs font-bold truncate max-w-[155px] sm:max-w-[200px]">{orgName}</div>
+            <div className="text-[10px] text-slate-400 truncate max-w-[155px] sm:max-w-[200px]">{centreName}</div>
+          </div>
+        </Link>
+
+        {/* Right Controls: Mobile = Expanding Search -> Expandable Menu -> User Button | Desktop = Full Bar */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
+          {/* Mobile (< lg): Animated Expanding Inline Search Pill */}
+          <div
+            className={`lg:hidden relative flex items-center h-9 rounded-full border transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] overflow-hidden ${
+              mobileSearchOpen
+                ? `w-[186px] sm:w-64 px-2.5 ${
+                    isDark ? "bg-[#11161F] border-slate-700 text-white" : "bg-white border-slate-300 text-[#111317] shadow-xs"
+                  }`
+                : `w-9 justify-center ${railPillCls}`
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setMobileSearchOpen((open) => {
+                  const next = !open;
+                  if (next) {
+                    setTimeout(() => searchInputRef.current?.focus(), 60);
+                  }
+                  return next;
+                });
+                setProfileMenuOpen(false);
+                setBellOpen(false);
+              }}
+              aria-label={isSw ? "Tafuta" : "Search"}
+              className="w-5 h-5 flex items-center justify-center shrink-0 cursor-pointer"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m0 0A7.5 7.5 0 1 0 5.64 5.64a7.5 7.5 0 0 0 11.01 11.01Z" />
+              </svg>
+            </button>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={isSw ? "Tafuta..." : "Search..."}
+              className={`bg-transparent text-xs focus:outline-none transition-all duration-300 ${
+                mobileSearchOpen ? "w-full ml-1.5 opacity-100" : "w-0 ml-0 opacity-0 pointer-events-none"
+              }`}
+            />
+            {mobileSearchOpen && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSearchChange("");
+                  setMobileSearchOpen(false);
+                }}
+                aria-label="Close search"
+                className="w-5 h-5 rounded-full flex items-center justify-center text-xs opacity-70 hover:opacity-100 shrink-0 cursor-pointer"
+              >
+                &times;
+              </button>
+            )}
+          </div>
+
+          {/* Mobile (< lg): Expandable Menu Trigger (Top Right beside Search) */}
           <button
             type="button"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open navigation"
-            className={`lg:hidden w-9 h-9 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${railPillCls}`}
+            onClick={() => {
+              setSidebarOpen(true);
+              setProfileMenuOpen(false);
+              setBellOpen(false);
+            }}
+            aria-label={isSw ? "Fungua menyu" : "Open menu"}
+            className={`lg:hidden relative w-9 h-9 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${railPillCls}`}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M12 17.25h8.25" />
             </svg>
+            {notifications.some((n) => !n.read) && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-[#11161F]" />
+            )}
           </button>
 
-          <Link href="/app" className="flex items-center gap-2.5 shrink-0">
-            <div className="relative w-9 h-9 rounded-full overflow-hidden ring-1 ring-slate-200/80 bg-white shrink-0 shadow-2xs">
-              <Image
-                src={brandLogoUrl || "/cervos-company-logo-circular.svg"}
-                alt={orgName}
-                fill
-                className="object-contain p-1"
-                unoptimized={Boolean(brandLogoUrl)}
-              />
-            </div>
-            <div className="leading-tight">
-              <div className="text-xs font-bold truncate max-w-[180px]">{orgName}</div>
-              <div className="text-[10px] text-slate-400 truncate max-w-[180px]">{centreName}</div>
-            </div>
-          </Link>
-        </div>
-
-        {/* Top-Right Expanded Search + Crisp Controls (Bell, Theme, Lang, Help, Chat if branch) + Profile */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Desktop Search Bar + Mobile Search Pill */}
-          <button
-            type="button"
-            onClick={() => setMobileSearchOpen((v) => !v)}
-            aria-label={isSw ? "Tafuta" : "Search"}
-            className={`sm:hidden w-10 h-10 rounded-full border flex items-center justify-center cursor-pointer ${railPillCls}`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35m0 0A7.5 7.5 0 1 0 5.64 5.64a7.5 7.5 0 0 0 11.01 11.01Z" />
-            </svg>
-          </button>
-
-          <div className="relative hidden sm:flex items-center">
+          {/* Desktop (>= lg): Always-open Search + Bell + Theme + Lang + Guide */}
+          <div className="relative hidden lg:flex items-center">
             <svg
               className="w-3.5 h-3.5 absolute left-3 text-slate-400 pointer-events-none"
               fill="none"
@@ -417,15 +528,14 @@ export default function WorkspaceShell({
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={isSw ? "Tafuta ndani ya kituo (/)..." : "Search records, batches, logs (/)"}
-              className={`w-48 md:w-64 pl-8 pr-3 py-2 rounded-full border text-xs transition-all focus:outline-none focus:w-72 ${isDark
+              className={`w-56 xl:w-64 pl-8 pr-3 py-2 rounded-full border text-xs transition-all focus:outline-none focus:w-72 ${isDark
                 ? "bg-[#11161F] border-slate-800 text-white placeholder:text-slate-500 focus:border-[#38BDF8]"
                 : "bg-white border-[#EAECF0] text-[#111317] placeholder:text-slate-400 focus:border-[#1039B9] shadow-[0_2px_8px_rgba(15,23,42,0.03)]"
                 }`}
             />
           </div>
 
-          {/* 1. Notification Bell (Shows top 3 recent alerts cleanly) */}
-          <div className="relative">
+          <div className="relative hidden lg:block">
             <button
               type="button"
               onClick={() => {
@@ -472,12 +582,11 @@ export default function WorkspaceShell({
             )}
           </div>
 
-          {/* 2. Light / Dark Theme Toggle */}
           <button
             type="button"
             onClick={onToggleTheme}
             aria-label={isDark ? "Light mode" : "Dark mode"}
-            className={`w-9 h-9 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${railPillCls}`}
+            className={`hidden lg:flex w-9 h-9 rounded-full border items-center justify-center transition-colors cursor-pointer ${railPillCls}`}
           >
             {isDark ? (
               <svg className="w-3.5 h-3.5 text-amber-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -490,13 +599,12 @@ export default function WorkspaceShell({
             )}
           </button>
 
-          {/* 3. Language Quick Switch (EN <-> SW) on Top Bar; Branch Chat stays docked at Side */}
           <button
             type="button"
             onClick={onToggleLang}
             aria-label="Switch workspace language"
             title={isSw ? "Badili Lugha (EN / SW)" : "Switch Language (EN / SW)"}
-            className={`h-9 px-3 rounded-full border flex items-center gap-1.5 text-xs font-bold transition-colors cursor-pointer ${railPillCls}`}
+            className={`hidden lg:flex h-9 px-3 rounded-full border items-center gap-1.5 text-xs font-bold transition-colors cursor-pointer ${railPillCls}`}
           >
             <svg className="w-3.5 h-3.5 opacity-75" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="m10.5 21 5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 0 1 6-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 0 1-3.827-5.802" />
@@ -504,7 +612,6 @@ export default function WorkspaceShell({
             <span>{lang}</span>
           </button>
 
-          {/* 3b. Help & Interactive App Tutorial Trigger */}
           <button
             type="button"
             onClick={() => {
@@ -514,40 +621,15 @@ export default function WorkspaceShell({
             }}
             aria-label={isSw ? "Msaada & Mwongozo" : "Help & App Tutorial"}
             title={isSw ? "Msaada & Mwongozo" : "Help & App Tutorial"}
-            className={`h-9 px-2.5 rounded-full border flex items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${railPillCls}`}
+            className={`hidden lg:flex h-9 px-2.5 rounded-full border items-center gap-1 text-xs font-bold transition-colors cursor-pointer ${railPillCls}`}
           >
             <svg className="w-3.5 h-3.5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
             </svg>
-            <span className="hidden sm:inline">{isSw ? "Mwongozo" : "Guide"}</span>
+            <span>{isSw ? "Mwongozo" : "Guide"}</span>
           </button>
 
-          {showBranchChat && branchChat.available && (
-            <button
-              type="button"
-              onClick={() => {
-                branchChat.toggle();
-                setBellOpen(false);
-                setProfileMenuOpen(false);
-              }}
-              aria-label="Open mobile branch chat"
-              className={`lg:hidden relative w-9 h-9 rounded-full border flex items-center justify-center transition-colors cursor-pointer ${
-                branchChat.open ? "text-white border-transparent shadow-sm" : railPillCls
-              }`}
-              style={branchChat.open ? { backgroundColor: brandAccent } : undefined}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-              </svg>
-              {branchChat.badge > 0 && !branchChat.open && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-[#111317] text-[9px] font-extrabold flex items-center justify-center">
-                  {branchChat.badge}
-                </span>
-              )}
-            </button>
-          )}
-
-          {/* Profile Avatar & Quick Actions Menu (includes Language Switch + 3 top recent destinations) */}
+          {/* Far Right: User Avatar & Settings/Org/SignOut Popover */}
           <div className="relative">
             <button
               type="button"
@@ -555,7 +637,8 @@ export default function WorkspaceShell({
                 setProfileMenuOpen((o) => !o);
                 setBellOpen(false);
               }}
-              className={`inline-flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full border transition-colors cursor-pointer ${railPillCls}`}
+              aria-label="User settings and account"
+              className={`inline-flex items-center gap-2 p-1 lg:pl-1.5 lg:pr-2.5 rounded-full border transition-colors cursor-pointer ${railPillCls}`}
             >
               <span
                 className="w-7 h-7 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0"
@@ -563,12 +646,12 @@ export default function WorkspaceShell({
               >
                 {initials || "C"}
               </span>
-              <span className="hidden md:inline text-xs font-semibold max-w-[110px] truncate">{profileName}</span>
+              <span className="hidden lg:inline text-xs font-semibold max-w-[110px] truncate">{profileName}</span>
             </button>
 
             {profileMenuOpen && (
               <div
-                className={`animate-fade-in-scale absolute right-0 mt-2 w-56 rounded-2xl border p-2 shadow-2xl z-40 origin-top-right ${isDark ? "bg-[#11161F] border-slate-800 text-slate-100" : "bg-white border-[#EAECF0] text-[#111317]"
+                className={`animate-fade-in-scale absolute right-0 mt-2 w-60 rounded-2xl border p-2 shadow-2xl z-50 origin-top-right ${isDark ? "bg-[#11161F] border-slate-800 text-slate-100" : "bg-white border-[#EAECF0] text-[#111317]"
                   }`}
               >
                 <div className="px-3 py-2 border-b border-slate-200/20 mb-1 flex items-center justify-between gap-2">
@@ -578,13 +661,22 @@ export default function WorkspaceShell({
                       {profileRole.replace(/_/g, " ")}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={onToggleLang}
-                    className={`px-2 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer shrink-0 ${railPillCls}`}
-                  >
-                    {lang}
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={onToggleTheme}
+                      className={`px-2 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer ${railPillCls}`}
+                    >
+                      {isDark ? "Light" : "Dark"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onToggleLang}
+                      className={`px-2 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer ${railPillCls}`}
+                    >
+                      {lang}
+                    </button>
+                  </div>
                 </div>
                 <Link
                   href="/app/settings?tab=user"
@@ -632,23 +724,6 @@ export default function WorkspaceShell({
           </div>
         </div>
       </header>
-
-      {/* Mobile Collapsible Search Strip (Prevents Cramped Mobile Top Header) */}
-      {mobileSearchOpen && (
-        <div className="sm:hidden px-4 pb-2 z-20">
-          <input
-            type="search"
-            autoFocus
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={isSw ? "Tafuta dawa, risiti au matukio..." : "Search medicines, receipts, logs..."}
-            className={`w-full px-4 py-2.5 rounded-full border text-sm focus:outline-none ${isDark
-              ? "bg-[#11161F] border-slate-800 text-white placeholder:text-slate-500"
-              : "bg-white border-[#CBD5E1] text-[#111317]"
-              }`}
-          />
-        </div>
-      )}
 
       {/* BODY: EXPANDABLE LEFT ICON -> WORD RAIL + MAIN STAGE + FULL-BLEED RIGHT CHAT */}
       <div className={`relative z-10 flex-1 w-full px-3.5 sm:px-7 ${showBranchChat ? "lg:pr-0" : ""} py-3 sm:py-4 flex gap-5`}>
@@ -774,58 +849,106 @@ export default function WorkspaceShell({
           )}
         </div>
 
-        {/* Native-App Fixed Mobile Bottom Navigation Bar (< 1024px) */}
-        <nav
-          aria-label={isSw ? "Menyu ya Simu" : "Mobile Bottom Navigation"}
-          className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around gap-1 ${
-            isDark
-              ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
-              : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.06)]"
-          }`}
-        >
-          {navItems.slice(0, 4).map((item) => {
-            const baseCls = `flex-1 min-h-[48px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
-              item.active ? "text-white shadow-xs" : isDark ? "text-slate-300" : "text-slate-600"
-            }`;
-            if (item.href) {
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={baseCls}
-                  style={item.active ? { backgroundColor: brandAccent } : undefined}
-                >
-                  <RailItemIcon id={item.id} active={item.active} />
-                  <span className="truncate max-w-[74px]">{item.label}</span>
-                </Link>
-              );
-            }
-            return (
+        {/* Role-First 3-Button Mobile Dock (< 1024px): Home | Big Primary Action | Messages */}
+        {!branchChat.open && !sidebarOpen && (() => {
+          const homeItem = navItems.find((n) => n.id === "overview" || n.id === "home") ?? navItems[0];
+          const primaryItem = resolvePrimaryMobileAction(navItems, profileRole);
+          const msgCount =
+            showBranchChat && branchChat.available
+              ? branchChat.badge
+              : notifications.filter((n) => !n.read).length;
+
+          return (
+            <nav
+              aria-label={isSw ? "Menyu ya Simu" : "Mobile Bottom Navigation"}
+              className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl px-4 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-3 ${
+                isDark
+                  ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
+                  : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.06)]"
+              }`}
+            >
+              {/* Left: Home / Dashboard */}
+              {homeItem && (
+                homeItem.href ? (
+                  <Link
+                    href={homeItem.href}
+                    className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
+                      homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
+                    }`}
+                    style={homeItem.active ? { color: brandAccent } : undefined}
+                  >
+                    <RailItemIcon id={homeItem.id} active={homeItem.active} />
+                    <span className="truncate max-w-[78px]">{homeItem.label}</span>
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={homeItem.onClick}
+                    className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
+                      homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
+                    }`}
+                    style={homeItem.active ? { color: brandAccent } : undefined}
+                  >
+                    <RailItemIcon id={homeItem.id} active={homeItem.active} />
+                    <span className="truncate max-w-[78px]">{homeItem.label}</span>
+                  </button>
+                )
+              )}
+
+              {/* Center: Elevated Large Role-Primary CTA */}
+              {primaryItem && (
+                primaryItem.href ? (
+                  <Link
+                    href={primaryItem.href}
+                    className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform"
+                    style={{ backgroundColor: brandAccent }}
+                  >
+                    <RailItemIcon id={primaryItem.id} active />
+                    <span className="truncate max-w-[125px]">{primaryItem.label}</span>
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={primaryItem.onClick}
+                    className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform cursor-pointer"
+                    style={{ backgroundColor: brandAccent }}
+                  >
+                    <RailItemIcon id={primaryItem.id} active />
+                    <span className="truncate max-w-[125px]">{primaryItem.label}</span>
+                  </button>
+                )
+              )}
+
+              {/* Right: Messages / Branch Chat */}
               <button
-                key={item.id}
                 type="button"
-                onClick={item.onClick}
-                className={baseCls}
-                style={item.active ? { backgroundColor: brandAccent } : undefined}
+                onClick={() => {
+                  if (showBranchChat && branchChat.available) {
+                    branchChat.toggle();
+                  } else {
+                    if (onMarkNotificationsRead) onMarkNotificationsRead();
+                    setSidebarOpen(true);
+                  }
+                }}
+                className={`relative flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
+                  isDark ? "text-slate-400" : "text-slate-600"
+                }`}
               >
-                <RailItemIcon id={item.id} active={item.active} />
-                <span className="truncate max-w-[74px]">{item.label}</span>
+                <span className="relative">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+                  </svg>
+                  {msgCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-[#111317] text-[9px] font-extrabold flex items-center justify-center">
+                      {msgCount}
+                    </span>
+                  )}
+                </span>
+                <span>{isSw ? "Ujumbe" : "Messages"}</span>
               </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className={`flex-1 min-h-[48px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold cursor-pointer ${
-              isDark ? "text-slate-300" : "text-slate-600"
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-            <span>{isSw ? "Zaidi" : "More"}</span>
-          </button>
-        </nav>
+            </nav>
+          );
+        })()}
 
       {/* Interactive Guided Tutorial & Help Modal */}
       {helpOpen && (

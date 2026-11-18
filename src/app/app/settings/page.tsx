@@ -300,7 +300,8 @@ function WorkspaceSettingsInner() {
   }
 
   const isSw = state.account.lang === "SW";
-  const accent = state.account.customization?.brandAccent || brandAccent;
+  const accent = settingsScope === "org" ? brandAccent : (state.account.customization?.brandAccent || brandAccent);
+  const liveFontScale = settingsScope === "org" ? orgFontScale : myFontScale;
   const isManagerRole =
     state.activeProfile.isMasterAdmin ||
     state.activeProfile.role === "pharmacy_owner" ||
@@ -348,7 +349,7 @@ function WorkspaceSettingsInner() {
       profileRole={state.activeProfile.role}
       brandLogoUrl={state.account.customization?.brandLogoUrl}
       brandAccent={accent}
-      fontScale={state.activeProfile.profilePrefs?.fontScale || state.account.customization?.fontScale}
+      fontScale={liveFontScale}
       lang={state.account.lang}
       onToggleLang={toggleLang}
       theme={theme}
@@ -725,10 +726,16 @@ function WorkspaceSettingsInner() {
                     onChange={(e) => {
                       const val = e.target.value as "light" | "dark" | "system";
                       setThemePref(val);
-                      if (val === "light" || val === "dark") {
-                        setTheme(val);
+                      const resolved =
+                        val === "system" && typeof window !== "undefined"
+                          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                            ? "dark"
+                            : "light"
+                          : val;
+                      if (resolved === "light" || resolved === "dark") {
+                        setTheme(resolved);
                         try {
-                          localStorage.setItem("cervos-ws-theme", val);
+                          localStorage.setItem("cervos-ws-theme", resolved);
                         } catch {
                           // Ignore
                         }

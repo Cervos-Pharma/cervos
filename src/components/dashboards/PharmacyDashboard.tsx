@@ -1152,6 +1152,54 @@ export default function PharmacyDashboard({
     [batches, todayIso]
   );
 
+  const fefoChart = useMemo(() => {
+    const in30Iso = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const in90Iso = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+    const buckets = [
+      { key: "safe", label: isSw ? "Salama (>90s)" : "Safe (>90d)", x: 24, count: 0, units: 0, valueTzs: 0 },
+      { key: "watch", label: isSw ? "Fuatilia (31-90s)" : "Watch (31-90d)", x: 132, count: 0, units: 0, valueTzs: 0 },
+      { key: "fefo", label: isSw ? "Uza Kwanza (<=30s)" : "FEFO <=30d", x: 240, count: 0, units: 0, valueTzs: 0 },
+      { key: "blocked", label: isSw ? "Imekwisha/Zuiwa" : "Expired/Blocked", x: 340, count: 0, units: 0, valueTzs: 0 },
+    ];
+    for (const b of batches) {
+      if (b.quantity <= 0) continue;
+      const val = b.quantity * b.costPriceTzs;
+      if (b.quarantined || b.expiryDate < todayIso) {
+        buckets[3].count += 1;
+        buckets[3].units += b.quantity;
+        buckets[3].valueTzs += val;
+      } else if (b.expiryDate <= in30Iso) {
+        buckets[2].count += 1;
+        buckets[2].units += b.quantity;
+        buckets[2].valueTzs += val;
+      } else if (b.expiryDate <= in90Iso) {
+        buckets[1].count += 1;
+        buckets[1].units += b.quantity;
+        buckets[1].valueTzs += val;
+      } else {
+        buckets[0].count += 1;
+        buckets[0].units += b.quantity;
+        buckets[0].valueTzs += val;
+      }
+    }
+    const maxUnits = Math.max(...buckets.map((b) => b.units), 1);
+    const hasAnyStock = batches.some((b) => b.quantity > 0);
+    const nodes = buckets.map((b, idx) => ({
+      ...b,
+      idx,
+      y: !hasAnyStock ? 68 : Math.max(18, Math.min(68, 68 - Math.round((b.units / maxUnits) * 48))),
+    }));
+    let lineD = `M ${nodes[0].x} ${nodes[0].y}`;
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const p0 = nodes[i];
+      const p1 = nodes[i + 1];
+      const cx = Math.round((p0.x + p1.x) / 2);
+      lineD += ` C ${cx} ${p0.y}, ${cx} ${p1.y}, ${p1.x} ${p1.y}`;
+    }
+    const areaD = `${lineD} L ${nodes[nodes.length - 1].x} 76 L ${nodes[0].x} 76 Z`;
+    return { nodes, lineD, areaD, hasAnyStock };
+  }, [batches, todayIso, isSw]);
+
   const todaySalesTzs = useMemo(
     () => sales.filter((s) => s.createdAt.slice(0, 10) === todayIso).reduce((sum, s) => sum + s.totalTzs, 0),
     [sales, todayIso]
@@ -3982,8 +4030,68 @@ export default function PharmacyDashboard({
           {
             (!canManageAdmin || orgScope === "branch") && (
               <>
+                {layoutType === "focus" && (
+                  <div className={`rounded-2xl border p-3.5 mb-4 flex flex-wrap items-center justify-between gap-2.5 ${cardCls}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: accent }} />
+                      <span className="text-xs font-bold uppercase tracking-wider">
+                        {isSw ? "Hali ya Kazi Moja kwa Moja (Focus Layout)" : "Counter Focus Strip"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setTab("operations")}
+                        className="px-3.5 py-1.5 rounded-full text-white text-xs font-semibold cursor-pointer"
+                        style={{ backgroundColor: accent }}
+                      >
+                        {isSw ? "Fungua Kaunta ya POS" : "Launch Counter POS"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTab("inventory")}
+                        className={`px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
+                      >
+                        {isSw ? "Stoo & FEFO" : "Stock & FEFO"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openReport("sales")}
+                        className={`px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
+                      >
+                        {isSw ? "Ripoti ya Siku" : "Shift Totals"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {layoutType === "executive" && (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                    <div className={`rounded-2xl border p-4 ${cardCls}`} style={{ borderTopColor: accent, borderTopWidth: "3px" }}>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>{isSw ? "Mauzo (Siku 30)" : "30-Day Gross Sales"}</div>
+                      <div className="text-xl font-bold tabular-nums mt-1">{formatTzs(grossSalesTzs)}</div>
+                      <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{sales.length} receipts</div>
+                    </div>
+                    <div className={`rounded-2xl border p-4 ${cardCls}`}>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>{isSw ? "Faida Halisi" : "Net Profit & Margin"}</div>
+                      <div className="text-xl font-bold tabular-nums mt-1 text-emerald-600 dark:text-emerald-400">{formatTzs(pnlSummary.netProfit)}</div>
+                      <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{pnlSummary.grossMarginPct}% gross margin</div>
+                    </div>
+                    <div className={`rounded-2xl border p-4 ${cardCls}`}>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>Kasri Escrow Held</div>
+                      <div className="text-xl font-bold tabular-nums mt-1">{formatTzs(escrowHeldTzs)}</div>
+                      <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length} orders pending GRN</div>
+                    </div>
+                    <div className={`rounded-2xl border p-4 ${cardCls}`}>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>{isSw ? "Usalama wa Rafu" : "FEFO Exposure"}</div>
+                      <div className="text-xl font-bold tabular-nums mt-1">{validLotsCount} lots</div>
+                      <div className="text-[11px] mt-0.5 text-amber-600">{stockAlerts.nearExpiryCount} expiring &middot; {stockAlerts.expiredCount} expired</div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch animate-stage-pop">
-                  {layoutType !== "focus" && (
+                  {layoutType === "balanced" && (
                     <div
                       className={`lg:col-span-4 min-h-[400px] rounded-[24px] border p-6 flex flex-col justify-between gap-4 relative overflow-hidden transition-all duration-300 ${isDark
                         ? "border-slate-800 bg-[#0D111A] text-white"
@@ -4055,7 +4163,7 @@ export default function PharmacyDashboard({
                     </div>
                   )}
 
-                  <div className={`${layoutType === "focus" ? "lg:col-span-12" : "lg:col-span-8"} flex flex-col gap-4`}>
+                  <div className={`${layoutType === "balanced" ? "lg:col-span-8" : "lg:col-span-12"} flex flex-col gap-4`}>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                       {/* Clickable Dispense Activity Card -> Opens Deep Sales & Heatmap Report */}
                       <div
@@ -4240,66 +4348,92 @@ export default function PharmacyDashboard({
                           </div>
                         </div>
 
-                        <div className="relative h-24 w-full pt-1">
-                          <svg viewBox="0 0 360 80" className="w-full h-full overflow-visible" aria-hidden="true">
+                        <div className="relative h-28 w-full pt-1">
+                          <svg viewBox="0 0 360 88" className="w-full h-full overflow-visible" aria-hidden="true">
                             <defs>
                               <linearGradient id="pharmaSplineFill" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor={isDark ? "#38BDF8" : "#94A3B8"} stopOpacity="0.22" />
-                                <stop offset="100%" stopColor={isDark ? "#38BDF8" : "#94A3B8"} stopOpacity="0.0" />
+                                <stop offset="0%" stopColor={accent} stopOpacity="0.26" />
+                                <stop offset="100%" stopColor={accent} stopOpacity="0.0" />
                               </linearGradient>
                             </defs>
+                            <path d={fefoChart.areaD} fill="url(#pharmaSplineFill)" />
                             <path
-                              d="M 10 64 C 48 68, 70 42, 112 50 C 154 58, 168 28, 206 32 C 244 36, 282 14, 350 18 L 350 76 L 10 76 Z"
-                              fill="url(#pharmaSplineFill)"
-                            />
-                            <path
-                              d="M 10 64 C 48 68, 70 42, 112 50 C 154 58, 168 28, 206 32 C 244 36, 282 14, 350 18"
+                              d={fefoChart.lineD}
                               fill="none"
-                              stroke={isDark ? "#94A3B8" : "#475569"}
-                              strokeWidth="1.5"
+                              stroke={accent}
+                              strokeWidth="2"
                             />
-                            {[
-                              { x: 112, y: 50, idx: 0, label: "Healthy Safe" },
-                              { x: 206, y: 32, idx: 1, label: "30d FEFO Risk" },
-                              { x: 350, y: 18, idx: 2, label: "Blocked / Low" },
-                            ].map((pt) => (
-                              <circle
-                                key={pt.label}
-                                cx={pt.x}
-                                cy={pt.y}
-                                r={hoveredRiskNode === pt.idx ? 6 : 4}
-                                fill={hoveredRiskNode === pt.idx ? accent : "#111317"}
-                                stroke="#FFFFFF"
-                                strokeWidth="1.5"
-                                className="cursor-pointer"
-                                onMouseEnter={(e) => {
-                                  e.stopPropagation();
-                                  setHoveredRiskNode(pt.idx);
-                                }}
-                                onMouseLeave={() => setHoveredRiskNode(null)}
-                              />
+                            {fefoChart.nodes.map((pt) => (
+                              <g key={pt.key}>
+                                <circle
+                                  cx={pt.x}
+                                  cy={pt.y}
+                                  r={hoveredRiskNode === pt.idx ? 6.5 : 4.5}
+                                  fill={
+                                    hoveredRiskNode === pt.idx
+                                      ? accent
+                                      : pt.key === "blocked" && pt.count > 0
+                                        ? "#DC2626"
+                                        : pt.key === "fefo" && pt.count > 0
+                                          ? "#D97706"
+                                          : isDark
+                                            ? "#E2E8F0"
+                                            : "#111317"
+                                  }
+                                  stroke="#FFFFFF"
+                                  strokeWidth="1.5"
+                                  className="cursor-pointer"
+                                  onMouseEnter={(e) => {
+                                    e.stopPropagation();
+                                    setHoveredRiskNode(pt.idx);
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setHoveredRiskNode(pt.idx);
+                                  }}
+                                  onMouseLeave={() => setHoveredRiskNode(null)}
+                                />
+                                <text
+                                  x={pt.x}
+                                  y={86}
+                                  textAnchor="middle"
+                                  fontSize="8.5"
+                                  fill={isDark ? "#94A3B8" : "#64748B"}
+                                >
+                                  {pt.label.split(" ")[0]} ({pt.count})
+                                </text>
+                              </g>
                             ))}
-                            <rect x="174" y="6" width="64" height="18" rx="9" fill="#E2F575" />
-                            <text x="206" y="17.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="#111317">
-                              FEFO Risk
-                            </text>
                           </svg>
                         </div>
-                        {hoveredRiskNode !== null && (
-                          <div className={`text-[11px] px-3 py-1.5 rounded-xl border ${chipCls}`}>
-                            {hoveredRiskNode === 0
-                              ? isSw
-                                ? `Makundi ${validLotsCount} yapo salama kwa mauzo ya FEFO.`
-                                : `${validLotsCount} verified lots are safe for immediate counter dispense.`
-                              : hoveredRiskNode === 1
-                                ? isSw
-                                  ? `Makundi ${stockAlerts.nearExpiryCount} yataisha muda ndani ya siku 30.`
-                                  : `${stockAlerts.nearExpiryCount} batch(es) enter the 30-day FEFO clearance window.`
-                                : isSw
-                                  ? `Makundi ${stockAlerts.expiredCount} yamezuiwa · ${stockAlerts.lowStockCount} chini ya kizingiti.`
-                                  : `${stockAlerts.expiredCount} expired blocked · ${stockAlerts.lowStockCount} low stock alerts.`}
-                          </div>
-                        )}
+                        {(() => {
+                          const activeBucket =
+                            hoveredRiskNode !== null ? fefoChart.nodes[hoveredRiskNode] : null;
+                          if (!activeBucket) {
+                            return (
+                              <div className={`text-[11px] px-3 py-1.5 rounded-xl border flex items-center justify-between gap-2 ${chipCls}`}>
+                                <span>
+                                  {fefoChart.hasAnyStock
+                                    ? isSw
+                                      ? `Makundi ${validLotsCount} salama · ${stockAlerts.nearExpiryCount} yanakaribia kuisha <=30d`
+                                      : `${validLotsCount} active lots · ${fefoChart.nodes[2].units.toLocaleString("en-US")} units in <=30d FEFO window`
+                                    : isSw
+                                      ? "Hakuna mzigo rafuni bado. Ingiza makundi kuona mchoro halisi wa FEFO."
+                                      : "No batches in stock yet. Receive batches to plot live FEFO expiry distribution."}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className={`text-[11px] px-3 py-1.5 rounded-xl border ${chipCls}`}>
+                              <strong>{activeBucket.label}:</strong> {activeBucket.count}{" "}
+                              {isSw ? "makundi" : "batches"} &middot;{" "}
+                              {activeBucket.units.toLocaleString("en-US")}{" "}
+                              {isSw ? "vipimo" : "units"} &middot;{" "}
+                              {formatTzs(activeBucket.valueTzs)}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Clickable Inventory Mix Card -> Opens Product ABC & Margin Intelligence */}

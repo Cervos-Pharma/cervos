@@ -1,7 +1,8 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { formatTzs } from "@cervos/core";
+import CervosMap from "@/components/MapClientWrapper";
+import type { MarkerData } from "@/components/CervosMap";
 import type {
   HqAuditEvent,
   HqFleetAccount,
@@ -9,15 +10,6 @@ import type {
   HqTab,
   HqWholesaleOrderRecord,
 } from "./types";
-
-const BranchMap = dynamic(() => import("./BranchMap"), {
-  ssr: false,
-  loading: () => (
-    <div className="h-[340px] flex items-center justify-center text-xs text-slate-500">
-      Loading East Africa fleet map...
-    </div>
-  ),
-});
 
 interface HQOverviewSectionProps {
   summary: HqFleetSummary;
@@ -38,6 +30,40 @@ const EXPORT_FEEDS = [
   { label: "Updates CSV", href: "/api/hq/export/news" },
 ];
 
+const REGION_COORDS: Array<[string, number, number]> = [
+  ["dar", -6.7924, 39.2083],
+  ["arusha", -3.3869, 36.683],
+  ["mwanza", -2.5164, 32.9175],
+  ["dodoma", -6.163, 35.7516],
+  ["mbeya", -8.9094, 33.4608],
+  ["zanzibar", -6.1659, 39.2026],
+  ["unguja", -6.1659, 39.2026],
+  ["morogoro", -6.8278, 37.6591],
+  ["tanga", -5.0689, 39.0987],
+  ["moshi", -3.3349, 37.3404],
+  ["kilimanjaro", -3.3349, 37.3404],
+  ["iringa", -7.77, 35.69],
+  ["tabora", -5.0162, 32.8266],
+  ["kigoma", -4.8769, 29.6267],
+  ["mtwara", -10.2676, 40.1836],
+  ["kahama", -3.8375, 32.6],
+  ["geita", -2.8725, 32.2325],
+];
+
+function resolveRegionCoords(region: string, seedIdx: number): { lat: number; lng: number } {
+  const lower = (region || "").toLowerCase();
+  const match = REGION_COORDS.find(([key]) => lower.includes(key));
+  const baseLat = match ? match[1] : -6.7924;
+  const baseLng = match ? match[2] : 39.2083;
+  // Tiny deterministic spread so multi-branch orgs don't stack invisibly on one pixel
+  const angle = (seedIdx * 137.5 * Math.PI) / 180;
+  const offset = match ? 0.012 : 0.03;
+  return {
+    lat: Number((baseLat + Math.cos(angle) * offset).toFixed(4)),
+    lng: Number((baseLng + Math.sin(angle) * offset).toFixed(4)),
+  };
+}
+
 export default function HQOverviewSection({
   summary,
   accounts,
@@ -55,20 +81,34 @@ export default function HQOverviewSection({
     : "bg-slate-50 border-slate-200 text-slate-800";
   const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
 
-  const branchLocations = accounts.flatMap((acc) =>
-    acc.centres.map((ctr) => ({
-      branchId: ctr.id,
-      branchName: ctr.name,
-      accountName: acc.orgName,
-      lat: typeof ctr.lat === "number" ? ctr.lat : null,
-      lng: typeof ctr.lng === "number" ? ctr.lng : null,
-      revenue: acc.centresCount > 0 ? Math.round(acc.salesRevenueTzs / acc.centresCount) : acc.salesRevenueTzs,
-      status: acc.accessLock.locked
-        ? "locked"
-        : acc.subscriptionActive
-          ? "active"
-          : "trial",
-    }))
+  let branchSeed = 0;
+  const branchMarkers: Array<MarkerData & { accountId: string }> = accounts.flatMap((acc) =>
+    acc.centres.map((ctr) => {
+      branchSeed += 1;
+      const hasExact =
+        typeof ctr.lat === "number" &&
+        typeof ctr.lng === "number" &&
+        Number.isFinite(ctr.lat) &&
+        Number.isFinite(ctr.lng);
+      const fallback = resolveRegionCoords(ctr.region || acc.region || "Dar es Salaam", branchSeed);
+      return {
+        id: ctr.id,
+        accountId: acc.id,
+        lat: hasExact ? ctr.lat! : fallback.lat,
+        lng: hasExact ? ctr.lng! : fallback.lng,
+        label: ctr.name,
+        accountName: acc.orgName,
+        region: ctr.region || acc.region,
+        revenue:
+          acc.centresCount > 0 ? Math.round(acc.salesRevenueTzs / acc.centresCount) : acc.salesRevenueTzs,
+        status: acc.accessLock.locked
+          ? "locked"
+          : acc.subscriptionActive
+            ? "active"
+            : "trial",
+        detail: `${ctr.staffCount} staff · ${acc.subscriptionPlan}`,
+      };
+    })
   );
 
   const escrowHeldOrders = wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held");
@@ -175,7 +215,7 @@ export default function HQOverviewSection({
             <div>
               <h3 className="text-sm font-semibold">Live East Africa Branch Map</h3>
               <p className={`text-xs ${mutedCls}`}>
-                {branchLocations.length} total branches mapped across {accounts.length} organizations.
+                {branchMarkers.length} branches mapped across {accounts.length} organizations. Tap any pin to inspect org.
               </p>
             </div>
             <button
@@ -186,8 +226,20 @@ export default function HQOverviewSection({
               Inspect Fleet
             </button>
           </div>
-          <div className="rounded-xl overflow-hidden border border-slate-500/20">
-            <BranchMap branches={branchLocations} />
+          <div className="h-[460px] rounded-xl overflow-hidden border border-slate-500/20">
+            <CervosMap
+              markers={branchMarkers}
+              defaultStyle={isDark ? "dark" : "light"}
+              showControls
+              enableRegionJump
+              onMarkerClick={(m) => {
+                const match = branchMarkers.find((bm) => bm.id === m.id);
+                if (match) {
+                  onSelectOrg(match.accountId);
+                  onSwitchTab("fleet");
+                }
+              }}
+            />
           </div>
         </section>
 

@@ -43,7 +43,7 @@ interface ChatStateSlice {
  * into the slim right pill rail unless the user interacts with or pins it open.
  */
 export function useShellBranchChat() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [state, setState] = useState<ChatStateSlice | null>(null);
   const userToggledRef = useRef(false);
 
@@ -73,14 +73,20 @@ export function useShellBranchChat() {
     };
   }, [load]);
 
-  // Peek open on launch for ~1.15s then collapse cleanly unless pinned or interacted with
+  // Peek open on desktop launch for ~1.15s unless pinned; keep mobile closed until explicitly tapped
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth < 1024) {
+      setOpen(false);
+      return;
+    }
     let closeTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       const pinned = window.localStorage.getItem("cervos-chat-pinned");
       if (pinned === "1") {
         setOpen(true);
       } else {
+        setOpen(true);
         closeTimer = setTimeout(() => {
           if (!userToggledRef.current) setOpen(false);
         }, 1150);
@@ -286,17 +292,17 @@ export function BranchChatDockedAside({
         )}
       </aside>
 
-      {/* Mobile (< lg): Slide-over Sheet only when explicitly toggled */}
+      {/* Mobile (< lg): Full-height dvh Slide-over Sheet cleanly above bottom nav */}
       {chat.open && (
-        <div className="lg:hidden fixed inset-0 z-50 flex justify-end">
+        <div className="lg:hidden fixed inset-0 z-[60] h-[100dvh] max-h-[100dvh] flex justify-end">
           <button
             type="button"
             aria-label="Close mobile branch chat backdrop"
             onClick={chat.close}
-            className="flex-1 bg-slate-950/45 backdrop-blur-xs cursor-pointer"
+            className="flex-1 bg-slate-950/50 backdrop-blur-xs cursor-pointer"
           />
           <aside
-            className={`w-full max-w-sm h-full border-l flex flex-col shadow-2xl ${isDark ? "bg-[#0E131C] border-slate-800" : "bg-white border-[#EAECF0]"
+            className={`w-full max-w-md h-full max-h-[100dvh] min-h-0 border-l flex flex-col shadow-2xl ${isDark ? "bg-[#0E131C] border-slate-800" : "bg-white border-[#EAECF0]"
               }`}
           >
             <BranchChatDrawer
