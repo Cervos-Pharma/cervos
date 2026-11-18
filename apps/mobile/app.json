@@ -52,7 +52,16 @@
         {
           "color": "#1039B9"
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ],
+      "expo-sqlite"
     ],
     "extra": {
       "router": {
