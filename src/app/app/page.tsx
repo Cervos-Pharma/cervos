@@ -36,6 +36,7 @@ import {
 import { IconCheck, IconDownload, IconLock, IconShield } from "@/components/LandingIcons";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { usePwaInstall } from "@/lib/workspace/usePwaInstall";
+import { triggerBackgroundDownload } from "@/lib/workspace/download";
 import { useI18n } from "@/lib/i18n/context";
 
 interface AuditLogEntry {
@@ -61,6 +62,9 @@ interface AppWorkspaceData {
     networkUnlocked: boolean;
     subscriptionActive: boolean;
     subscriptionPlan: string;
+    subscriptionExpiresAt?: string;
+    subscriptionDaysLeft?: number | null;
+    subscriptionInGraceDay?: boolean;
     billingOverdue?: boolean;
     trialEndsAt?: string;
     accessLock?: { locked: boolean; source: "hq" | "billing" | null; reason: string };
@@ -111,13 +115,33 @@ export default function WorkspaceHomePage() {
   const router = useRouter();
   const { setLang: setI18nLang } = useI18n();
   const { theme, isDark, toggleTheme } = useWorkspaceTheme();
-  const { canPromptNative, isInstalled, installing, triggerInstall } = usePwaInstall();
+  const { canPromptNative, isInstalled, installing, deviceKind, triggerInstall } = usePwaInstall();
 
   const [data, setData] = useState<AppWorkspaceData | null>(null);
   const [tab, setTab] = useState<AppTab>("overview");
   const [orgScope, setOrgScope] = useState<"all" | "branch">("branch");
   const [sessionLockedOut, setSessionLockedOut] = useState(false);
   const userChoseScopeRef = useRef(false);
+  const [contextSwitchToast, setContextSwitchToast] = useState<{
+    label: string;
+    scope: "all" | "branch";
+    key: number;
+  } | null>(null);
+  const [paymentCelebration, setPaymentCelebration] = useState<{
+    status: "completed" | "failed";
+    planName: string;
+    reference?: string;
+    message: string;
+  } | null>(null);
+  const [dismissedExpiryStrip, setDismissedExpiryStrip] = useState(false);
+
+  const showSwitchToast = (label: string, scope: "all" | "branch") => {
+    const key = Date.now();
+    setContextSwitchToast({ label, scope, key });
+    window.setTimeout(() => {
+      setContextSwitchToast((cur) => (cur?.key === key ? null : cur));
+    }, 3200);
+  };
 
   const handleSetOrgScope = (nextScope: "all" | "branch") => {
     userChoseScopeRef.current = true;
@@ -125,6 +149,15 @@ export default function WorkspaceHomePage() {
     if (nextScope === "all" && (tab === "operations" || tab === "inventory" || tab === "receipts")) {
       setTab("overview");
     }
+    const targetName =
+      nextScope === "all"
+        ? data?.account?.lang === "SW"
+          ? "Matawi Yote"
+          : "All Branches"
+        : data?.centres?.find((c) => c.id === data.activeCentreId)?.name ||
+          data?.centres?.[0]?.name ||
+          "Branch";
+    showSwitchToast(targetName, nextScope);
   };
   const [searchQuery, setSearchQuery] = useState("");
   const [showInstallOffer, setShowInstallOffer] = useState(false);
@@ -148,7 +181,16 @@ export default function WorkspaceHomePage() {
         router.replace("/auth?mode=signin");
         return;
       }
-      const res = (await r.json()) as AppWorkspaceData & { loungeOnly?: boolean };
+      const res = (await r.json()) as AppWorkspaceData & {
+        loungeOnly?: boolean;
+        paymentResolution?: {
+          status: "completed" | "failed";
+          reference: string;
+          planName: string;
+          amountTzs: number;
+          message: string;
+        } | null;
+      };
       if (res.loungeOnly) {
         router.replace("/app/lounge");
         return;
@@ -160,6 +202,19 @@ export default function WorkspaceHomePage() {
       if (!res.activeProfile) {
         router.replace("/app/gate?stage=profile");
         return;
+      }
+      if (res.paymentResolution) {
+        try {
+          window.localStorage.removeItem("cervos_pending_payment");
+        } catch {
+          /* ignore */
+        }
+        setPaymentCelebration({
+          status: res.paymentResolution.status,
+          planName: res.paymentResolution.planName,
+          reference: res.paymentResolution.reference,
+          message: res.paymentResolution.message,
+        });
       }
       setI18nLang(res.account.lang);
       setData(res);
@@ -201,8 +256,10 @@ export default function WorkspaceHomePage() {
     window.addEventListener("pageshow", onPageShow);
     try {
       const justSignedIn = window.sessionStorage.getItem("cervos-just-logged-in") === "1";
-      const dismissed = window.sessionStorage.getItem("cervos-install-offer-dismissed") === "1";
-      if (justSignedIn && !dismissed) {
+      const snoozeUntilRaw = window.localStorage.getItem("cervos-install-offer-snoozed-until");
+      const snoozeUntil = snoozeUntilRaw ? Number(snoozeUntilRaw) : 0;
+      const notSnoozed = !Number.isFinite(snoozeUntil) || Date.now() > snoozeUntil;
+      if (justSignedIn && notSnoozed) {
         setShowInstallOffer(true);
       }
     } catch {
@@ -253,7 +310,11 @@ export default function WorkspaceHomePage() {
   const dismissInstallOffer = () => {
     setShowInstallOffer(false);
     try {
-      window.sessionStorage.setItem("cervos-install-offer-dismissed", "1");
+      // Show infrequently (remember dismissal for 14 days instead of nagging every login)
+      window.localStorage.setItem(
+        "cervos-install-offer-snoozed-until",
+        String(Date.now() + 14 * 24 * 60 * 60 * 1000)
+      );
     } catch {
       // Ignore
     }
@@ -331,10 +392,82 @@ export default function WorkspaceHomePage() {
     if (res.ok) {
       userChoseScopeRef.current = true;
       setOrgScope("branch");
+      const matchedName =
+        data?.centres?.find((c) => c.id === centreId)?.name ||
+        (data?.account?.lang === "SW" ? "Tawi Limebadilishwa" : "Switched Branch");
+      showSwitchToast(matchedName, "branch");
       await fetchState();
       window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
     }
   };
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let attempts = 0;
+    const pollBackgroundPayment = async () => {
+      let raw: string | null = null;
+      try {
+        raw = window.localStorage.getItem("cervos_pending_payment");
+      } catch {
+        return;
+      }
+      if (!raw) return;
+      let saved: { reference?: string; planName?: string; startedAt?: string } | null = null;
+      try {
+        saved = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (!saved?.reference) return;
+      const ageMs = saved.startedAt ? Date.now() - Date.parse(saved.startedAt) : 0;
+      if (ageMs > 20 * 60 * 1000 || attempts >= 15) {
+        try {
+          window.localStorage.removeItem("cervos_pending_payment");
+        } catch {
+          /* ignore */
+        }
+        if (timer) clearInterval(timer);
+        return;
+      }
+      attempts += 1;
+      try {
+        const res = await fetch("/api/workspace/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "check_subscription_payment", reference: saved.reference }),
+        });
+        const out = await res.json();
+        if (out.status === "completed") {
+          window.localStorage.removeItem("cervos_pending_payment");
+          if (timer) clearInterval(timer);
+          setPaymentCelebration({
+            status: "completed",
+            planName: out.planName || saved.planName || "Cervos Plan",
+            reference: out.receiptNumber || saved.reference,
+            message: `${out.planName || saved.planName || "Plan"} payment cleared and unlocked!`,
+          });
+          void fetchState();
+        } else if (out.status === "failed" || res.status === 402) {
+          window.localStorage.removeItem("cervos_pending_payment");
+          if (timer) clearInterval(timer);
+          setPaymentCelebration({
+            status: "failed",
+            planName: saved.planName || "Cervos Plan",
+            reference: saved.reference,
+            message: out.error || "Mobile money payment failed or was declined.",
+          });
+        }
+      } catch {
+        /* retry quietly within bounded background limit */
+      }
+    };
+    void pollBackgroundPayment();
+    timer = setInterval(() => void pollBackgroundPayment(), 6000);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const recordDemoSale = async () => {
     if (!data) return;
@@ -718,7 +851,7 @@ export default function WorkspaceHomePage() {
       centreName={isGeneralOrgHub ? (isSw ? "Matawi Yote" : "All Branches") : activeCentre?.name || account.region}
       profileName={activeProfile.displayName}
       profileRole={role}
-      showBranchChat={!isGeneralOrgHub}
+      showBranchChat={true}
       brandLogoUrl={account.customization?.brandLogoUrl}
       brandAccent={brandAccent}
       fontScale={activeProfile.profilePrefs?.fontScale || account.customization?.fontScale}
@@ -748,8 +881,141 @@ export default function WorkspaceHomePage() {
       />
 
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Post-Login In-App Install Prompt (PWA or In-App Device Downloads) */}
-        {showInstallOffer && !isInstalled && (
+        {/* Animated Branch Switch Confirmation Popup (visible across Reports & all tabs) */}
+        {contextSwitchToast && (
+          <div
+            key={contextSwitchToast.key}
+            role="status"
+            aria-live="polite"
+            className="fixed top-[68px] left-1/2 -translate-x-1/2 z-[70] pointer-events-none px-4"
+          >
+            <div
+              className="pointer-events-auto inline-flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-lg border text-xs font-semibold animate-stage-pop backdrop-blur-md"
+              style={{
+                backgroundColor: isDark ? "rgba(17, 22, 31, 0.96)" : "rgba(255, 255, 255, 0.96)",
+                borderColor: brandAccent,
+                color: isDark ? "#F8FAFC" : "#0F172A",
+              }}
+            >
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span>
+                {isSw ? "Mtazamo umehamishiwa:" : "Viewing:"}{" "}
+                <strong style={{ color: isDark ? "#38BDF8" : brandAccent }}>{contextSwitchToast.label}</strong>
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Background Payment Celebration / Retry Banner */}
+        {paymentCelebration && (
+          <div
+            className={`rounded-[22px] border p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 animate-stage-pop ${
+              paymentCelebration.status === "completed"
+                ? "bg-emerald-500/12 border-emerald-500/40"
+                : "bg-rose-500/10 border-rose-500/40"
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white ${
+                  paymentCelebration.status === "completed" ? "bg-emerald-500" : "bg-rose-500"
+                }`}
+              >
+                {paymentCelebration.status === "completed" ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </span>
+              <div>
+                <div className={`text-xs sm:text-sm font-bold ${paymentCelebration.status === "completed" ? "text-emerald-600 dark:text-emerald-300" : "text-rose-500"}`}>
+                  {paymentCelebration.status === "completed"
+                    ? isSw
+                      ? `Hongera! ${paymentCelebration.planName} Imewashwa`
+                      : `Celebration! ${paymentCelebration.planName} Is Now Active`
+                    : isSw
+                      ? "Malipo Hayakukamilika"
+                      : "Subscription Payment Did Not Clear"}
+                </div>
+                <p className={`text-xs mt-0.5 ${mutedText}`}>
+                  {paymentCelebration.message}
+                  {paymentCelebration.reference ? ` (Ref ${paymentCelebration.reference})` : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {paymentCelebration.status === "failed" && (
+                <Link
+                  href="/app/billing"
+                  className="px-4 py-2 rounded-full text-white text-xs font-semibold"
+                  style={{ backgroundColor: brandAccent }}
+                >
+                  {isSw ? "Jaribu Tena" : "Retry Payment ->"}
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={() => setPaymentCelebration(null)}
+                className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${
+                  isDark ? "border-slate-700 text-slate-300" : "border-slate-300 text-slate-600"
+                }`}
+              >
+                {isSw ? "Funga" : "Dismiss"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Personalized Approaching-Expiry Reminder Strip (<= 7 days or grace day) */}
+        {!dismissedExpiryStrip &&
+          typeof account.subscriptionDaysLeft === "number" &&
+          account.subscriptionDaysLeft <= 7 &&
+          !account.accessLock?.locked && (
+            <div className={`rounded-[20px] border px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-stage-pop ${
+              account.subscriptionInGraceDay
+                ? "bg-rose-500/10 border-rose-500/35"
+                : "bg-amber-500/10 border-amber-500/35"
+            }`}>
+              <div className="text-xs">
+                <strong className={account.subscriptionInGraceDay ? "text-rose-500" : "text-amber-600 dark:text-amber-300"}>
+                  {(() => {
+                    const firstName = (account.fullName || account.orgName).trim().split(/\s+/)[0];
+                    if (account.subscriptionInGraceDay) {
+                      return isSw
+                        ? `${firstName}, leo ni siku ya mwisho ya ${account.subscriptionPlan} kabla ya kusitishwa kesho.`
+                        : `Hi ${firstName}, your ${account.subscriptionPlan} plan expired today - renew tonight so ${account.orgName} counters stay active tomorrow.`;
+                    }
+                    return isSw
+                      ? `${firstName}, zimebaki siku ${account.subscriptionDaysLeft} kwenye ${account.subscriptionPlan} kwa ${account.orgName}.`
+                      : `Hi ${firstName}, ${account.subscriptionDaysLeft} day${account.subscriptionDaysLeft === 1 ? "" : "s"} left on your ${account.subscriptionPlan} plan for ${account.orgName}.`;
+                  })()}
+                </strong>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/app/billing"
+                  className="px-3.5 py-1.5 rounded-full text-white text-[11px] font-semibold"
+                  style={{ backgroundColor: brandAccent }}
+                >
+                  {isSw ? "Lipia / Boresha ->" : "Renew / Upgrade ->"}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setDismissedExpiryStrip(true)}
+                  className={`text-[11px] font-semibold px-2 py-1 cursor-pointer ${mutedText}`}
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+          )}
+
+        {/* Post-Login Infrequent Install & Cross-Device Convenience Tip */}
+        {showInstallOffer && (!isInstalled || installNotice) && (
           <div
             className={`rounded-lg border p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-stage-pop ${
               isDark
@@ -772,9 +1038,13 @@ export default function WorkspaceHomePage() {
                 </div>
                 <p className={`text-xs mt-0.5 ${mutedText}`}>
                   {installNotice ||
-                    (isSw
-                      ? "Weka app nyepesi hapa hapa kwenye kivinjari (PWA) au pakua toleo la kompyuta yako."
-                      : "Install right here as a fast, lightweight browser PWA or pick your device installer inside the app.")}
+                    (deviceKind === "desktop"
+                      ? isSw
+                        ? "Weka app hapa kwenye kompyuta (PWA) au pakua toleo la Android kwa ukaguzi wa stoo."
+                        : "Install as a desktop app right here, or grab the Android app for mobile barcode stock counts."
+                      : isSw
+                        ? "Weka app hapa simuni (PWA) au pakua kisakinishi cha Windows kwa kaunta."
+                        : "Install on this phone for quick counter access, or grab the Windows installer for your desktop station.")}
                 </p>
               </div>
             </div>
@@ -784,26 +1054,51 @@ export default function WorkspaceHomePage() {
                 type="button"
                 disabled={installing}
                 onClick={handleQuickPwaInstall}
-                className="px-4 py-2 rounded-md text-white text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-md text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
                 style={{ backgroundColor: brandAccent }}
               >
-                {canPromptNative
-                  ? isSw
-                    ? "Sakinisha PWA Papo Hapo"
-                    : "Install Browser App (PWA)"
-                  : isSw
-                    ? "Weka PWA"
-                    : "Instant PWA Guide"}
+                {installing && (
+                  <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                )}
+                <span>
+                  {canPromptNative
+                    ? isSw
+                      ? "Sakinisha PWA Papo Hapo"
+                      : "Install Browser App (PWA)"
+                    : isSw
+                      ? "Weka PWA"
+                      : "Instant PWA Guide"}
+                </span>
               </button>
-              <Link
-                href="/app/download"
-                className={`px-4 py-2 rounded-md border text-xs font-semibold ${
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUrl =
+                    deviceKind === "desktop"
+                      ? "https://github.com/Cervos-Pharma/cervos/releases/download/installers/Cervos-Pharma.apk"
+                      : "https://github.com/Cervos-Pharma/cervos/releases/download/installers/Cervos-POS-Setup.exe";
+                  const fname = triggerBackgroundDownload(targetUrl);
+                  setInstallNotice(
+                    isSw
+                      ? `Inapakua ${fname} chinichini bila kuondoka hapa.`
+                      : `Downloading ${fname} for your other device in the background.`
+                  );
+                }}
+                className={`px-3.5 py-2 rounded-md border text-xs font-semibold cursor-pointer ${
                   isDark
                     ? "border-slate-700 hover:bg-slate-800 text-slate-100"
                     : "border-[#E2E8F0] hover:bg-slate-50 text-[#0F172A]"
                 }`}
               >
-                {isSw ? "Chagua Kifaa" : "Device Downloads"} &rarr;
+                {deviceKind === "desktop"
+                  ? isSw ? "Pakua Android APK" : "Get Android App"
+                  : isSw ? "Pakua Windows (.exe)" : "Get Windows POS"}
+              </button>
+              <Link
+                href="/app/download"
+                className={`px-3 py-2 text-xs font-semibold hover:underline ${mutedText}`}
+              >
+                {isSw ? "Vifaa Vyote" : "All Platforms"} &rarr;
               </Link>
               <button
                 type="button"
@@ -811,6 +1106,52 @@ export default function WorkspaceHomePage() {
                 className={`px-2.5 py-2 text-xs font-semibold cursor-pointer ${mutedText} hover:underline`}
               >
                 {isSw ? "Baadaye" : "Not now"}
+              </button>
+            </div>
+          </div>
+        )}
+        {showInstallOffer && isInstalled && !installNotice && (
+          <div
+            className={`rounded-lg border px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-stage-pop ${
+              isDark
+                ? "bg-[#11161F]/90 border-slate-800 text-slate-200"
+                : "bg-white border-[#E2E8F0] text-[#0F172A]"
+            }`}
+          >
+            <div className="text-xs">
+              <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-bold text-[10px] mr-2">
+                {isSw ? "IMEWEKWA HAPA" : "INSTALLED"}
+              </span>
+              {deviceKind === "desktop"
+                ? isSw
+                  ? "Kituo cha kompyuta kiko tayari. Unataka app ya Android kwa ukaguzi wa simu?"
+                  : "App installed here. Want the Android app for mobile barcode stock counts?"
+                : isSw
+                  ? "App iko tayari simuni. Unataka kisakinishi cha Windows kwa kaunta?"
+                  : "App installed here. Want the Windows desktop installer for your counter PC?"}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetUrl =
+                    deviceKind === "desktop"
+                      ? "https://github.com/Cervos-Pharma/cervos/releases/download/installers/Cervos-Pharma.apk"
+                      : "https://github.com/Cervos-Pharma/cervos/releases/download/installers/Cervos-POS-Setup.exe";
+                  const fname = triggerBackgroundDownload(targetUrl);
+                  setInstallNotice(`Downloading ${fname} in the background.`);
+                }}
+                className="px-3 py-1.5 rounded-md text-white text-[11px] font-semibold cursor-pointer"
+                style={{ backgroundColor: brandAccent }}
+              >
+                {deviceKind === "desktop" ? "Get Android APK" : "Get Windows POS"}
+              </button>
+              <button
+                type="button"
+                onClick={dismissInstallOffer}
+                className={`px-2 py-1 text-xs cursor-pointer ${mutedText}`}
+              >
+                &times;
               </button>
             </div>
           </div>

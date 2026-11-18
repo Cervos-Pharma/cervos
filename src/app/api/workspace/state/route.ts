@@ -36,14 +36,13 @@ import {
 import {
   appendAuditLog,
   clampProfileCapabilities,
+  computePlanCheckoutQuote,
   ensureAccountDomainData,
   flushWorkspaceDb,
   getHqUpdates,
   getWorkspaceDb,
-  getWorkspacePackages,
   isAccountAccessLocked,
   isUsernameTaken,
-  MIN_BRANCH_PRICE_TZS,
   newId,
   publicAccountSummary,
   publicJoinRequestSummary,
@@ -161,6 +160,107 @@ export async function GET(request: NextRequest) {
   }
 
   const activeCaps = activeProfile.capabilities;
+
+  // Opportunistically resolve recent pending Payme USSD checkouts when syncing workspace state
+  let paymentResolution: {
+    status: "completed" | "failed";
+    reference: string;
+    planName: string;
+    amountTzs: number;
+    isUpgrade?: boolean;
+    message: string;
+  } | null = null;
+  const isTestOrMock =
+    process.env.NODE_ENV === "test" ||
+    process.env.NEXT_PUBLIC_MOCK_MODE === "true" ||
+    process.env.CERVOS_MOCK_AUTH === "true";
+  const pendingSub = (db.pendingSubscriptions ?? []).find(
+    (p) =>
+      p.accountId === account.id &&
+      p.status === "pending" &&
+      Date.now() - Date.parse(p.createdAt) < 30 * 60 * 1000
+  );
+  if (pendingSub && !isTestOrMock) {
+    try {
+      const { data: qData } = await queryTransaction(pendingSub.reference);
+      const payStatus = (qData?.payment_status || "").toUpperCase();
+      if (payStatus === "COMPLETED") {
+        const quote = computePlanCheckoutQuote(
+          db,
+          account,
+          pendingSub.planName,
+          pendingSub.billingCycle
+        );
+        const nowIso = new Date().toISOString();
+        pendingSub.status = "completed";
+        pendingSub.completedAt = nowIso;
+        account.subscriptionActive = true;
+        account.billingOverdue = false;
+        account.subscriptionPlan = pendingSub.planName;
+        account.billingCycle = pendingSub.billingCycle;
+        account.subscriptionActivatedAt = nowIso;
+        account.subscriptionExpiresAt = quote.nextExpiresAt;
+        db.notifications ??= [];
+        const noteBody = pendingSub.isUpgrade
+          ? `Upgraded to ${pendingSub.planName} (${pendingSub.reference}). All features and limits are now active.`
+          : `${pendingSub.planName} payment confirmed (${pendingSub.reference}).`;
+        db.notifications.unshift({
+          id: newId("ntf"),
+          accountId: account.id,
+          centreId: activeCentreId,
+          kind: "system",
+          title: pendingSub.isUpgrade ? `Plan Upgraded: ${pendingSub.planName}` : `Plan Active: ${pendingSub.planName}`,
+          body: noteBody,
+          read: false,
+          createdAt: nowIso,
+        });
+        appendAuditLog(db, {
+          accountId: account.id,
+          actor: activeProfile.displayName,
+          category: "BILLING",
+          action: `${pendingSub.isUpgrade ? "Upgraded" : "Activated"} ${pendingSub.planName} via background USSD verify (${pendingSub.reference})`,
+        });
+        saveWorkspaceDb(db);
+        await flushWorkspaceDb();
+        paymentResolution = {
+          status: "completed",
+          reference: pendingSub.reference,
+          planName: pendingSub.planName,
+          amountTzs: pendingSub.amountTzs,
+          isUpgrade: pendingSub.isUpgrade,
+          message: noteBody,
+        };
+      } else if (payStatus === "FAILED") {
+        pendingSub.status = "failed";
+        const failReason =
+          qData?.provider_message ||
+          "Mobile money PIN approval was declined or expired. Retry from Billing & Plans.";
+        db.notifications ??= [];
+        db.notifications.unshift({
+          id: newId("ntf"),
+          accountId: account.id,
+          centreId: activeCentreId,
+          kind: "approval",
+          title: "Subscription Payment Did Not Clear",
+          body: failReason,
+          read: false,
+          createdAt: new Date().toISOString(),
+        });
+        saveWorkspaceDb(db);
+        await flushWorkspaceDb();
+        paymentResolution = {
+          status: "failed",
+          reference: pendingSub.reference,
+          planName: pendingSub.planName,
+          amountTzs: pendingSub.amountTzs,
+          message: failReason,
+        };
+      }
+    } catch {
+      /* non-fatal background poll */
+    }
+  }
+
   const auditLogs = isOwnerSession
     ? (db.auditLogs ?? []).filter((log) => log.accountId === account.id).slice(0, 15)
     : [];
@@ -221,6 +321,7 @@ export async function GET(request: NextRequest) {
     stockAlerts: { nearExpiryCount, expiredCount, lowStockCount },
     activeCentreId,
     activeProfile,
+    paymentResolution,
   });
 }
 
@@ -281,6 +382,16 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: accessLock.reason, accessLock }, { status: 423 });
   }
 
+  const orgCentres = db.centres.filter((c) => c.accountId === account.id);
+  const effectiveCentreId =
+    (isManagerRole &&
+    profileSession?.centreId &&
+    orgCentres.some((c) => c.id === profileSession.centreId)
+      ? profileSession.centreId
+      : orgCentres.some((c) => c.id === unlockedProfile.centreId)
+        ? unlockedProfile.centreId
+        : orgCentres[0]?.id) || unlockedProfile.centreId;
+
   if (action === "ack_hq_message") {
     const msgId = sanitizeText(body.messageId, 60);
     const msg = (db.hqMessages ?? []).find((m) => m.id === msgId && m.accountId === account.id);
@@ -308,7 +419,7 @@ export async function POST(request: NextRequest) {
       const created = {
         id: newId("shift"),
         accountId: account.id,
-        centreId: unlockedProfile.centreId,
+        centreId: effectiveCentreId,
         profileId: unlockedProfile.id,
         staffName: unlockedProfile.displayName,
         role: unlockedProfile.role,
@@ -659,26 +770,24 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ ok: true, profile: publicProfileSummary(unlockedProfile) });
   }
 
-  const effectiveCentreId =
-    (unlockedProfile.isMasterAdmin ||
-      unlockedProfile.role === "pharmacy_owner" ||
-      unlockedProfile.role === "supplier_admin") &&
-    profileSession?.centreId &&
-    db.centres.some((c) => c.id === profileSession.centreId && c.accountId === account.id)
-      ? profileSession.centreId
-      : unlockedProfile.centreId;
-
-  // Branch-scoped WhatsApp-style Chat + Record Attachment (Available to all unlocked staff at that centre)
+  // Branch-scoped team chat + record attachment + replies, @mentions & reactions
   if (action === "send_branch_chat") {
     const rawAtt = (body.attachment ?? null) as Record<string, unknown> | null;
     if (hasAnyInjection([body.body, rawAtt?.title, rawAtt?.subtitle, rawAtt?.refId])) {
       return noStoreJson({ error: "Unsupported characters in message." }, { status: 400 });
     }
-    const text = sanitizeText(body.body, 400);
+    const text = sanitizeText(body.body, 500);
     if (!text && !rawAtt) {
       return noStoreJson({ error: "Write a message or attach a system record." }, { status: 400 });
     }
-    ensureAccountDomainData(db, account.id, effectiveCentreId);
+    const targetCentreId =
+      isManagerRole &&
+      typeof body.centreId === "string" &&
+      orgCentres.some((c) => c.id === body.centreId)
+        ? body.centreId
+        : effectiveCentreId;
+
+    ensureAccountDomainData(db, account.id, targetCentreId);
     const allowedKinds = new Set(["batch", "sale", "order", "wholesale_request"]);
     const attachment =
       rawAtt && typeof rawAtt.kind === "string" && allowedKinds.has(rawAtt.kind)
@@ -691,20 +800,97 @@ export async function POST(request: NextRequest) {
           }
         : undefined;
 
-    db.branchMessages!.push({
+    const replyToId = sanitizeText(body.replyToId, 60);
+    const repliedMsg = replyToId
+      ? (db.branchMessages ?? []).find((m) => m.id === replyToId && m.accountId === account.id)
+      : undefined;
+
+    const mentionMatches = new Set<string>();
+    const orgProfiles = db.profiles.filter((p) => p.accountId === account.id);
+    const rawMentions = text.match(/@([a-zA-Z0-9._-]+)/g) ?? [];
+    for (const rawM of rawMentions) {
+      const handle = rawM.slice(1).toLowerCase();
+      const matchedProf = orgProfiles.find(
+        (p) =>
+          (p.username && p.username.toLowerCase() === handle) ||
+          p.displayName.toLowerCase().replace(/\s+/g, ".") === handle ||
+          p.displayName.split(/\s+/)[0]?.toLowerCase() === handle
+      );
+      if (matchedProf) {
+        mentionMatches.add(matchedProf.displayName);
+      }
+    }
+
+    const createdMsg = {
       id: newId("msg"),
       accountId: account.id,
-      centreId: effectiveCentreId,
+      centreId: targetCentreId,
       senderProfileId: unlockedProfile.id,
       senderName: unlockedProfile.displayName,
       senderRole: unlockedProfile.role,
       body: text || "Shared system record",
+      ...(repliedMsg
+        ? {
+            replyTo: {
+              id: repliedMsg.id,
+              senderName: repliedMsg.senderName,
+              body: repliedMsg.body.slice(0, 120),
+            },
+          }
+        : {}),
+      ...(mentionMatches.size > 0 ? { mentions: Array.from(mentionMatches) } : {}),
       attachment,
       createdAt: new Date().toISOString(),
-    });
+    };
+    db.branchMessages!.push(createdMsg);
+
+    if (mentionMatches.size > 0) {
+      db.notifications ??= [];
+      db.notifications.unshift({
+        id: newId("ntf"),
+        accountId: account.id,
+        centreId: targetCentreId,
+        kind: "system",
+        title: `${unlockedProfile.displayName} mentioned ${Array.from(mentionMatches).join(", ")}`,
+        body: createdMsg.body.slice(0, 140),
+        read: false,
+        createdAt: createdMsg.createdAt,
+      });
+    }
+
     saveWorkspaceDb(db);
     await flushWorkspaceDb();
-    return noStoreJson({ ok: true });
+    return noStoreJson({ ok: true, message: createdMsg });
+  }
+
+  if (action === "react_branch_chat") {
+    const messageId = sanitizeText(body.messageId, 60);
+    const kind =
+      body.kind === "thumbs_up" || body.kind === "heart" || body.kind === "check"
+        ? body.kind
+        : "thumbs_up";
+    const msg = (db.branchMessages ?? []).find(
+      (m) => m.id === messageId && m.accountId === account.id
+    );
+    if (!msg) {
+      return noStoreJson({ error: "Message not found." }, { status: 404 });
+    }
+    const list = (msg.reactions ??= []);
+    const existingIdx = list.findIndex(
+      (r) => r.profileId === unlockedProfile.id && r.kind === kind
+    );
+    if (existingIdx >= 0) {
+      list.splice(existingIdx, 1);
+    } else {
+      list.push({
+        kind,
+        profileId: unlockedProfile.id,
+        name: unlockedProfile.displayName,
+      });
+    }
+    saveWorkspaceDb(db);
+    await flushWorkspaceDb();
+    return noStoreJson({ ok: true, reactions: list });
   }
 
   if (action === "mark_notifications_read") {
@@ -1249,7 +1435,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "activate_subscription") {
-    const planName = sanitizeText(body.planName, 80) || account.subscriptionPlan;
+    const planNameInput = sanitizeText(body.planName, 80) || account.subscriptionPlan;
     const channel = sanitizeText(body.paymentChannel, 40) || "M-Pesa (Vodacom)";
     const billingCycle: "monthly" | "annual" = body.billingCycle === "annual" ? "annual" : "monthly";
     const payerRef = sanitizeText(body.payerPhoneOrRef, 60);
@@ -1264,18 +1450,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pkgs = getWorkspacePackages(db);
-    const matchedPkg =
-      pkgs.find((p) => p.name.toLowerCase() === planName.toLowerCase() || p.id === planName) ?? pkgs[1] ?? pkgs[0];
-    const orgBranchesCount = Math.max(1, db.centres.filter((c) => c.accountId === account.id).length);
-    const unitMonthly = Math.max(
-      MIN_BRANCH_PRICE_TZS,
-      matchedPkg ? Math.max(matchedPkg.priceMonthlyTzs, matchedPkg.pricePerBranchMonthlyTzs * orgBranchesCount) : 45000
-    );
-    const amountTzs =
-      billingCycle === "annual"
-        ? Math.max(unitMonthly * 10, matchedPkg?.priceAnnualTzs || unitMonthly * 10)
-        : unitMonthly;
+    const quote = computePlanCheckoutQuote(db, account, planNameInput, billingCycle);
+    const planName = quote.resolvedPlanName;
+    const amountTzs = quote.amountDueTzs;
+    const previousPlan = account.subscriptionPlan;
 
     const isMobileMoney = /mpesa|m-pesa|tigo|mixx|airtel|halo|mobile|ussd/i.test(channel);
     const msisdn = isMobileMoney ? normalizeMsisdn(payerRef) : "";
@@ -1320,6 +1498,9 @@ export async function POST(request: NextRequest) {
         reference: payReceipt,
         accountId: account.id,
         planName,
+        previousPlan,
+        upgradeCreditTzs: quote.creditTzs,
+        isUpgrade: quote.isUpgrade,
         billingCycle,
         channel,
         msisdn,
@@ -1335,7 +1516,7 @@ export async function POST(request: NextRequest) {
           accountId: account.id,
           actor: unlockedProfile.displayName,
           category: "BILLING",
-          action: `Initiated ${channel} USSD checkout (${payReceipt}, +${msisdn}, ${amountTzs.toLocaleString("en-US")} TZS) awaiting PIN approval`,
+          action: `Initiated ${channel} USSD ${quote.isUpgrade ? "upgrade" : "checkout"} (${payReceipt}, +${msisdn}, ${amountTzs.toLocaleString("en-US")} TZS -> ${planName}) awaiting PIN approval`,
         });
         saveWorkspaceDb(db);
         await flushWorkspaceDb();
@@ -1345,6 +1526,10 @@ export async function POST(request: NextRequest) {
           reference: payReceipt,
           transactionId: paymeData?.transaction_id || null,
           amountTzs,
+          baseAmountTzs: quote.baseAmountTzs,
+          upgradeCreditTzs: quote.creditTzs,
+          isUpgrade: quote.isUpgrade,
+          previousPlan,
           msisdn,
           message:
             paymeData?.provider_response?.message ||
@@ -1353,14 +1538,33 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const nowIso = new Date().toISOString();
     account.subscriptionActive = true;
     account.billingOverdue = false;
     account.subscriptionPlan = planName;
+    account.billingCycle = billingCycle;
+    account.subscriptionActivatedAt = nowIso;
+    account.subscriptionExpiresAt = quote.nextExpiresAt;
+    db.notifications ??= [];
+    db.notifications.unshift({
+      id: newId("ntf"),
+      accountId: account.id,
+      centreId: "",
+      kind: "system",
+      title: quote.isUpgrade ? `Plan Upgraded: ${planName}` : `Plan Active: ${planName}`,
+      body: quote.isUpgrade
+        ? `Upgraded from ${previousPlan} to ${planName} (${amountTzs.toLocaleString("en-US")} TZS${quote.creditTzs > 0 ? `, credit applied: ${quote.creditTzs.toLocaleString("en-US")} TZS` : ""}).`
+        : `${planName} (${billingCycle}) activated via ${channel}. Receipt ${payReceipt}.`,
+      read: false,
+      createdAt: nowIso,
+    });
     appendAuditLog(db, {
       accountId: account.id,
       actor: unlockedProfile.displayName,
       category: "BILLING",
-      action: `Activated plan ${planName} (${billingCycle}) via ${channel}${payerRef ? ` (${payerRef})` : ""} - Receipt ${payReceipt}`,
+      action: quote.isUpgrade
+        ? `Upgraded plan from ${previousPlan} to ${planName} (${billingCycle}) via ${channel} - ${amountTzs.toLocaleString("en-US")} TZS (Credit ${quote.creditTzs.toLocaleString("en-US")} TZS) - Receipt ${payReceipt}`
+        : `Activated plan ${planName} (${billingCycle}) via ${channel}${payerRef ? ` (${payerRef})` : ""} - Receipt ${payReceipt}`,
     });
     saveWorkspaceDb(db);
     await flushWorkspaceDb();
@@ -1369,6 +1573,10 @@ export async function POST(request: NextRequest) {
       pending: false,
       receiptNumber: payReceipt,
       amountTzs,
+      baseAmountTzs: quote.baseAmountTzs,
+      upgradeCreditTzs: quote.creditTzs,
+      isUpgrade: quote.isUpgrade,
+      previousPlan,
       account: publicAccountSummary(account),
     });
   }
@@ -1388,6 +1596,9 @@ export async function POST(request: NextRequest) {
         ok: true,
         status: "completed",
         receiptNumber: pending.reference,
+        planName: pending.planName,
+        isUpgrade: pending.isUpgrade,
+        amountTzs: pending.amountTzs,
         account: publicAccountSummary(account),
       });
     }
@@ -1398,16 +1609,34 @@ export async function POST(request: NextRequest) {
     }
     const payStatus = (qData?.payment_status || "").toUpperCase();
     if (payStatus === "COMPLETED") {
+      const quote = computePlanCheckoutQuote(db, account, pending.planName, pending.billingCycle);
+      const nowIso = new Date().toISOString();
       pending.status = "completed";
-      pending.completedAt = new Date().toISOString();
+      pending.completedAt = nowIso;
       account.subscriptionActive = true;
       account.billingOverdue = false;
       account.subscriptionPlan = pending.planName;
+      account.billingCycle = pending.billingCycle;
+      account.subscriptionActivatedAt = nowIso;
+      account.subscriptionExpiresAt = quote.nextExpiresAt;
+      db.notifications ??= [];
+      db.notifications.unshift({
+        id: newId("ntf"),
+        accountId: account.id,
+        centreId: "",
+        kind: "system",
+        title: pending.isUpgrade ? `Plan Upgraded: ${pending.planName}` : `Plan Active: ${pending.planName}`,
+        body: `Confirmed ${pending.channel} USSD payment ${pending.reference} (${pending.amountTzs.toLocaleString("en-US")} TZS).`,
+        read: false,
+        createdAt: nowIso,
+      });
       appendAuditLog(db, {
         accountId: account.id,
         actor: unlockedProfile.displayName,
         category: "BILLING",
-        action: `Confirmed ${pending.channel} USSD payment ${pending.reference} (${pending.amountTzs.toLocaleString("en-US")} TZS) -> ${pending.planName} activated`,
+        action: pending.isUpgrade
+          ? `Confirmed ${pending.channel} USSD upgrade ${pending.reference} (${pending.amountTzs.toLocaleString("en-US")} TZS): ${pending.previousPlan || "Previous"} -> ${pending.planName}`
+          : `Confirmed ${pending.channel} USSD payment ${pending.reference} (${pending.amountTzs.toLocaleString("en-US")} TZS) -> ${pending.planName} activated`,
       });
       saveWorkspaceDb(db);
       await flushWorkspaceDb();
@@ -1415,6 +1644,9 @@ export async function POST(request: NextRequest) {
         ok: true,
         status: "completed",
         receiptNumber: pending.reference,
+        planName: pending.planName,
+        isUpgrade: pending.isUpgrade,
+        amountTzs: pending.amountTzs,
         account: publicAccountSummary(account),
       });
     }

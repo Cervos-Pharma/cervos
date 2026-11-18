@@ -13,6 +13,7 @@ import {
   IconWindows,
 } from "@/components/LandingIcons";
 import { detectClientPlatform, getDownloadBuilds, type PlatformBuildId } from "@/lib/landing-data";
+import { triggerBackgroundDownload } from "@/lib/workspace/download";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { usePwaInstall } from "@/lib/workspace/usePwaInstall";
 
@@ -43,6 +44,7 @@ export default function InAppDownloadPage() {
   const [detected, setDetected] = useState<PlatformBuildId>("windows");
   const [searchQuery, setSearchQuery] = useState("");
   const [pwaNotice, setPwaNotice] = useState<string | null>(null);
+  const [downloadBanner, setDownloadBanner] = useState<string | null>(null);
   const [previewSplash, setPreviewSplash] = useState(false);
 
   useEffect(() => {
@@ -242,13 +244,22 @@ export default function InAppDownloadPage() {
           </div>
         </div>
 
+        {downloadBanner && (
+          <div className="px-4 py-3 rounded-xl border border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between gap-2">
+            <span>{downloadBanner}</span>
+            <button type="button" onClick={() => setDownloadBanner(null)} className="underline text-[11px] cursor-pointer">
+              {isSw ? "Funga" : "Dismiss"}
+            </button>
+          </div>
+        )}
+
         {/* Device-Specific Native Downloads Inside Workspace */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {builds
             .filter((b) => !searchQuery.trim() || b.title.toLowerCase().includes(searchQuery.toLowerCase()))
             .map((b) => {
               const isDetected = b.id === detected;
-              const isPwaCard = b.id === "pwa";
+              const isApplePwa = b.id === "mac";
               return (
                 <div
                   key={b.id}
@@ -286,7 +297,7 @@ export default function InAppDownloadPage() {
                     <p className={`text-xs leading-relaxed ${mutedCls}`}>{b.desc}</p>
                   </div>
 
-                  {isPwaCard ? (
+                  {isApplePwa ? (
                     <button
                       type="button"
                       onClick={handleInstallPwa}
@@ -297,13 +308,20 @@ export default function InAppDownloadPage() {
                       }`}
                     >
                       <IconCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>{isSw ? "Sakinisha Kwenye Simu" : "Install Mobile PWA"}</span>
+                      <span>{b.cta}</span>
                     </button>
                   ) : (
-                    <a
-                      href={b.href}
-                      download
-                      className={`w-full py-2.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-2 text-center transition-colors ${
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const file = triggerBackgroundDownload(b.href);
+                        setDownloadBanner(
+                          isSw
+                            ? `Inapakua ${file} chinichini bila kuondoka kwenye ukurasa huu.`
+                            : `Downloading ${file} in the background - stay right here while your browser saves it.`
+                        );
+                      }}
+                      className={`w-full py-2.5 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-2 text-center transition-colors cursor-pointer ${
                         isDetected
                           ? "text-white"
                           : isDark
@@ -314,7 +332,7 @@ export default function InAppDownloadPage() {
                     >
                       <IconDownload className="w-3.5 h-3.5" />
                       <span>{b.cta}</span>
-                    </a>
+                    </button>
                   )}
                 </div>
               );

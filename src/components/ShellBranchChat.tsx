@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BranchChatDrawer, {
+  type BranchChatMember,
   type BranchChatMsg,
+  type BranchChatReactionKind,
   type BranchChatRecordAttachment,
 } from "@/components/BranchChatDrawer";
 
 /** Fired by any view (e.g. calm wholesale escalation) to pop the branch chat open. */
 export const OPEN_CHAT_EVENT = "cervos:open-chat";
-/** Fired by the chat after it mutates server state (approvals) so views can refresh. */
+/** Fired by the chat after it mutates server state (approvals, messages, reactions) so views can refresh. */
 export const WORKSPACE_REFRESH_EVENT = "cervos:workspace-refresh";
 
 export function requestOpenBranchChat() {
@@ -19,6 +21,13 @@ interface ChatStateSlice {
   activeProfile: { id: string; role: string; isMasterAdmin: boolean } | null;
   activeCentreId: string | null;
   centres: Array<{ id: string; name: string }>;
+  profiles?: Array<{
+    id: string;
+    username?: string;
+    displayName: string;
+    role: string;
+    centreId: string;
+  }>;
   branchMessages?: BranchChatMsg[];
   batches?: Array<{
     id: string;
@@ -39,11 +48,10 @@ interface ChatStateSlice {
 
 /**
  * Shared branch-chat state hook for WorkspaceShell.
- * Opens briefly (~1.15s) on launch just like the left nav rail, then auto-collapses
- * into the slim right pill rail unless the user interacts with or pins it open.
  */
 export function useShellBranchChat() {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [state, setState] = useState<ChatStateSlice | null>(null);
   const userToggledRef = useRef(false);
 
@@ -54,6 +62,8 @@ export function useShellBranchChat() {
       setState((await r.json()) as ChatStateSlice);
     } catch {
       // Offline: keep last snapshot
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -62,9 +72,9 @@ export function useShellBranchChat() {
     const onOpen = () => {
       userToggledRef.current = true;
       setOpen(true);
-      load();
+      void load();
     };
-    const onRefresh = () => load();
+    const onRefresh = () => void load();
     window.addEventListener(OPEN_CHAT_EVENT, onOpen);
     window.addEventListener(WORKSPACE_REFRESH_EVENT, onRefresh);
     return () => {
@@ -117,7 +127,7 @@ export function useShellBranchChat() {
       } catch {
         // Ignore storage errors
       }
-      if (next) load();
+      if (next) void load();
       return next;
     });
   }, [load]);
@@ -146,6 +156,17 @@ export function useShellBranchChat() {
     (m) => m.attachment?.kind === "wholesale_request" && m.attachment.approvalStatus === "pending"
   ).length;
 
+  const members: BranchChatMember[] = useMemo(() => {
+    return (state?.profiles ?? []).map((p) => ({
+      id: p.id,
+      displayName: p.displayName,
+      handle:
+        (p.username && p.username.trim()) ||
+        p.displayName.trim().toLowerCase().replace(/\s+/g, "."),
+      role: p.role,
+    }));
+  }, [state?.profiles]);
+
   const attachableRecords = useMemo(() => {
     const batchOpts = (state?.batches ?? []).slice(0, 8).map((b) => ({
       kind: "batch" as const,
@@ -162,14 +183,65 @@ export function useShellBranchChat() {
     return [...batchOpts, ...orderOpts];
   }, [state?.batches, state?.wholesaleOrders]);
 
-  const send = async (body: string, attachment?: BranchChatRecordAttachment) => {
+  const send = async (
+    body: string,
+    attachment?: BranchChatRecordAttachment,
+    replyToId?: string
+  ): Promise<string | null> => {
     userToggledRef.current = true;
-    const res = await fetch("/api/workspace/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "send_branch_chat", body, attachment }),
-    });
-    if (res.ok) await load();
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send_branch_chat",
+          body,
+          attachment,
+          replyToId,
+          centreId: state?.activeCentreId || undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        message?: BranchChatMsg;
+      };
+      if (!res.ok || !json.ok) {
+        return json.error || `Message failed to send (HTTP ${res.status}).`;
+      }
+      if (json.message) {
+        setState((prev) =>
+          prev
+            ? {
+                ...prev,
+                branchMessages: [...(prev.branchMessages ?? []), json.message!],
+              }
+            : prev
+        );
+      }
+      await load();
+      window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
+      return null;
+    } catch {
+      return "Network error — could not send message.";
+    }
+  };
+
+  const react = async (messageId: string, kind: BranchChatReactionKind): Promise<string | null> => {
+    userToggledRef.current = true;
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "react_branch_chat", messageId, kind }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) return json.error || "Could not save reaction.";
+      await load();
+      return null;
+    } catch {
+      return "Network error saving reaction.";
+    }
   };
 
   const resolve = async (messageId: string, decision: "approve" | "decline"): Promise<string | null> => {
@@ -189,6 +261,7 @@ export function useShellBranchChat() {
   return {
     available: !!profile,
     open,
+    loading,
     toggle,
     close,
     markInteracted,
@@ -197,8 +270,10 @@ export function useShellBranchChat() {
     profile,
     canManageAdmin,
     messages,
+    members,
     attachableRecords,
     send,
+    react,
     resolve,
   };
 }
@@ -213,8 +288,7 @@ interface BranchChatDockedAsideProps {
 
 /**
  * Docked symmetrical right rail inside WorkspaceShell's main flex row.
- * Expands to a 340px panel that adjusts `<main>` layout smoothly (never hangs over content)
- * and collapses down to a matching w-11 vertical icon rail just like the left menu.
+ * Mobile overlay stops cleanly below the sticky top bar (`top-[57px]`).
  */
 export function BranchChatDockedAside({
   chat,
@@ -247,16 +321,19 @@ export function BranchChatDockedAside({
           <div className="h-full w-full flex flex-col">
             <BranchChatDrawer
               open={chat.open}
+              loading={chat.loading}
               onClose={chat.close}
               centreName={chat.centreName}
               currentProfileId={chat.profile.id}
               canManageAdmin={chat.canManageAdmin}
               messages={chat.messages}
+              members={chat.members}
               attachableRecords={chat.attachableRecords}
               accent={accent}
               isDark={isDark}
               isSw={isSw}
               onSendMessage={chat.send}
+              onReactMessage={chat.react}
               onResolveApproval={chat.resolve}
             />
           </div>
@@ -292,31 +369,35 @@ export function BranchChatDockedAside({
         )}
       </aside>
 
-      {/* Mobile (< lg): Full-height dvh Slide-over Sheet cleanly above bottom nav */}
+      {/* Mobile (< lg): Bounded strictly BELOW top bar (`top-[57px]`) so header controls stay accessible */}
       {chat.open && (
-        <div className="lg:hidden fixed inset-0 z-[60] h-[100dvh] max-h-[100dvh] flex justify-end">
+        <div className="lg:hidden fixed top-[57px] inset-x-0 bottom-0 z-[28] h-[calc(100dvh-57px)] max-h-[calc(100dvh-57px)] flex justify-end">
           <button
             type="button"
             aria-label="Close mobile branch chat backdrop"
             onClick={chat.close}
-            className="flex-1 bg-slate-950/50 backdrop-blur-xs cursor-pointer"
+            className="flex-1 bg-slate-950/45 backdrop-blur-xs cursor-pointer"
           />
           <aside
-            className={`w-full max-w-md h-full max-h-[100dvh] min-h-0 border-l flex flex-col shadow-2xl ${isDark ? "bg-[#0E131C] border-slate-800" : "bg-white border-[#EAECF0]"
-              }`}
+            className={`w-full max-w-md h-full max-h-[calc(100dvh-57px)] min-h-0 border-l flex flex-col shadow-2xl ${
+              isDark ? "bg-[#0E131C] border-slate-800" : "bg-white border-[#EAECF0]"
+            }`}
           >
             <BranchChatDrawer
               open={chat.open}
+              loading={chat.loading}
               onClose={chat.close}
               centreName={chat.centreName}
               currentProfileId={chat.profile.id}
               canManageAdmin={chat.canManageAdmin}
               messages={chat.messages}
+              members={chat.members}
               attachableRecords={chat.attachableRecords}
               accent={accent}
               isDark={isDark}
               isSw={isSw}
               onSendMessage={chat.send}
+              onReactMessage={chat.react}
               onResolveApproval={chat.resolve}
             />
           </aside>

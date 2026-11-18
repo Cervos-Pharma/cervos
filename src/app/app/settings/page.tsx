@@ -68,6 +68,8 @@ function WorkspaceSettingsInner() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [savingAction, setSavingAction] = useState<string | null>(null);
+  const [enrollingPasskey, setEnrollingPasskey] = useState(false);
 
   // User Personal Profile Form State
   const [myDisplayName, setMyDisplayName] = useState("");
@@ -166,21 +168,27 @@ function WorkspaceSettingsInner() {
   };
 
   const postAction = async (payload: Record<string, unknown>, successText: string) => {
+    const actName = String(payload.action || "saving");
+    setSavingAction(actName);
     setErrorMsg(null);
     setStatusMsg(null);
-    const res = await fetch("/api/workspace/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const out = (await res.json()) as { ok?: boolean; error?: string };
-    if (!res.ok || !out.ok) {
-      setErrorMsg(out.error || "Update failed.");
-      return false;
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const out = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !out.ok) {
+        setErrorMsg(out.error || "Update failed.");
+        return false;
+      }
+      setStatusMsg(successText);
+      await loadState();
+      return true;
+    } finally {
+      setSavingAction(null);
     }
-    setStatusMsg(successText);
-    await loadState();
-    return true;
   };
 
   const handleSaveUserProfile = async (e: FormEvent) => {
@@ -254,20 +262,25 @@ function WorkspaceSettingsInner() {
 
   const handleEnrollPasskey = async () => {
     if (!state) return;
+    setEnrollingPasskey(true);
     setErrorMsg(null);
     setStatusMsg(null);
-    const res = await enrollPasskeyForAccount({
-      userName: state.account.email,
-      displayName: state.activeProfile?.displayName || state.account.fullName,
-      label: passkeyLabel,
-      profileId: state.activeProfile?.id,
-    });
-    if (!res.ok) {
-      setErrorMsg(res.error || "Passkey enrollment failed.");
-      return;
+    try {
+      const res = await enrollPasskeyForAccount({
+        userName: state.account.email,
+        displayName: state.activeProfile?.displayName || state.account.fullName,
+        label: passkeyLabel,
+        profileId: state.activeProfile?.id,
+      });
+      if (!res.ok) {
+        setErrorMsg(res.error || "Passkey enrollment failed.");
+        return;
+      }
+      setStatusMsg("Passkey / device biometrics linked to your profile.");
+      await loadState();
+    } finally {
+      setEnrollingPasskey(false);
     }
-    setStatusMsg("Passkey / device biometrics linked to your profile.");
-    await loadState();
   };
 
   const handleLogoFileChange = (file: File | undefined) => {
@@ -526,11 +539,18 @@ function WorkspaceSettingsInner() {
 
                 <button
                   type="submit"
-                  disabled={Boolean(newPin && (!newPinCheck?.ok || newPin !== confirmNewPin))}
-                  className="px-5 py-2.5 rounded-full text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                  disabled={savingAction === "update_profile_settings" || Boolean(newPin && (!newPinCheck?.ok || newPin !== confirmNewPin))}
+                  className="px-5 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   style={{ backgroundColor: accent }}
                 >
-                  {isSw ? "Hifadhi Mipangilio Yangu" : "Save My Profile Settings"}
+                  {savingAction === "update_profile_settings" && (
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  )}
+                  <span>
+                    {savingAction === "update_profile_settings"
+                      ? isSw ? "Inahifadhi..." : "Saving..."
+                      : isSw ? "Hifadhi Mipangilio Yangu" : "Save My Profile Settings"}
+                  </span>
                 </button>
               </form>
             </section>
@@ -555,11 +575,15 @@ function WorkspaceSettingsInner() {
                   />
                   <button
                     type="button"
+                    disabled={enrollingPasskey}
                     onClick={handleEnrollPasskey}
-                    className="px-5 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer"
+                    className="px-5 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                     style={{ backgroundColor: accent }}
                   >
-                    + Register My Passkey
+                    {enrollingPasskey && (
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    )}
+                    <span>{enrollingPasskey ? "Registering..." : "+ Register My Passkey"}</span>
                   </button>
                 </div>
               )}
@@ -752,16 +776,20 @@ function WorkspaceSettingsInner() {
 
               <button
                 type="button"
+                disabled={savingAction === "update_customization"}
                 onClick={() =>
                   postAction(
                     { action: "update_customization", brandAccent, fontScale: orgFontScale, layoutType, themePref },
                     "Organization branding & layout updated."
                   )
                 }
-                className="px-5 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer"
+                className="px-5 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                 style={{ backgroundColor: brandAccent }}
               >
-                Save Organization Brand
+                {savingAction === "update_customization" && (
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                )}
+                <span>{savingAction === "update_customization" ? "Saving..." : "Save Organization Brand"}</span>
               </button>
             </section>
 
@@ -835,11 +863,14 @@ function WorkspaceSettingsInner() {
 
                 <button
                   type="submit"
-                  disabled={!licenseNum.trim() || !certFileName.trim()}
-                  className="px-5 py-2.5 rounded-full text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                  disabled={savingAction === "upload_certificates" || !licenseNum.trim() || !certFileName.trim()}
+                  className="px-5 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   style={{ backgroundColor: accent }}
                 >
-                  Upload &amp; Unlock Network Access
+                  {savingAction === "upload_certificates" && (
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  )}
+                  <span>{savingAction === "upload_certificates" ? "Uploading..." : "Upload & Unlock Network Access"}</span>
                 </button>
               </form>
             </section>
@@ -921,10 +952,14 @@ function WorkspaceSettingsInner() {
                 />
                 <button
                   type="submit"
-                  className="sm:col-span-3 justify-self-start px-5 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer"
+                  disabled={savingAction === "add_centre"}
+                  className="sm:col-span-3 justify-self-start px-5 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   style={{ backgroundColor: accent }}
                 >
-                  + Add Centre
+                  {savingAction === "add_centre" && (
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  )}
+                  <span>{savingAction === "add_centre" ? "Adding..." : "+ Add Centre"}</span>
                 </button>
               </form>
             </section>
@@ -999,11 +1034,14 @@ function WorkspaceSettingsInner() {
                 </div>
                 <button
                   type="submit"
-                  disabled={!staffPinCheck.ok}
-                  className="sm:col-span-4 justify-self-start px-5 py-2.5 rounded-full text-white text-xs font-semibold disabled:opacity-50 cursor-pointer"
+                  disabled={savingAction === "add_profile" || !staffPinCheck.ok}
+                  className="sm:col-span-4 justify-self-start px-5 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   style={{ backgroundColor: accent }}
                 >
-                  + Add Staff Profile
+                  {savingAction === "add_profile" && (
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  )}
+                  <span>{savingAction === "add_profile" ? "Adding..." : "+ Add Staff Profile"}</span>
                 </button>
               </form>
             </section>

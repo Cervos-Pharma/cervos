@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatTzs } from "@cervos/core";
 import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import type { ProfileCapabilities } from "@/lib/workspace/permissions";
@@ -120,7 +120,15 @@ export default function ReportsIntelligenceView({
   const effectiveView: ExtendedReportView = !canViewOrg ? "my_perf" : rawActiveView;
 
   const [windowDays, setWindowDays] = useState<14 | 30>(30);
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const derivedCentreFilter =
+    activeCentreName === "All Branches" || activeCentreName === "Matawi Yote"
+      ? "all"
+      : activeCentreId || "all";
+  const [branchFilter, setBranchFilter] = useState<string>(derivedCentreFilter);
+
+  useEffect(() => {
+    setBranchFilter(derivedCentreFilter);
+  }, [derivedCentreFilter]);
   const [compareBranchA, setCompareBranchA] = useState<string>("");
   const [compareBranchB, setCompareBranchB] = useState<string>("");
   const [hoverProdChartIdx, setHoverProdChartIdx] = useState<number | null>(null);
@@ -686,10 +694,29 @@ export default function ReportsIntelligenceView({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border animate-stage-pop"
+            style={{ borderColor: accent, color: accent }}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span>
+              {branchFilter === "all"
+                ? isSw
+                  ? "Matawi Yote"
+                  : "All Branches"
+                : centres.find((c) => c.id === branchFilter)?.name || activeCentreName}
+            </span>
+          </span>
           {canViewOrg && centres.length > 1 && (
             <select
               value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                setBranchFilter(nextId);
+                if (nextId !== "all" && onSwitchCentre) {
+                  onSwitchCentre(nextId);
+                }
+              }}
               className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
             >
               <option value="all">{isSw ? "Matawi Yote" : "All Branches"}</option>

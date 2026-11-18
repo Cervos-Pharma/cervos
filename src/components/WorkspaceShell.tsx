@@ -953,7 +953,7 @@ export default function WorkspaceShell({
             )}
 
             {/* Right: Messages / Branch Chat */}
-            <Link
+            <button
               type="button"
               onClick={() => {
                 if (showBranchChat && branchChat.available) {
@@ -977,7 +977,7 @@ export default function WorkspaceShell({
                 )}
               </span>
               <span>{isSw ? "Ujumbe" : "Messages"}</span>
-            </Link>
+            </button>
           </nav>
         );
       })()}

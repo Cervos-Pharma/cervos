@@ -29,6 +29,7 @@ import SupportHelpSection from "@/components/SupportHelpSection";
 import type { ActiveStationPing } from "@/components/TanzaniaGlobe";
 import { useI18n } from "@/lib/i18n/context";
 import { useIsLowEndDevice } from "@/lib/useDeviceTier";
+import { triggerBackgroundDownload } from "@/lib/workspace/download";
 
 const TanzaniaGlobe = dynamic(() => import("@/components/TanzaniaGlobe"), {
   ssr: false,
@@ -896,7 +897,7 @@ export default function CervosLandingPage() {
             </div>
 
             <div className="shrink-0">
-              {activeBuild.id === "pwa" ? (
+              {activeBuild.href.startsWith("/") ? (
                 <Link
                   href={activeBuild.href}
                   className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md"
@@ -905,14 +906,16 @@ export default function CervosLandingPage() {
                   <FlipText text={activeBuild.cta} flipKey={lang} />
                 </Link>
               ) : (
-                <a
-                  href={activeBuild.href}
-                  download
-                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md"
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerBackgroundDownload(activeBuild.href);
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
                 >
                   <IconDownload className="w-4 h-4" />
                   <FlipText text={activeBuild.cta} flipKey={lang} />
-                </a>
+                </button>
               )}
             </div>
           </div>

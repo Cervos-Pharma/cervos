@@ -16,6 +16,7 @@ import {
 } from "@/components/LandingIcons";
 import { useI18n } from "@/lib/i18n/context";
 import { useIsLowEndDevice } from "@/lib/useDeviceTier";
+import { triggerBackgroundDownload } from "@/lib/workspace/download";
 
 export default function DownloadsPage() {
   const { lang } = useI18n();
@@ -23,6 +24,7 @@ export default function DownloadsPage() {
   const isLowEnd = useIsLowEndDevice();
 
   const [detected, setDetected] = useState<PlatformBuildId>("windows");
+  const [downloadNote, setDownloadNote] = useState<string | null>(null);
   const heroRef = useRef<HTMLElement>(null);
   const [heroMesh, setHeroMesh] = useState({ x: 64, y: 38, active: false });
 
@@ -111,6 +113,14 @@ export default function DownloadsPage() {
 
       <main className="flex-1 py-16 sm:py-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-6">
+          {downloadNote && (
+            <div className="mb-6 px-4 py-3 rounded-xl border border-emerald-500/35 bg-emerald-500/10 text-emerald-700 text-xs font-semibold flex items-center justify-between gap-2">
+              <span>{downloadNote}</span>
+              <button type="button" onClick={() => setDownloadNote(null)} className="underline text-[11px] cursor-pointer">
+                {isSw ? "Funga" : "Dismiss"}
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {builds.map((b) => {
               const isCurrent = b.id === detected;
@@ -148,7 +158,7 @@ export default function DownloadsPage() {
                     </p>
                   </div>
 
-                  {b.id === "pwa" ? (
+                  {b.href.startsWith("/") ? (
                     <Link
                       href={b.href}
                       className="w-full py-2.5 px-4 rounded-full bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
@@ -157,14 +167,21 @@ export default function DownloadsPage() {
                       <span>{b.cta}</span>
                     </Link>
                   ) : (
-                    <a
-                      href={b.href}
-                      download
-                      className="w-full py-2.5 px-4 rounded-full bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const file = triggerBackgroundDownload(b.href);
+                        setDownloadNote(
+                          isSw
+                            ? `Upakuaji wa ${file} umeanza chinichini bila kuondoka kwenye ukurasa huu.`
+                            : `Started downloading ${file} in the background - no redirect needed.`
+                        );
+                      }}
+                      className="w-full py-2.5 px-4 rounded-full bg-[#1039B9] hover:bg-[#0D2E94] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                     >
                       <IconDownload className="w-3.5 h-3.5" />
                       <span>{b.cta}</span>
-                    </a>
+                    </button>
                   )}
                 </div>
               );

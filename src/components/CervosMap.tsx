@@ -69,28 +69,30 @@ const ROUTE_COLORS: Record<string, string> = {
 
 const TILE_LAYERS: Record<
   MapStyleId,
-  { label: string; url: string; attribution: string; maxZoom: number; bg: string }
+  { label: string; url: string; attribution: string; maxZoom: number; bg: string; className?: string }
 > = {
-  light: {
-    label: "Light",
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    maxZoom: 19,
-    bg: "#eef2f9",
-  },
-  dark: {
-    label: "Dark",
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    maxZoom: 19,
-    bg: "#0e1320",
-  },
   street: {
     label: "OSM",
     url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: "&copy; OpenStreetMap contributors",
     maxZoom: 19,
     bg: "#e9ecef",
+  },
+  light: {
+    label: "OSM Light",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+    bg: "#eef2f9",
+    className: "saturate-75 brightness-105",
+  },
+  dark: {
+    label: "OSM Dark",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+    bg: "#0e1320",
+    className: "invert hue-rotate-180 brightness-95 contrast-90",
   },
 };
 
@@ -240,7 +242,7 @@ export default function CervosMap({
   onMarkerClick,
   onMapClick,
   selectedId,
-  defaultStyle = "light",
+  defaultStyle = "street",
   showControls = true,
   enableRegionJump = false,
   fitBoundsOnUpdate = true,
@@ -322,6 +324,7 @@ export default function CervosMap({
       const layer = L.tileLayer(spec.url, {
         attribution: spec.attribution,
         maxZoom: spec.maxZoom,
+        ...(spec.className ? { className: spec.className } : {}),
       });
       layer.on("tileerror", () => {
         setTileErrors((c) => Math.min(c + 1, 20));
