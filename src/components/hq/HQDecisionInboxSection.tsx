@@ -47,23 +47,17 @@ export default function HQDecisionInboxSection({
   );
 
   return (
-    <div className="space-y-5">
-      {/* Autonomy Dial Header (Spec Part 2 §9) */}
-      <section className={`p-5 space-y-4 ${t.panelCls}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+    <div className="space-y-3">
+      {/* COMPACT HORIZONTAL AUTONOMY DIAL BAR */}
+      <section className={`px-4 py-3 space-y-2.5 rounded-2xl border ${t.cardBorderCls} ${isDark ? "bg-[#0F141D]" : "bg-white"}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#1039B9] dark:text-sky-400">
               DECISION LAYER &amp; AUTONOMY DIAL
             </span>
-            <h2
-              className="text-xl font-semibold tracking-tight mt-0.5"
-              style={{ fontFamily: "Outfit, Inter, sans-serif" }}
-            >
-              Typed Proposals &amp; Command Registry Execution
-            </h2>
-            <p className={`text-xs mt-0.5 ${t.mutedCls}`}>
-              Every suggestion cites event ranges, model versions, and blast-radius bounds. Money, access locks, and clinical actions require human approval.
-            </p>
+            <span className={`text-xs ${t.mutedCls}`}>
+              Money, access locks, and recalls enforce human approval gates.
+            </span>
           </div>
           <button
             type="button"
@@ -74,18 +68,23 @@ export default function HQDecisionInboxSection({
                 "Generated fresh cited proposals from Spine signals"
               )
             }
-            className={`px-4 py-2 rounded-full text-xs font-semibold cursor-pointer disabled:opacity-50 ${t.primaryBtnCls}`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer disabled:opacity-50 ${t.primaryBtnCls}`}
           >
             Run Agent Draft Pass
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
+        <div className="flex lg:grid lg:grid-cols-7 gap-2 overflow-x-auto pb-1 lg:pb-0">
           {ACTION_CLASSES.map((cls) => {
             const current = autonomyConfig[cls.key] || "suggest";
             return (
-              <div key={cls.key} className={`p-3 space-y-1.5 ${t.wellCls}`}>
-                <div className="text-[11px] font-semibold leading-snug">{cls.label}</div>
+              <div key={cls.key} className={`min-w-[140px] lg:min-w-0 p-2 rounded-xl border space-y-1 ${t.cardBorderCls}`}>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[10px] font-semibold truncate">{cls.label}</span>
+                  {cls.lockToHuman && (
+                    <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold shrink-0">GATE</span>
+                  )}
+                </div>
                 <select
                   value={current}
                   disabled={busy}
@@ -99,39 +98,34 @@ export default function HQDecisionInboxSection({
                       `Autonomy for ${cls.label} set to ${e.target.value}`
                     )
                   }
-                  className={`w-full h-8 px-2 rounded-lg text-[11px] font-mono ${t.inputCls}`}
+                  className={`w-full h-7 px-1.5 rounded-lg text-[10px] font-mono ${t.inputCls}`}
                 >
                   <option value="off">Off</option>
                   <option value="suggest">Suggest (Human)</option>
                   {!cls.lockToHuman && <option value="auto_undo">Auto + Undo</option>}
                   {!cls.lockToHuman && <option value="auto">Auto</option>}
                 </select>
-                {cls.lockToHuman && (
-                  <div className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold">
-                    Human gate enforced
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
       </section>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        {/* Left: Proposal Inbox */}
-        <div className={`xl:col-span-7 p-5 space-y-4 ${t.panelCls}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-base font-semibold" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-              Proposal Inbox ({proposals.length})
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+        {/* Left: Scrollable Proposal Inbox */}
+        <div className={`xl:col-span-7 rounded-2xl border overflow-hidden ${t.cardBorderCls} ${isDark ? "bg-[#0F141D]" : "bg-white"}`}>
+          <div className={`px-4 py-2.5 border-b ${t.subtleBorderCls} flex flex-wrap items-center justify-between gap-2`}>
+            <h3 className="text-sm font-bold" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+              Proposal Inbox ({visibleProposals.length}/{proposals.length})
             </h3>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {(["proposed", "executed", "rejected", "reverted", "all"] as const).map((st) => (
                 <button
                   key={st}
                   type="button"
                   onClick={() => setStatusFilter(st)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold capitalize cursor-pointer ${
-                    statusFilter === st ? t.primaryBtnCls : t.pillCls
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize cursor-pointer ${
+                    statusFilter === st ? t.primaryBtnCls : t.wellCls
                   }`}
                 >
                   {st}
@@ -140,16 +134,16 @@ export default function HQDecisionInboxSection({
             </div>
           </div>
 
-          {visibleProposals.length === 0 ? (
-            <div className={`p-8 text-center text-xs ${t.wellCls} ${t.mutedCls}`}>
-              No proposals in this status. Click &ldquo;Run Agent Draft Pass&rdquo; above to scan live telemetry for new recommendations.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {visibleProposals.map((prop) => {
+          <div className="max-h-[490px] overflow-y-auto divide-y divide-slate-500/10">
+            {visibleProposals.length === 0 ? (
+              <div className={`p-8 text-center text-xs ${t.mutedCls}`}>
+                No proposals in this status. Click &ldquo;Run Agent Draft Pass&rdquo; above or queue directly from Models &amp; Twin.
+              </div>
+            ) : (
+              visibleProposals.map((prop) => {
                 const showBlast = expandedBlastId === prop.id;
                 return (
-                  <div key={prop.id} className={`p-4 space-y-3 text-xs ${t.wellCls}`}>
+                  <div key={prop.id} className="p-3.5 space-y-2 text-xs">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -271,25 +265,25 @@ export default function HQDecisionInboxSection({
                     </div>
                   </div>
                 );
-              })}
-            </div>
-          )}
+              })
+            )}
+          </div>
         </div>
 
         {/* Right: 5-Agent Crew & Guardrails */}
-        <div className={`xl:col-span-5 p-5 space-y-4 ${t.panelCls}`}>
-          <div>
-            <h3 className="text-base font-semibold" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+        <div className={`xl:col-span-5 rounded-2xl border overflow-hidden ${t.cardBorderCls} ${isDark ? "bg-[#0F141D]" : "bg-white"}`}>
+          <div className={`px-4 py-2.5 border-b ${t.subtleBorderCls}`}>
+            <h3 className="text-sm font-bold" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
               Governed Agent Crew ({agents.length})
             </h3>
-            <p className={`text-xs mt-0.5 ${t.mutedCls}`}>
-              All workers authenticate through the Command Registry with hard token, tool-call, and clinical guardrails.
+            <p className={`text-[11px] ${t.mutedCls}`}>
+              Command Registry guardrails, daily caps, and acceptance accuracy.
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="max-h-[490px] overflow-y-auto divide-y divide-slate-500/10">
             {agents.map((ag) => (
-              <div key={ag.id} className={`p-3.5 space-y-2 text-xs ${t.wellCls}`}>
+              <div key={ag.id} className="p-3.5 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <span className="font-bold">{ag.name}</span>

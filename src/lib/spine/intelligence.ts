@@ -14,6 +14,7 @@ import {
   ensureSpineBackfill,
   verifyOrgHashChain,
 } from "./events";
+import { evaluateRollingOriginBacktest, runModel3OrgHealthHazard } from "./models";
 import { resolveProductAlias } from "./ontology";
 import { checkEscrowFundsIntegrity, computeEffectiveAccessState } from "./registry";
 
@@ -101,6 +102,7 @@ export function buildModelScorecards(
   const gLabelPassed = gates.find((g) => g.id === "G-LABEL")?.passed ?? false;
   const gGroupPassed = gates.find((g) => g.id === "G-GROUP")?.passed ?? false;
   const stockAtCost = (db.batches ?? []).reduce((s, b) => s + b.quantity * b.costPriceTzs, 0);
+  const bt = evaluateRollingOriginBacktest(db);
 
   return [
     {
@@ -109,15 +111,15 @@ export function buildModelScorecards(
       unitAndHorizon: "Branch x ProductMaster · 7/14/30d quantiles",
       version: gIdPassed && gHistPassed ? "lgbm-q-v1.3" : "croston-baseline-v1.0",
       stage: gIdPassed && gHistPassed ? "quantile_gbm" : "baseline_rules",
-      trainingWindow: "Rolling 8 folds (weekly origin)",
+      trainingWindow: `Rolling ${bt.foldsEvaluated} folds (weekly origin)`,
       primaryMetricLabel: "WAPE / MASE",
-      modelScore: gIdPassed && gHistPassed ? "18.4% / 0.71" : "24.2% / 0.94",
-      baselineScore: "28.9% / 1.00",
-      coveragePct: 81,
-      psiDrift: 0.08,
+      modelScore: bt.wapePct > 0 || bt.mase !== 1 ? `${bt.wapePct}% / ${bt.mase}` : "Insufficient sales history",
+      baselineScore: bt.baselineWapePct > 0 ? `${bt.baselineWapePct}% / 1.00` : "0% / 1.00",
+      coveragePct: bt.empiricalCoveragePct,
+      psiDrift: bt.psiDrift,
       tzsImpact30d: Math.round(stockAtCost * 0.14),
       status: gIdPassed && gHistPassed ? "champion" : "baseline_fallback",
-      lastErrorNote: "Last backtest residual: +1.8 packs/wk on fast antimalarials",
+      lastErrorNote: `Pinball P10/P50/P90: ${bt.pinballP10} / ${bt.pinballP50} / ${bt.pinballP90}`,
       gateIds: ["G-ID", "G-HIST"],
     },
     {
@@ -192,61 +194,17 @@ export function buildModelScorecards(
 }
 
 export function computeOrgHealthAndChurn(db: WorkspaceDbSnapshot): HqSpineTelemetry["orgHealthScores"] {
-  const nowMs = Date.now();
-  return db.accounts.map((acc) => {
-    const accessState = computeEffectiveAccessState(acc, nowMs);
-    const orgSales = (db.sales ?? []).filter((s) => s.accountId === acc.id);
-    const orgTickets = (db.supportTickets ?? []).filter(
-      (tk) => tk.accountId === acc.id && tk.status !== "resolved"
-    );
-    const orgShifts = (db.shiftLogs ?? []).filter((sh) => sh.accountId === acc.id);
-
-    let score = 84;
-    const reasons: string[] = [];
-
-    if (accessState === "locked" || accessState === "overdue") {
-      score -= 35;
-      reasons.push(`Account in ${accessState} access state`);
-    } else if (accessState === "trial") {
-      score -= 8;
-      reasons.push("On onboarding trial window");
-    }
-
-    if (orgSales.length === 0) {
-      score -= 22;
-      reasons.push("Zero counter receipts recorded yet");
-    } else {
-      reasons.push(`${orgSales.length} receipts synced (${orgShifts.length} shifts logged)`);
-    }
-
-    if (orgTickets.length > 0) {
-      score -= Math.min(20, orgTickets.length * 8);
-      reasons.push(`${orgTickets.length} unresolved support ticket(s)`);
-    }
-
-    const clampedScore = Math.max(12, Math.min(99, score));
-    const churnRisk30dPct = Math.max(4, Math.min(92, 100 - clampedScore));
-
-    const playbook =
-      accessState === "overdue" || accessState === "locked"
-        ? "Trigger gentle billing check-in + payment link"
-        : orgSales.length === 0
-          ? "Schedule 15-min POS onboarding & barcode walk-through"
-          : orgTickets.length > 0
-            ? "Prioritize open support ticket before billing renewal"
-            : "Healthy trajectory — eligible for annual plan nudge";
-
-    return {
-      accountId: acc.id,
-      orgName: acc.orgName,
-      region: acc.region,
-      score: clampedScore,
-      churnRisk30dPct,
-      accessState,
-      topReasons: reasons.slice(0, 3),
-      recommendedPlaybook: playbook,
-    };
-  });
+  const spine = ensureSpineBackfill(db);
+  return runModel3OrgHealthHazard(db, spine.healthWeights).map((item) => ({
+    accountId: item.accountId,
+    orgName: item.orgName,
+    region: item.region,
+    score: item.score,
+    churnRisk30dPct: item.churnRisk30dPct,
+    accessState: item.accessState,
+    topReasons: item.topReasons,
+    recommendedPlaybook: item.recommendedPlaybook,
+  }));
 }
 
 export function buildPromiseBoard(db: WorkspaceDbSnapshot): HqPromiseMetric[] {

@@ -299,6 +299,24 @@ export const COMMAND_REGISTRY: Record<string, CommandRegistrySpec> = {
     reversibility: "reversible",
     emitsEvents: ["command.issued"],
   },
+  label_anomaly_alert: {
+    name: "label_anomaly_alert",
+    requiredCapability: "canAnswerSupport",
+    reversibility: "reversible",
+    emitsEvents: ["command.issued"],
+  },
+  update_health_weights: {
+    name: "update_health_weights",
+    requiredCapability: "canManageHqTeam",
+    reversibility: "reversible",
+    emitsEvents: ["command.issued"],
+  },
+  create_proposal_from_model: {
+    name: "create_proposal_from_model",
+    requiredCapability: "canAnswerSupport",
+    reversibility: "reversible",
+    emitsEvents: ["agent.action_proposed"],
+  },
   log_audit_event: {
     name: "log_audit_event",
     reversibility: "irreversible",

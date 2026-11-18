@@ -33,9 +33,9 @@ export default function HQCaseAndPrivacySection({
   const t = hqSurfaceTokens(isDark);
   const [subTab, setSubTab] = useState<"recalls" | "cases" | "privacy" | "aliases">("recalls");
 
-  // Recall Issue Form
-  const [regRef, setRegRef] = useState("TMDA-RCL-2026-09");
-  const [innName, setInnName] = useState("Artemether / Lumefantrine 20/120mg");
+  // Recall Issue Form (populated purely from operator entry or quick-pick DB ProductMaster aliases)
+  const [regRef, setRegRef] = useState("");
+  const [innName, setInnName] = useState(productAliases[0]?.masterLabel ?? "");
   const [batchNo, setBatchNo] = useState("");
 
   // Investigation Case Form
@@ -44,8 +44,8 @@ export default function HQCaseAndPrivacySection({
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
 
   // Privacy Release Form
-  const [recipient, setRecipient] = useState("MUHAS Pharmacovigilance");
-  const [project, setProject] = useState("Antimalarial Resistance Study");
+  const [recipient, setRecipient] = useState("");
+  const [project, setProject] = useState("");
   const [queryRegion, setQueryRegion] = useState("ALL");
   const [epsilon, setEpsilon] = useState(0.5);
 
@@ -154,6 +154,20 @@ export default function HQCaseAndPrivacySection({
               required
               className={`w-full h-9 px-3 rounded-xl ${t.inputCls}`}
             />
+            {productAliases.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {Array.from(new Set(productAliases.map((a) => a.masterLabel))).slice(0, 4).map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setInnName(label)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] cursor-pointer ${t.wellCls}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <input
               type="text"
               value={batchNo}

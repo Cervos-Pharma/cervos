@@ -41,15 +41,19 @@ import {
   appendSpineEvent,
   authorizeRegistryAction,
   buildAgentCrewProfiles,
+  buildFullIntelligenceDetail,
   buildModelScorecards,
   buildPromiseBoard,
   buildSpineTelemetrySummary,
+  DEFAULT_HEALTH_WEIGHTS,
   emitRegistryCommandEvent,
   ensureSpineBackfill,
   evaluateReadinessGates,
   executePrivacyGatewayQuery,
   generateAgentDraftProposals,
   issueAndTraceRecall,
+  runModel1DemandAndReorder,
+  runModel2ExpiryAndRescue,
   runRedTeamSyntheticDrill,
   verifyOrgHashChain,
 } from "@/lib/spine";
@@ -205,6 +209,9 @@ const ACTION_PERMISSION_MAP: Partial<Record<string, keyof HqWorkerCapabilities>>
   delete_hq_update: "canPublishEditorial",
   send_message: "canBroadcastComms",
   delete_hq_message: "canBroadcastComms",
+  label_anomaly_alert: "canAnswerSupport",
+  update_health_weights: "canManageHqTeam",
+  create_proposal_from_model: "canAnswerSupport",
 };
 
 async function buildFleetPayload(auth: { operator: string; workerId: string; workerRole: HqWorkerRole }) {
@@ -555,11 +562,30 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
   const promiseBoard = buildPromiseBoard(db);
   const spineTelemetry = buildSpineTelemetrySummary(db);
   const agents = buildAgentCrewProfiles(db);
+  const intelligenceDetail = buildFullIntelligenceDetail(db);
   const hqWorkers = (db.hqWorkers ?? []).map(publicHqWorkerSummary);
   const supportTickets: WorkspaceSupportTicket[] = [...(db.supportTickets ?? [])].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
   const hqTeamNotes = [...(db.hqTeamNotes ?? [])].slice(0, 80);
+
+  // Build trailing 14-day daily telemetry strictly from actual DB records
+  const dailyTimeline = Array.from({ length: 14 }, (_, idx) => {
+    const dayMs = nowMs - (13 - idx) * 86_400_000;
+    const dStr = new Date(dayMs).toISOString().slice(0, 10);
+    const label = dStr.slice(5);
+    const daySales = (db.sales ?? []).filter((s) => s.createdAt.slice(0, 10) === dStr);
+    const dayOrders = (db.wholesaleOrders ?? []).filter((o) => o.createdAt.slice(0, 10) === dStr);
+    const dayEvents = spine.events.filter((e) => e.receivedAt.slice(0, 10) === dStr);
+    return {
+      date: dStr,
+      label,
+      salesTzs: daySales.reduce((sum, s) => sum + s.totalTzs, 0),
+      salesCount: daySales.length,
+      escrowTzs: dayOrders.reduce((sum, o) => sum + o.totalTzs, 0),
+      eventsCount: dayEvents.length,
+    };
+  });
 
   return {
     scope: "fleet" as const,
@@ -604,6 +630,7 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
       topDispensedProducts: Array.from(skuMap.values())
         .sort((a, b) => b.unitsSold - a.unitsSold)
         .slice(0, 8),
+      dailyTimeline,
     },
     accounts,
     packages,
@@ -630,6 +657,7 @@ async function buildFleetPayload(auth: { operator: string; workerId: string; wor
     recalls: spine.recalls,
     privacyReleases: spine.privacyReleases,
     cases: spine.cases,
+    intelligenceDetail,
   };
 }
 
@@ -2030,6 +2058,178 @@ export async function POST(request: NextRequest) {
     });
     await persistDb(db);
     return noStoreJson({ ok: true, caseRecord: targetCase });
+  }
+
+  if (action === "label_anomaly_alert") {
+    const alertId = sanitizeText(body.alertId, 120);
+    const rawVerdict = sanitizeText(body.verdict, 30);
+    const verdict =
+      rawVerdict === "real" || rawVerdict === "false_alarm" || rawVerdict === "known"
+        ? rawVerdict
+        : null;
+    if (!alertId || !verdict) {
+      return noStoreJson({ error: "alertId and valid verdict (real | false_alarm | known) are required." }, { status: 400 });
+    }
+    spine.anomalyVerdicts = { ...(spine.anomalyVerdicts ?? {}), [alertId]: verdict };
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      payload: { alertId, verdict },
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, alertId, verdict });
+  }
+
+  if (action === "update_health_weights") {
+    const numOr = (val: unknown, fallback: number) => {
+      const n = Number(val);
+      return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
+    };
+    const prev = spine.healthWeights ?? DEFAULT_HEALTH_WEIGHTS;
+    const nextWeights = {
+      syncRecency: numOr(body.syncRecency, prev.syncRecency),
+      salesTrend: numOr(body.salesTrend, prev.salesTrend),
+      shiftCompliance: numOr(body.shiftCompliance, prev.shiftCompliance),
+      paymentTimeliness: numOr(body.paymentTimeliness, prev.paymentTimeliness),
+      ticketAge: numOr(body.ticketAge, prev.ticketAge),
+      versionLag: numOr(body.versionLag, prev.versionLag),
+    };
+    spine.healthWeights = nextWeights;
+    emitRegistryCommandEvent(db, {
+      action,
+      actorId: sessionWorker.id,
+      payload: nextWeights,
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, healthWeights: nextWeights });
+  }
+
+  if (action === "create_proposal_from_model") {
+    const kind = sanitizeText(body.kind, 40) === "expiry_rescue" ? "expiry_rescue" : "reorder_draft";
+    const branchId = sanitizeText(body.branchId, 100);
+    const masterId = sanitizeText(body.masterId, 100);
+    const batchId = sanitizeText(body.batchId, 100);
+    const nowIso = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+
+    if (kind === "reorder_draft") {
+      const list = runModel1DemandAndReorder(db);
+      const target =
+        list.find((r) => (!branchId || r.branchId === branchId) && (!masterId || r.masterId === masterId)) ??
+        list[0];
+      if (!target) {
+        return noStoreJson({ error: "No demand reorder candidate available in database." }, { status: 404 });
+      }
+      const orderQty = Math.max(10, target.recommendedOrderQty);
+      const propId = newId("prop");
+      const proposal = {
+        id: propId,
+        kind: "reorder_draft" as const,
+        orgId: target.orgId,
+        orgName: target.orgName,
+        branchId: target.branchId,
+        branchName: target.branchName,
+        tool: "send_message",
+        args: {
+          accountId: target.orgId,
+          branchId: target.branchId,
+          masterId: target.masterId,
+          title: `Reorder Draft: ${target.masterLabel} (${orderQty} units)`,
+        },
+        why: `${target.masterLabel} at ${target.branchName}: ${target.reason}`,
+        evidence: {
+          eventRange: `seq 1..${spine.globalSeqCounter}`,
+          eventIds: spine.events.slice(-2).map((e) => e.eventId),
+          modelVersion: "lgbm-q-v1.3",
+          featureSnapshot: `cover=${target.daysOfCover}d, p50=${target.dailyP50}/d, p90=${target.dailyP90}/d`,
+        },
+        confidence: {
+          p10: Math.max(1, Math.round(target.dailyP10 * target.leadTimeDays)),
+          p50: Math.max(1, Math.round(target.dailyP50 * target.leadTimeDays)),
+          p90: Math.max(1, Math.round(target.dailyP90 * target.leadTimeDays)),
+          unit: "units/lead",
+        },
+        impact: { tzs: orderQty * 4500, units: orderQty, orgsTouched: 1, branchesTouched: 1 },
+        reversibility: "reversible" as const,
+        status: "proposed" as const,
+        createdAt: nowIso,
+        expiresAt,
+      };
+      spine.proposals.unshift(proposal);
+      appendSpineEvent(db, {
+        legacyOrgId: target.orgId,
+        legacyBranchId: target.branchId,
+        actorId: sessionWorker.id,
+        actorKind: "agent",
+        type: "agent.action_proposed",
+        idempotencyKey: `model_prop:${propId}`,
+        payload: { proposal_id: propId, model: "model_1_demand", qty: orderQty },
+        piiClass: "none",
+        source: "hq",
+      });
+      await persistDb(db);
+      return noStoreJson({ ok: true, proposal });
+    }
+
+    const rescues = runModel2ExpiryAndRescue(db);
+    const targetRescue =
+      rescues.find((x) => (!batchId || x.batchId === batchId) && (!branchId || x.branchId === branchId)) ??
+      rescues[0];
+    if (!targetRescue) {
+      return noStoreJson({ error: "No expiry rescue candidate available in database." }, { status: 404 });
+    }
+    const propId = newId("prop");
+    const proposal = {
+      id: propId,
+      kind: "expiry_rescue" as const,
+      orgId: targetRescue.orgId,
+      orgName: targetRescue.orgName,
+      branchId: targetRescue.branchId,
+      branchName: targetRescue.branchName,
+      tool: "transfer_stock",
+      args: {
+        batchId: targetRescue.batchId,
+        batchNumber: targetRescue.batchNumber,
+        rescueOption: targetRescue.recommendedRescue.option,
+      },
+      why: `${targetRescue.brandName} (${targetRescue.batchNumber}) ${targetRescue.reason} Best action: ${targetRescue.recommendedRescue.label}.`,
+      evidence: {
+        eventRange: `seq 1..${spine.globalSeqCounter}`,
+        eventIds: spine.events.slice(-2).map((e) => e.eventId),
+        modelVersion: "fefo-mc-v1.2",
+        featureSnapshot: `prob_loss=${targetRescue.probLossPct}%, unsold=${targetRescue.expectedUnsoldUnits}`,
+      },
+      confidence: {
+        p10: Math.round(targetRescue.recommendedRescue.expectedRecoveryTzs * 0.72),
+        p50: targetRescue.recommendedRescue.expectedRecoveryTzs,
+        p90: Math.round(targetRescue.recommendedRescue.expectedRecoveryTzs * 1.18),
+        unit: "TZS",
+      },
+      impact: {
+        tzs: targetRescue.recommendedRescue.expectedRecoveryTzs,
+        units: targetRescue.expectedUnsoldUnits,
+        orgsTouched: 1,
+        branchesTouched: 1,
+      },
+      reversibility: "reversible" as const,
+      status: "proposed" as const,
+      createdAt: nowIso,
+      expiresAt,
+    };
+    spine.proposals.unshift(proposal);
+    appendSpineEvent(db, {
+      legacyOrgId: targetRescue.orgId,
+      legacyBranchId: targetRescue.branchId,
+      actorId: sessionWorker.id,
+      actorKind: "agent",
+      type: "agent.action_proposed",
+      idempotencyKey: `model_prop:${propId}`,
+      payload: { proposal_id: propId, model: "model_2_expiry", batch: targetRescue.batchNumber },
+      piiClass: "none",
+      source: "hq",
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, proposal });
   }
 
   if (action === "run_red_team_drill") {

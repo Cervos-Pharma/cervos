@@ -2,19 +2,33 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import {
   appendSpineEvent,
+  buildFullIntelligenceDetail,
   buildModelScorecards,
   buildPromiseBoard,
+  buildSignedEdgeModelPack,
   checkEscrowFundsIntegrity,
+  computeBranchFeatures,
+  computeBranchProductFeatures,
+  computeCalendarFeatures,
   computeEffectiveAccessState,
+  computeLotFeatures,
+  computeOrgFeatures,
+  computeSupplierFeatures,
+  crostonTsbForecast,
   deterministicLegacyUuid,
   ensureSpineBackfill,
   evaluateReadinessGates,
+  evaluateRollingOriginBacktest,
   executePrivacyGatewayQuery,
   generateAgentDraftProposals,
   generateUuidV7,
   issueAndTraceRecall,
   nextHlc,
   resolveProductAlias,
+  runCatalogDetectors,
+  runModel1DemandAndReorder,
+  runModel2ExpiryAndRescue,
+  runModel3OrgHealthHazard,
   runRedTeamSyntheticDrill,
   verifyOrgHashChain,
 } from "@/lib/spine";
@@ -217,5 +231,149 @@ describe("Cervos Ontology, Event Spine & Intelligence Layer", () => {
     expect(drillRes.status).toBe(200);
     const drillJson = await drillRes.json();
     expect(drillJson.report.passedChecks).toBe(drillJson.report.totalChecks);
-  });
+
+    expect(Array.isArray(fleetJson.intelligenceDetail?.demandReorders)).toBe(true);
+    expect(Array.isArray(fleetJson.intelligenceDetail?.shelfExpiryForecasts)).toBe(true);
+    expect(Array.isArray(fleetJson.intelligenceDetail?.orgHealthHazards)).toBe(true);
+    expect(fleetJson.intelligenceDetail?.edgeModelPack?.hmacSignature).toBeTruthy();
+    expect(fleetJson.peakTelemetry?.dailyTimeline?.length).toBe(14);
+
+    // Label an anomaly alert & update Model 3 health weights
+    const firstAlertId = fleetJson.intelligenceDetail?.detectorAlerts?.[0]?.id ?? "det_test_1";
+    const labelRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Ops-Session": token },
+        body: JSON.stringify({ action: "label_anomaly_alert", alertId: firstAlertId, verdict: "real" }),
+      })
+    );
+    expect(labelRes.status).toBe(200);
+    expect((await labelRes.json()).verdict).toBe("real");
+
+    const weightsRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Ops-Session": token },
+        body: JSON.stringify({
+          action: "update_health_weights",
+          syncRecency: 30,
+          salesTrend: 25,
+          shiftCompliance: 15,
+          paymentTimeliness: 20,
+          ticketAge: 5,
+          versionLag: 5,
+        }),
+      })
+    );
+    expect(weightsRes.status).toBe(200);
+    expect((await weightsRes.json()).healthWeights.syncRecency).toBe(30);
+
+    // Queue Model 1 reorder & Model 2 expiry rescue proposals straight into Decision Inbox
+    const reorderTarget = fleetJson.intelligenceDetail?.demandReorders?.[0];
+    if (reorderTarget) {
+      const m1Res = await dispatchPost(
+        new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Ops-Session": token },
+          body: JSON.stringify({
+            action: "create_proposal_from_model",
+            kind: "reorder_draft",
+            branchId: reorderTarget.branchId,
+            masterId: reorderTarget.masterId,
+          }),
+        })
+      );
+      expect(m1Res.status).toBe(200);
+      expect((await m1Res.json()).proposal.kind).toBe("reorder_draft");
+    }
+
+    const expiryTarget = fleetJson.intelligenceDetail?.shelfExpiryForecasts?.[0];
+    if (expiryTarget) {
+      const m2Res = await dispatchPost(
+        new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Ops-Session": token },
+          body: JSON.stringify({
+            action: "create_proposal_from_model",
+            kind: "expiry_rescue",
+            branchId: expiryTarget.branchId,
+            batchId: expiryTarget.batchId,
+          }),
+        })
+      );
+      expect(m2Res.status).toBe(200);
+      expect((await m2Res.json()).proposal.kind).toBe("expiry_rescue");
+    }
+  }, 15000);
+
+  it("computes point-in-time feature views, Model 1-3 outputs, Catalog Detectors, Backtest & signed Edge Pack", () => {
+    const asOfIso = "2026-04-28T10:00:00.000Z";
+    const cal = computeCalendarFeatures(asOfIso);
+    expect(cal.isPaydayWeek).toBe(true);
+    expect(cal.rainySeason).toBe("masika_long");
+
+    expect(crostonTsbForecast([2, 0, 0, 3, 0, 2, 0])).toBeGreaterThan(0);
+
+    const db = getWorkspaceDb();
+    ensureSpineBackfill(db);
+
+    const firstBatch = (db.batches ?? [])[0];
+    const branchForBatch = firstBatch
+      ? db.centres.find((c) => c.id === firstBatch.centreId) ?? db.centres[0]
+      : db.centres[0];
+    if (branchForBatch && firstBatch) {
+      const master = resolveProductAlias(firstBatch.brandName, firstBatch.genericName);
+      const bpFeat = computeBranchProductFeatures(db, branchForBatch.id, master.masterId, asOfIso);
+      expect(bpFeat).not.toBeNull();
+      expect(typeof bpFeat?.stockOutDays28d).toBe("number");
+
+      const lotFeat = computeLotFeatures(db, branchForBatch.id, firstBatch.id, asOfIso);
+      expect(lotFeat).not.toBeNull();
+      const bFeat = computeBranchFeatures(db, branchForBatch.id, asOfIso);
+      expect(bFeat).not.toBeNull();
+    }
+
+    if (db.accounts[0]) {
+      const oFeat = computeOrgFeatures(db, db.accounts[0].id, asOfIso);
+      expect(oFeat).not.toBeNull();
+    }
+    const supFeat = computeSupplierFeatures(db, "Test Supplier", asOfIso);
+    expect(supFeat.orderCount).toBeGreaterThanOrEqual(0);
+
+    const reorders = runModel1DemandAndReorder(db, asOfIso);
+    expect(Array.isArray(reorders)).toBe(true);
+    if (reorders[0]) {
+      expect(reorders[0].dailyP90).toBeGreaterThanOrEqual(reorders[0].dailyP50);
+      expect(reorders[0].dailyP50).toBeGreaterThanOrEqual(reorders[0].dailyP10);
+    }
+
+    const rescues = runModel2ExpiryAndRescue(db, asOfIso);
+    expect(Array.isArray(rescues)).toBe(true);
+    if (rescues[0]) {
+      expect(rescues[0].allRescueOptions).toHaveLength(5);
+      expect(rescues[0].probLossPct).toBeGreaterThanOrEqual(0);
+      expect(rescues[0].probLossPct).toBeLessThanOrEqual(100);
+    }
+
+    const hazards = runModel3OrgHealthHazard(db, { syncRecency: 40, paymentTimeliness: 30 }, asOfIso);
+    expect(hazards.length).toBe(db.accounts.length);
+    if (hazards[0]) {
+      expect(hazards[0].ciHighPct).toBeGreaterThanOrEqual(hazards[0].churnRisk30dPct);
+      expect(hazards[0].ciLowPct).toBeLessThanOrEqual(hazards[0].churnRisk30dPct);
+    }
+
+    const detectors = runCatalogDetectors(db, asOfIso);
+    expect(Array.isArray(detectors.alerts)).toBe(true);
+    expect(Array.isArray(detectors.sentinelSignals)).toBe(true);
+
+    const bt = evaluateRollingOriginBacktest(db);
+    expect(bt.foldsEvaluated).toBe(4);
+
+    const pack = buildSignedEdgeModelPack(db, asOfIso);
+    expect(pack.hmacSignature.length).toBe(24);
+    expect(pack.payloadBytes).toBeGreaterThan(20);
+
+    const detail = buildFullIntelligenceDetail(db, asOfIso);
+    expect(detail.edgeModelPack.packVersion).toBe(pack.packVersion);
+  }, 15000);
 });

@@ -2,6 +2,7 @@ import type { HqWorkerCapabilities } from "@/lib/hq-workers";
 import type {
   HqAutonomyMode,
   HqDecisionProposal,
+  HqHealthWeights,
   HqInvestigationCase,
   HqPrivacyReleaseRecord,
   HqProductAliasRecord,
@@ -85,6 +86,7 @@ export interface CommandRegistrySpec {
 }
 
 export interface WorkspaceSpineStore {
+  canonicalVersion?: number;
   globalSeqCounter: number;
   backfilledAt?: string;
   legacyIdMap: LegacyIdMapEntry[];
@@ -100,6 +102,8 @@ export interface WorkspaceSpineStore {
   privacyReleases: HqPrivacyReleaseRecord[];
   privacyBudgets: Record<string, number>;
   cases: HqInvestigationCase[];
+  healthWeights?: HqHealthWeights;
+  anomalyVerdicts?: Record<string, "real" | "false_alarm" | "known">;
   lastRedTeamAudit?: {
     runAt: string;
     passedChecks: number;

@@ -56,11 +56,14 @@ export function canonicalJson(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return `[${value.map((v) => canonicalJson(v)).join(",")}]`;
+    return `[${value.map((v) => canonicalJson(v === undefined ? null : v)).join(",")}]`;
   }
-  const keys = Object.keys(value as Record<string, unknown>).sort();
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj)
+    .filter((k) => obj[k] !== undefined)
+    .sort();
   return `{${keys
-    .map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k])}`)
+    .map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`)
     .join(",")}}`;
 }
 
@@ -113,6 +116,7 @@ export interface AppendSpineEventInput {
 
 export function createEmptySpineStore(): WorkspaceSpineStore {
   return {
+    canonicalVersion: 2,
     globalSeqCounter: 0,
     legacyIdMap: [],
     productMaster: [...PRODUCT_MASTER_SEED],
@@ -263,6 +267,20 @@ export function ensureSpineBackfill(db: WorkspaceDbSnapshot): WorkspaceSpineStor
     db.spine = createEmptySpineStore();
   }
   const spine = db.spine;
+  if (spine.canonicalVersion !== 2) {
+    // Re-seal pre-v2 persisted events once using undefined-omitting canonicalJson so in-memory & JSON round-trips match
+    const sorted = [...spine.events].sort((a, b) => a.globalSeq - b.globalSeq);
+    const headByOrg = new Map<string, string>();
+    for (const ev of sorted) {
+      const prevHash = headByOrg.get(ev.orgId) ?? "0".repeat(64);
+      const { hash: _oldHash, prevHash: _oldPrev, ...rest } = ev;
+      const newHash = computeEnvelopeHash(prevHash, rest);
+      ev.prevHash = prevHash;
+      ev.hash = newHash;
+      headByOrg.set(ev.orgId, newHash);
+    }
+    spine.canonicalVersion = 2;
+  }
   if (!spine.productMaster || spine.productMaster.length === 0) {
     spine.productMaster = [...PRODUCT_MASTER_SEED];
   }
@@ -448,45 +466,6 @@ export function ensureSpineBackfill(db: WorkspaceDbSnapshot): WorkspaceSpineStor
       },
       piiClass: "personal",
       source: "import",
-    });
-  }
-
-  // 4. Initial Case & Privacy Seed Records if empty
-  if (spine.cases.length === 0 && db.accounts[0]) {
-    spine.cases.push({
-      id: "CASE-INF-01",
-      title: "Trailing Shift Cash Variance Baseline Check",
-      category: "till_anomaly",
-      status: "open",
-      severity: "normal",
-      pinnedEntities: [db.accounts[0].orgName],
-      citedEventIds: spine.events.slice(-2).map((e) => e.eventId),
-      notes: [
-        {
-          id: "note_init_1",
-          author: "Compliance Rules Engine",
-          body: "Monitoring after-hours sales share and shift close variance across all active branches.",
-          createdAt: new Date().toISOString(),
-        },
-      ],
-      createdAt: new Date().toISOString(),
-    });
-  }
-
-  if (spine.privacyReleases.length === 0) {
-    const uniqueRegions = Math.max(1, db.accounts.length);
-    spine.privacyReleases.push({
-      id: "REL-INIT-01",
-      recipient: "Ministry & Academic Partners",
-      project: "Essential Medicines Regional Availability Index",
-      querySummary: "Monthly Antimalarial & Antibiotic Stock Cover",
-      contributingOrgsCount: uniqueRegions,
-      minGroupSize: 5,
-      maxDominanceSharePct: 38,
-      epsilonSpent: 0.5,
-      budgetRemaining: 4.5,
-      status: uniqueRegions >= 5 ? "approved" : "blocked_small_cell",
-      createdAt: new Date().toISOString(),
     });
   }
 

@@ -334,16 +334,15 @@ export default function HQConsoleClient({
 
   return (
     <div className={`min-h-screen ${t.canvasCls}`}>
-      {/* TOP 2-ROW COMMAND & INTERACTIVE TIMELINE RIBBON (WorkspaceShell + res.jpg) */}
-      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${isDark ? "bg-[#090C12]/90 border-slate-800" : "bg-white/90 border-[#E2E8F0]"}`}>
-        {/* Row 1: Brand Lockup, Search, Chain Verification, Bell, Theme & Lock */}
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+      {/* COMPACT FULL-BLEED SINGLE-ROW COMMAND BAR */}
+      <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${isDark ? "bg-[#090C12]/92 border-slate-800" : "bg-white/92 border-[#E2E8F0]"}`}>
+        <div className="max-w-[1920px] w-full mx-auto px-3 sm:px-6 h-[52px] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
               onClick={toggleRail}
               aria-label="Toggle navigation rail"
-              className={`w-9 h-9 rounded-full flex items-center justify-center cursor-pointer ${t.pillCls}`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer shrink-0 ${t.pillCls}`}
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
@@ -352,27 +351,84 @@ export default function HQConsoleClient({
             <img
               src={isDark ? CERVOS_HQ_ASSETS.companyLogoCircularDark : CERVOS_HQ_ASSETS.companyLogoCircular}
               alt="Cervos Emblem"
-              className="w-8 h-8 rounded-full object-contain shrink-0"
+              className="w-7 h-7 rounded-full object-contain shrink-0"
             />
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold tracking-tight" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                  Cervos HQ
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono uppercase font-bold">
-                  {env?.mode || (mockMode ? "mock" : "live")}
-                </span>
-                {data?.spine && (
-                  <span className={`hidden md:inline-block px-2 py-0.5 rounded-full text-[10px] font-mono ${t.wellCls}`}>
-                    Spine #{data.spine.globalSeqHead} &middot; {data.spine.chainVerified ? "Verified" : "Check"}
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-sm font-bold tracking-tight truncate" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                Cervos HQ
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono uppercase font-bold shrink-0">
+                {env?.mode || (mockMode ? "mock" : "live")}
+              </span>
+              {data?.spine && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("comms")}
+                  className={`hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono cursor-pointer ${t.wellCls}`}
+                >
+                  <span>Spine #{data.spine.globalSeqHead}</span>
+                  <span>&middot;</span>
+                  <span className={data.spine.chainVerified ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-rose-500 font-bold"}>
+                    {data.spine.chainVerified ? "Verified" : "Check"}
                   </span>
-                )}
-              </div>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Search + Controls */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Clickable Live Fleet Telemetry Strip (replaces bulky repeated top cards) */}
+          {summary && (
+            <div className="hidden xl:flex items-center gap-1.5 text-[11px] font-mono">
+              <button
+                type="button"
+                onClick={() => setActiveTab("fleet")}
+                className={`px-2.5 py-1 rounded-full cursor-pointer transition-colors hover:border-[#1039B9]/50 ${t.wellCls}`}
+              >
+                <span className={t.mutedCls}>Orgs </span>
+                <strong>{summary.totalOrgs}</strong>
+                {summary.lockedOrgs > 0 && <span className="text-rose-500"> ({summary.lockedOrgs} lock)</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("decisions")}
+                className={`px-2.5 py-1 rounded-full cursor-pointer transition-colors hover:border-[#1039B9]/50 ${t.wellCls}`}
+              >
+                <span className={t.mutedCls}>Queue </span>
+                <strong className="text-[#1039B9] dark:text-sky-400">{pendingProposalsCount}</strong>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("support")}
+                className={`px-2.5 py-1 rounded-full cursor-pointer transition-colors hover:border-[#1039B9]/50 ${t.wellCls}`}
+              >
+                <span className={t.mutedCls}>Tickets </span>
+                <strong className={(summary.openSupportTickets ?? 0) > 0 ? "text-rose-500" : ""}>
+                  {summary.openSupportTickets ?? 0}
+                </strong>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("finance")}
+                className={`px-2.5 py-1 rounded-full cursor-pointer transition-colors hover:border-[#1039B9]/50 ${t.wellCls}`}
+              >
+                <span className={t.mutedCls}>POS </span>
+                <strong>{formatTzs(summary.totalSalesRevenueTzs, { compact: true })}</strong>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("intelligence")}
+                className={`px-2.5 py-1 rounded-full cursor-pointer transition-colors hover:border-[#1039B9]/50 ${t.wellCls}`}
+              >
+                <span className={t.mutedCls}>Near Exp </span>
+                <strong className={summary.nearExpiryBatches > 0 ? "text-amber-600 dark:text-amber-400" : ""}>
+                  {summary.nearExpiryBatches}
+                </strong>
+              </button>
+            </div>
+          )}
+
+          {/* Search + Exports + Controls */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <div className="relative hidden md:block">
               <input
                 ref={searchInputRef}
@@ -380,7 +436,7 @@ export default function HQConsoleClient({
                 value={quickSearch}
                 onChange={(e) => setQuickSearch(e.target.value)}
                 placeholder="Jump to org (/)..."
-                className={`w-56 h-9 px-3.5 rounded-full text-xs ${t.inputCls}`}
+                className={`w-44 lg:w-52 h-8 px-3 rounded-full text-xs ${t.inputCls}`}
               />
               {searchMatches.length > 0 && (
                 <div className={`absolute right-0 mt-1.5 w-64 rounded-2xl p-2 z-50 space-y-1 ${t.glassHudCls}`}>
@@ -403,38 +459,85 @@ export default function HQConsoleClient({
               )}
             </div>
 
+            <a
+              href="/api/hq/export/accounts"
+              download
+              className={`hidden 2xl:inline-flex h-8 items-center px-2.5 rounded-full text-[11px] font-semibold ${t.pillCls}`}
+            >
+              Orgs CSV
+            </a>
+            <a
+              href="/api/hq/export/payments"
+              download
+              className={`hidden 2xl:inline-flex h-8 items-center px-2.5 rounded-full text-[11px] font-semibold ${t.pillCls}`}
+            >
+              Pay CSV
+            </a>
+
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setBellOpen((o) => !o)}
-                className={`relative w-9 h-9 rounded-full flex items-center justify-center cursor-pointer ${t.pillCls}`}
+                className={`relative w-8 h-8 rounded-full flex items-center justify-center cursor-pointer ${t.pillCls}`}
                 aria-label="HQ Alerts"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
                 {((summary?.openSupportTickets ?? 0) > 0 || pendingProposalsCount > 0) && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500" />
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
                 )}
               </button>
               {bellOpen && (
-                <div className={`absolute right-0 mt-2 w-72 rounded-2xl p-3 space-y-2 z-50 text-xs ${t.glassHudCls}`}>
-                  <div className="font-bold uppercase tracking-wider text-[10px]">HQ Queue Signals</div>
-                  <div className="flex justify-between">
+                <div className={`absolute right-0 mt-2 w-72 rounded-2xl p-3 space-y-1.5 z-50 text-xs ${t.glassHudCls}`}>
+                  <div className="font-bold uppercase tracking-wider text-[10px] pb-1">HQ Live Queues</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("support");
+                      setBellOpen(false);
+                    }}
+                    className="w-full flex justify-between py-1 px-2 rounded-lg hover:bg-slate-500/10 cursor-pointer"
+                  >
                     <span>Open Support Tickets</span>
                     <strong>{summary?.openSupportTickets ?? 0}</strong>
-                  </div>
-                  <div className="flex justify-between">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("decisions");
+                      setBellOpen(false);
+                    }}
+                    className="w-full flex justify-between py-1 px-2 rounded-lg hover:bg-slate-500/10 cursor-pointer"
+                  >
                     <span>Pending Decision Proposals</span>
                     <strong>{pendingProposalsCount}</strong>
-                  </div>
-                  <div className="flex justify-between">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("finance");
+                      setBellOpen(false);
+                    }}
+                    className="w-full flex justify-between py-1 px-2 rounded-lg hover:bg-slate-500/10 cursor-pointer"
+                  >
                     <span>Kasri Escrow Held</span>
                     <strong>{heldOrdersCount}</strong>
-                  </div>
-                  <div className="flex justify-between">
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("onboarding");
+                      setBellOpen(false);
+                    }}
+                    className="w-full flex justify-between py-1 px-2 rounded-lg hover:bg-slate-500/10 cursor-pointer"
+                  >
                     <span>Pending Join Requests</span>
                     <strong>{summary?.pendingJoinRequests ?? 0}</strong>
+                  </button>
+                  <div className={`pt-2 mt-1 border-t text-[10px] font-mono flex items-center justify-between ${t.subtleBorderCls} ${t.mutedCls}`}>
+                    <span>{data?.operator || initialOperator} &middot; {roleMeta.shortTag}</span>
+                    <a href="/api/hq/export/accounts" download className="underline">CSV</a>
                   </div>
                 </div>
               )}
@@ -443,7 +546,7 @@ export default function HQConsoleClient({
             <button
               type="button"
               onClick={toggleTheme}
-              className={`h-9 px-3 rounded-full text-xs font-semibold cursor-pointer ${t.pillCls}`}
+              className={`h-8 px-2.5 rounded-full text-[11px] font-semibold cursor-pointer ${t.pillCls}`}
             >
               {isDark ? "Light" : "Dark"}
             </button>
@@ -452,198 +555,81 @@ export default function HQConsoleClient({
               type="button"
               onClick={() => void loadFleet()}
               disabled={loading || busy}
-              className={`hidden sm:inline-flex h-9 px-3 rounded-full text-xs font-semibold items-center gap-1.5 cursor-pointer ${t.pillCls}`}
+              className={`hidden sm:inline-flex h-8 px-2.5 rounded-full text-[11px] font-semibold items-center gap-1 cursor-pointer ${t.pillCls}`}
             >
               {loading && <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />}
-              <span>{loading ? "Sync" : "Refresh"}</span>
+              <span>{loading ? "Sync" : "Sync"}</span>
             </button>
 
             <button
               type="button"
               onClick={handleSignOut}
-              className="h-9 px-3 rounded-full border border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs font-semibold cursor-pointer"
+              className="h-8 px-2.5 rounded-full border border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-[11px] font-semibold cursor-pointer"
             >
               Lock
             </button>
           </div>
         </div>
-
-        {/* Row 2: res.jpg Timeline Scrubber & Quick Exports Ribbon */}
-        <div className={`border-t ${t.subtleBorderCls}`}>
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className={`font-bold uppercase tracking-wider text-[10px] mr-1 ${t.mutedCls}`}>
-                Timeline Stream:
-              </span>
-              {[
-                { id: "all", label: "All Events" },
-                { id: "sale.", label: "Sales" },
-                { id: "stock.", label: "Stock" },
-                { id: "access.", label: "Access" },
-                { id: "command.", label: "Commands" },
-                { id: "agent.", label: "Agents" },
-                { id: "recall.", label: "Recalls" },
-              ].map((stream) => (
-                <button
-                  key={stream.id}
-                  type="button"
-                  onClick={() => setTimelineFilter(stream.id)}
-                  className={`px-2.5 py-1 rounded-full font-semibold cursor-pointer ${
-                    timelineFilter === stream.id ? t.primaryBtnCls : t.wellCls
-                  }`}
-                >
-                  {stream.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <a
-                href="/api/hq/export/accounts"
-                download
-                className={`px-2.5 py-1 rounded-full font-semibold ${t.pillCls}`}
-              >
-                Accounts CSV
-              </a>
-              <a
-                href="/api/hq/export/payments"
-                download
-                className={`px-2.5 py-1 rounded-full font-semibold ${t.pillCls}`}
-              >
-                Payments CSV
-              </a>
-              <span className={`px-2.5 py-1 rounded-full font-mono ${t.wellCls}`}>
-                {data?.operator || initialOperator} &middot; {roleMeta.shortTag}
-              </span>
-            </div>
-          </div>
-        </div>
       </header>
 
-      {/* BODY: COLLAPSIBLE LEFT ICON+PILL RAIL + MAIN WORKSPACE */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5 flex flex-col lg:flex-row gap-5 items-start">
+      {/* BODY: ADAPTIVE HORIZONTAL BAR ON MOBILE + SLIM STICKY RAIL ON DESKTOP */}
+      <div className="max-w-[1920px] w-full mx-auto px-3 sm:px-6 py-3 flex flex-col lg:flex-row gap-4 items-start">
         <aside
           className={`w-full shrink-0 transition-[width] duration-200 ${
-            railExpanded ? "lg:w-64" : "lg:w-16"
-          } lg:sticky lg:top-[108px]`}
+            railExpanded ? "lg:w-52" : "lg:w-14"
+          } lg:sticky lg:top-[64px]`}
         >
-          <div className={`p-2.5 space-y-1.5 ${t.panelCls}`}>
-            <nav className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5">
-              {navItems.map((item) => {
-                const active = activeTab === item.key;
-                const lockedByRole =
-                  Boolean(item.requiredCap && worker) &&
-                  !canHqWorker(worker!.role, worker!.capabilities, item.requiredCap!);
+          <nav className="flex lg:flex-col gap-1 overflow-x-auto pb-1 lg:pb-0 no-scrollbar">
+            {navItems.map((item) => {
+              const active = activeTab === item.key;
+              const lockedByRole =
+                Boolean(item.requiredCap && worker) &&
+                !canHqWorker(worker!.role, worker!.capabilities, item.requiredCap!);
 
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    title={item.label}
-                    onClick={() => setActiveTab(item.key)}
-                    className={`relative w-full text-left rounded-xl px-2.5 py-2 transition-all flex items-center justify-between gap-2 cursor-pointer ${
-                      active
-                        ? t.primaryBtnCls
-                        : `${t.wellCls} hover:border-[#1039B9]/40`
-                    }`}
-                  >
-                    {active && (
-                      <span className="hidden lg:block absolute left-0 top-2 bottom-2 w-1 rounded-r-full bg-white/90" />
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  title={lockedByRole ? `${item.label} (read-only)` : item.label}
+                  onClick={() => setActiveTab(item.key)}
+                  className={`relative shrink-0 lg:w-full text-left rounded-xl px-2.5 py-2 transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                    active
+                      ? t.primaryBtnCls
+                      : "hover:bg-slate-500/10 text-current"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <RailNavSvg tab={item.key} />
+                    {railExpanded && (
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold whitespace-nowrap lg:truncate">{item.label}</div>
+                      </div>
                     )}
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <RailNavSvg tab={item.key} />
-                      {railExpanded && (
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold truncate">{item.label}</div>
-                          <div className={`text-[10px] truncate hidden lg:block ${active ? "text-blue-100" : t.mutedCls}`}>
-                            {lockedByRole ? "Read-only for role" : item.sub}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {railExpanded && typeof item.badge === "number" && item.badge > 0 && (
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold shrink-0 ${
-                          active
-                            ? "bg-white/25 text-white"
-                            : item.urgent
-                              ? "bg-rose-500 text-white"
-                              : "bg-[#1039B9]/12 text-[#1039B9] dark:text-sky-300"
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
+                  </div>
+                  {railExpanded && typeof item.badge === "number" && item.badge > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full font-mono text-[10px] font-bold shrink-0 ${
+                        active
+                          ? "bg-white/25 text-white"
+                          : item.urgent
+                            ? "bg-rose-500 text-white"
+                            : "bg-[#1039B9]/12 text-[#1039B9] dark:text-sky-300"
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </aside>
 
-        {/* Main Workspace Canvas */}
-        <main className="flex-1 min-w-0 w-full space-y-5">
-          {summary && (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-              <div className={`p-4 space-y-1 ${t.panelCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  Organizations &amp; Access
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-bold tabular-nums">{summary.totalOrgs}</span>
-                  <span className={`text-xs font-semibold ${summary.lockedOrgs > 0 ? "text-rose-500" : "text-emerald-600"}`}>
-                    {summary.lockedOrgs} locked
-                  </span>
-                </div>
-                <div className={`text-[11px] ${t.mutedCls}`}>
-                  {summary.activeOrgs} paid &middot; {summary.trialOrgs} trial &middot; {summary.verifiedOrgs} verified
-                </div>
-              </div>
-
-              <div className={`p-4 space-y-1 ${t.panelCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  Decision &amp; Support Queues
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-bold tabular-nums">{pendingProposalsCount}</span>
-                  <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                    {summary.openSupportTickets ?? 0} tickets
-                  </span>
-                </div>
-                <div className={`text-[11px] ${t.mutedCls}`}>
-                  {summary.activeHqWorkers ?? 0} active HQ staff &middot; {summary.invitedHqWorkers ?? 0} invited
-                </div>
-              </div>
-
-              <div className={`p-4 space-y-1 ${t.panelCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  Fleet POS Volume
-                </div>
-                <div className="text-2xl font-bold tabular-nums truncate">
-                  {formatTzs(summary.totalSalesRevenueTzs)}
-                </div>
-                <div className={`text-[11px] ${t.mutedCls}`}>
-                  {summary.totalSalesCount} receipts &middot; {summary.totalBranches} branches
-                </div>
-              </div>
-
-              <div className={`p-4 space-y-1 ${t.panelCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  Inventory Value &amp; Expiry
-                </div>
-                <div className="text-2xl font-bold tabular-nums truncate">
-                  {formatTzs(summary.totalStockCostTzs)}
-                </div>
-                <div className={`text-[11px] ${t.mutedCls}`}>
-                  {summary.expiredBatches} expired &middot; {summary.nearExpiryBatches} near expiry
-                </div>
-              </div>
-            </div>
-          )}
-
+        {/* Full-Bleed Open Workspace Canvas — Zero Repeated KPI Cards */}
+        <main className="flex-1 min-w-0 w-full space-y-3">
           {banner && (
             <div
-              className={`rounded-2xl border px-4 py-3 text-xs font-semibold flex items-center justify-between gap-2 ${
+              className={`rounded-xl border px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 ${
                 banner.type === "ok"
                   ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                   : "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300"
@@ -672,6 +658,7 @@ export default function HQConsoleClient({
               spine={data.spine}
               promiseBoard={data.promiseBoard}
               timelineFilter={timelineFilter}
+              onTimelineFilterChange={setTimelineFilter}
               onSwitchTab={setActiveTab}
               onSelectOrg={setSelectedOrgId}
               isDark={isDark}
@@ -695,7 +682,10 @@ export default function HQConsoleClient({
               scorecards={data.modelScorecards ?? []}
               accounts={data.accounts}
               peakTelemetry={data.peakTelemetry}
+              intelligenceDetail={data.intelligenceDetail}
               onRunAction={runAction}
+              onSwitchTab={setActiveTab}
+              onSelectOrg={setSelectedOrgId}
               isDark={isDark}
               busy={busy}
             />

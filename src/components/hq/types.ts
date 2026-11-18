@@ -564,6 +564,14 @@ export interface HqPeakTelemetry {
     unitsSold: number;
     revenueTzs: number;
   }>;
+  dailyTimeline?: Array<{
+    date: string;
+    label: string;
+    salesTzs: number;
+    salesCount: number;
+    escrowTzs: number;
+    eventsCount: number;
+  }>;
 }
 
 export interface HqNotificationEnv {
@@ -573,6 +581,156 @@ export interface HqNotificationEnv {
   exceptionEmailMasked: string | null;
   trialGraceDays: number;
   mode: "production" | "staging" | "mock";
+}
+
+export interface HqDemandReorderItem {
+  branchId: string;
+  branchName: string;
+  orgId: string;
+  orgName: string;
+  masterId: string;
+  masterLabel: string;
+  isEssential: boolean;
+  currentQty: number;
+  onOrderQty: number;
+  stockOutDays28d: number;
+  dailyP10: number;
+  dailyP50: number;
+  dailyP90: number;
+  crostonBaselineDaily: number;
+  leadTimeDays: number;
+  serviceQuantile: "P90" | "P75";
+  recommendedOrderQty: number;
+  daysOfCover: number;
+  reason: string;
+}
+
+export interface HqRescueOptionRank {
+  option:
+    | "branch_transfer"
+    | "kasri_cross_org"
+    | "supplier_return"
+    | "discount_ladder"
+    | "compliant_disposal";
+  label: string;
+  expectedRecoveryTzs: number;
+  feasible: boolean;
+  constraintNote: string;
+}
+
+export interface HqShelfExpiryForecastItem {
+  batchId: string;
+  branchId: string;
+  branchName: string;
+  orgId: string;
+  orgName: string;
+  brandName: string;
+  batchNumber: string;
+  expiryDate: string;
+  daysToExpiry: number;
+  qty: number;
+  probLossPct: number;
+  expectedUnsoldUnits: number;
+  expectedLossTzs: number;
+  unsellableDate: string;
+  recommendedRescue: HqRescueOptionRank;
+  runnerUpRescue: HqRescueOptionRank;
+  allRescueOptions: HqRescueOptionRank[];
+  reason: string;
+}
+
+export interface HqHealthWeights {
+  syncRecency: number;
+  salesTrend: number;
+  shiftCompliance: number;
+  paymentTimeliness: number;
+  ticketAge: number;
+  versionLag: number;
+}
+
+export interface HqOrgHealthHazardItem {
+  accountId: string;
+  orgName: string;
+  region: string;
+  score: number;
+  churnRisk30dPct: number;
+  ciLowPct: number;
+  ciHighPct: number;
+  accessState: string;
+  topReasons: string[];
+  recommendedPlaybook: string;
+}
+
+export interface HqCatalogDetectorAlert {
+  id: string;
+  detector:
+    | "stockout_7d"
+    | "till_anomaly_mad"
+    | "controlled_drug_watch"
+    | "diversion_counterfeit";
+  orgId: string;
+  orgName: string;
+  branchId: string;
+  branchName: string;
+  severity: "normal" | "high" | "critical";
+  scoreLabel: string;
+  summary: string;
+  verdict?: "real" | "false_alarm" | "known";
+  detectorPrecisionPct: number;
+}
+
+export interface HqSupplierReliabilityItem {
+  supplierName: string;
+  observedOrders: number;
+  shrunkOnTimePct: number;
+  shrunkFillRatePct: number;
+  disputeRatePct: number;
+  reliabilityScore: number;
+}
+
+export interface HqSentinelSignal {
+  region: string;
+  drugClass: string;
+  cusumScore: number;
+  threshold: number;
+  alert: boolean;
+  contributingOrgs: number;
+  privacyGated: boolean;
+  note: string;
+}
+
+export interface HqEdgeModelPackSummary {
+  packVersion: string;
+  signedAt: string;
+  hmacSignature: string;
+  reorderRulesCount: number;
+  expiryRescueRulesCount: number;
+  anomalyThresholdsCount: number;
+  payloadBytes: number;
+}
+
+export interface HqBacktestMetricsSummary {
+  foldsEvaluated: number;
+  wapePct: number;
+  baselineWapePct: number;
+  mase: number;
+  pinballP10: number;
+  pinballP50: number;
+  pinballP90: number;
+  empiricalCoveragePct: number;
+  psiDrift: number;
+}
+
+export interface HqIntelligenceDetail {
+  demandReorders: HqDemandReorderItem[];
+  shelfExpiryForecasts: HqShelfExpiryForecastItem[];
+  orgHealthHazards: HqOrgHealthHazardItem[];
+  healthWeights: HqHealthWeights;
+  detectorAlerts: HqCatalogDetectorAlert[];
+  supplierReliability: HqSupplierReliabilityItem[];
+  sentinelSignals: HqSentinelSignal[];
+  backtestSummary: HqBacktestMetricsSummary;
+  edgeModelPack: HqEdgeModelPackSummary;
 }
 
 export interface HqFleetPayload {
@@ -607,4 +765,5 @@ export interface HqFleetPayload {
   recalls?: HqRecallRecord[];
   privacyReleases?: HqPrivacyReleaseRecord[];
   cases?: HqInvestigationCase[];
+  intelligenceDetail?: HqIntelligenceDetail;
 }

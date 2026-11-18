@@ -3,3 +3,5 @@ export * from "./ontology";
 export * from "./events";
 export * from "./registry";
 export * from "./intelligence";
+export * from "./features";
+export * from "./models";
