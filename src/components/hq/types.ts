@@ -1,3 +1,5 @@
+import type { HqWorkerCapabilities, HqWorkerRole } from "@/lib/hq-workers";
+
 export type AuditCategory =
   | "AUTH"
   | "SETUP"
@@ -8,6 +10,8 @@ export type AuditCategory =
 
 export type HqTab =
   | "overview"
+  | "support"
+  | "team"
   | "fleet"
   | "packages"
   | "finance"
@@ -153,6 +157,15 @@ export interface HqFleetAccount {
   subscriptionDaysLeft?: number | null;
   expiryExposureTzs?: number;
   estimatedMonthlyFeeTzs?: number;
+  paymentSettings?: {
+    mpesaPaybill: string;
+    tigoLipaNumber: string;
+    bankName: string;
+    bankAccount: string;
+    settlementCycle: "daily" | "instant" | "weekly";
+    vatRegistered: boolean;
+    updatedAt: string;
+  } | null;
 }
 
 export interface HqAuditEvent {
@@ -233,6 +246,81 @@ export interface HqFleetSummary {
   expiredBatches: number;
   pendingJoinRequests: number;
   unreadHqMessages: number;
+  openSupportTickets?: number;
+  urgentSupportTickets?: number;
+  activeHqWorkers?: number;
+  invitedHqWorkers?: number;
+}
+
+export interface HqWorkerSummary {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: HqWorkerRole;
+  title: string;
+  region: string;
+  capabilities: HqWorkerCapabilities;
+  status: "invited" | "active" | "suspended";
+  inviteCodeHint?: string;
+  invitedBy: string;
+  invitedAt: string;
+  activatedAt?: string | null;
+  lastSeenAt?: string | null;
+}
+
+export interface HqSupportTicketReply {
+  id: string;
+  authorName: string;
+  authorRole: "hq" | "customer";
+  authorWorkerId?: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface HqSupportTicketRecord {
+  id: string;
+  ticketRef: string;
+  accountId: string | null;
+  orgName?: string;
+  contactEmail: string;
+  contactName?: string;
+  subject: string;
+  message: string;
+  category: "billing" | "technical" | "general" | "other";
+  priority: "low" | "normal" | "high" | "urgent";
+  status: "open" | "in_progress" | "waiting_user" | "resolved";
+  assignedWorkerId?: string | null;
+  assignedWorkerName?: string | null;
+  internalNote?: string | null;
+  replies: HqSupportTicketReply[];
+  source: "landing" | "auth" | "workspace" | "web";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HqTeamNoteItem {
+  id: string;
+  authorWorkerId: string;
+  authorName: string;
+  authorRole: HqWorkerRole;
+  topic: "shift_handoff" | "escalation" | "directive" | "general";
+  targetWorkerId?: string | null;
+  targetWorkerName?: string | null;
+  linkedTicketId?: string | null;
+  linkedAccountId?: string | null;
+  body: string;
+  pinned?: boolean;
+  createdAt: string;
+}
+
+export interface HqCurrentSessionWorker {
+  id: string;
+  name: string;
+  role: HqWorkerRole;
+  title: string;
+  capabilities: HqWorkerCapabilities;
+  isMaster: boolean;
 }
 
 export interface HqJournalArticleRecord {
@@ -287,6 +375,7 @@ export interface HqNotificationEnv {
 export interface HqFleetPayload {
   scope: "fleet";
   operator: string;
+  currentWorker?: HqCurrentSessionWorker;
   minBranchPriceTzs: number;
   fleetSummary: HqFleetSummary;
   peakTelemetry?: HqPeakTelemetry;
@@ -301,5 +390,8 @@ export interface HqFleetPayload {
   joinRequests: HqJoinRequestRecord[];
   hqUpdates: HqUpdateRecord[];
   journalArticles?: HqJournalArticleRecord[];
+  hqWorkers?: HqWorkerSummary[];
+  supportTickets?: HqSupportTicketRecord[];
+  hqTeamNotes?: HqTeamNoteItem[];
   notificationEnv: HqNotificationEnv;
 }

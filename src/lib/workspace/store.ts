@@ -8,9 +8,14 @@ import {
   type ProfileCapabilities,
   type WorkspaceProfileRole,
 } from "@/lib/workspace/permissions";
+import {
+  clampHqCapabilities,
+  type HqWorkerCapabilities,
+  type HqWorkerRole,
+} from "@/lib/hq-workers";
 
-export { clampProfileCapabilities, ROLE_PERMISSION_RULES };
-export type { ProfileCapabilities, WorkspaceProfileRole };
+export { clampProfileCapabilities, ROLE_PERMISSION_RULES, clampHqCapabilities };
+export type { ProfileCapabilities, WorkspaceProfileRole, HqWorkerCapabilities, HqWorkerRole };
 
 /** True when running on Vercel production (no writable local filesystem) */
 const IS_VERCEL = Boolean(process.env.VERCEL || process.env.VERCEL_ENV);
@@ -124,8 +129,36 @@ export interface WorkspaceAccount {
     lockedAt: string;
   };
   certificates: CertificateRecord[];
+  customCategories?: string[];
   customization?: WorkspaceCustomization;
   createdAt: string;
+}
+
+export const DEFAULT_DRUG_CATEGORIES = [
+  "Essential",
+  "Antibiotics",
+  "Antimalarials",
+  "Analgesics & Fever",
+  "ORS & Electrolytes",
+  "Respiratory & Inhalers",
+  "Diabetes & Chronic",
+  "Cardiovascular",
+  "Vitamins & Supplements",
+  "Dermatology & Topical",
+  "Gastrointestinal",
+  "Maternal & Pediatric",
+  "Diagnostics & Devices",
+] as const;
+
+export function recordCustomDrugCategory(account: WorkspaceAccount, rawCategory: string): void {
+  const clean = rawCategory.trim().slice(0, 40);
+  if (clean.length < 2) return;
+  const lower = clean.toLowerCase();
+  if (DEFAULT_DRUG_CATEGORIES.some((c) => c.toLowerCase() === lower)) return;
+  const list = (account.customCategories ??= []);
+  if (!list.some((c) => c.toLowerCase() === lower) && list.length < 40) {
+    list.push(clean);
+  }
 }
 
 export interface AuditLogEntry {
@@ -410,6 +443,71 @@ export interface JournalArticleRecord {
   updatedAt: string;
 }
 
+export interface HqWorkerRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  role: HqWorkerRole;
+  title: string;
+  region: string;
+  capabilities: HqWorkerCapabilities;
+  status: "invited" | "active" | "suspended";
+  passwordHash?: string;
+  pinHash?: string;
+  inviteTokenHash?: string;
+  inviteCodeHint?: string;
+  invitedBy: string;
+  invitedAt: string;
+  activatedAt?: string;
+  lastSeenAt?: string;
+}
+
+export interface SupportTicketReply {
+  id: string;
+  authorName: string;
+  authorRole: "hq" | "customer";
+  authorWorkerId?: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface WorkspaceSupportTicket {
+  id: string;
+  ticketRef: string;
+  accountId: string | null;
+  orgName?: string;
+  contactEmail: string;
+  contactName?: string;
+  subject: string;
+  message: string;
+  category: "billing" | "technical" | "general" | "other";
+  priority: "low" | "normal" | "high" | "urgent";
+  status: "open" | "in_progress" | "waiting_user" | "resolved";
+  assignedWorkerId?: string | null;
+  assignedWorkerName?: string | null;
+  internalNote?: string | null;
+  replies: SupportTicketReply[];
+  source: "landing" | "auth" | "workspace" | "web";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HqTeamNoteRecord {
+  id: string;
+  authorWorkerId: string;
+  authorName: string;
+  authorRole: HqWorkerRole;
+  topic: "shift_handoff" | "escalation" | "directive" | "general";
+  targetWorkerId?: string | null;
+  targetWorkerName?: string | null;
+  linkedTicketId?: string | null;
+  linkedAccountId?: string | null;
+  body: string;
+  pinned?: boolean;
+  createdAt: string;
+}
+
 export interface WorkspaceDbSnapshot {
   accounts: WorkspaceAccount[];
   centres: WorkspaceCentre[];
@@ -429,6 +527,9 @@ export interface WorkspaceDbSnapshot {
   hqUpdates?: HqUpdateItem[];
   hqMessages?: HqCustomMessage[];
   journalArticles?: JournalArticleRecord[];
+  hqWorkers?: HqWorkerRecord[];
+  supportTickets?: WorkspaceSupportTicket[];
+  hqTeamNotes?: HqTeamNoteRecord[];
   savedCustomers?: SavedCustomerPreset[];
   shiftLogs?: WorkspaceShiftLog[];
 }
@@ -1150,6 +1251,9 @@ export function ensureAccountDomainData(
   db.auditLogs ??= [];
   db.joinRequests ??= [];
   db.hqMessages ??= [];
+  db.hqWorkers ??= [];
+  db.supportTickets ??= [];
+  db.hqTeamNotes ??= [];
   db.pendingSubscriptions ??= [];
   const isCleanStart = process.env.CERVOS_CLEAN_START === "true";
   const isDemoSeedAccount =
@@ -2036,6 +2140,7 @@ export function publicAccountSummary(acc: WorkspaceAccount) {
     hqLock: acc.hqLock,
     accessLock: lock,
     certificates: acc.certificates,
+    customCategories: acc.customCategories ?? [],
     customization: acc.customization ?? {
       brandAccent: "#1039B9",
       fontScale: "standard",
@@ -2372,3 +2477,85 @@ export function checkPharmacyPlanQuota(
     reason: `${planName} allows up to ${limit} ${label} (${used}/${limit} in use).${upgradeHint}`,
   };
 }
+
+export function publicHqWorkerSummary(worker: HqWorkerRecord) {
+  return {
+    id: worker.id,
+    name: worker.name,
+    email: worker.email,
+    phone: worker.phone ?? "",
+    role: worker.role,
+    title: worker.title,
+    region: worker.region,
+    capabilities: clampHqCapabilities(worker.role, worker.capabilities),
+    status: worker.status,
+    inviteCodeHint: worker.inviteCodeHint ?? "",
+    invitedBy: worker.invitedBy,
+    invitedAt: worker.invitedAt,
+    activatedAt: worker.activatedAt ?? null,
+    lastSeenAt: worker.lastSeenAt ?? null,
+  };
+}
+
+export function createWorkspaceSupportTicket(
+  db: WorkspaceDbSnapshot,
+  input: {
+    accountId?: string | null;
+    orgName?: string;
+    contactEmail: string;
+    contactName?: string;
+    subject: string;
+    message: string;
+    category: WorkspaceSupportTicket["category"];
+    priority?: WorkspaceSupportTicket["priority"];
+    source?: WorkspaceSupportTicket["source"];
+  }
+): WorkspaceSupportTicket {
+  const list = (db.supportTickets ??= []);
+  const nowIso = new Date().toISOString();
+  const matchedAccount =
+    (input.accountId ? db.accounts.find((a) => a.id === input.accountId) : undefined) ??
+    db.accounts.find((a) => a.email.toLowerCase() === input.contactEmail.trim().toLowerCase());
+
+  const seq = 1001 + list.length;
+  const ticket: WorkspaceSupportTicket = {
+    id: newId("sup"),
+    ticketRef: `SUP-${seq}`,
+    accountId: matchedAccount?.id ?? input.accountId ?? null,
+    orgName: input.orgName || matchedAccount?.orgName || undefined,
+    contactEmail: input.contactEmail.trim().toLowerCase(),
+    contactName: input.contactName?.trim() || matchedAccount?.fullName || undefined,
+    subject: input.subject.trim().slice(0, 200),
+    message: input.message.trim().slice(0, 5000),
+    category: input.category,
+    priority:
+      input.priority ??
+      (input.category === "billing" ? "high" : input.category === "technical" ? "high" : "normal"),
+    status: "open",
+    assignedWorkerId: null,
+    assignedWorkerName: null,
+    internalNote: null,
+    replies: [],
+    source: input.source ?? "web",
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  list.unshift(ticket);
+  return ticket;
+}
+
+export function createHqTeamNote(
+  db: WorkspaceDbSnapshot,
+  input: Omit<HqTeamNoteRecord, "id" | "createdAt">
+): HqTeamNoteRecord {
+  const list = (db.hqTeamNotes ??= []);
+  const note: HqTeamNoteRecord = {
+    ...input,
+    id: newId("hqnote"),
+    createdAt: new Date().toISOString(),
+  };
+  list.unshift(note);
+  if (list.length > 200) list.length = 200;
+  return note;
+}
+

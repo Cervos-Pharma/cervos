@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyAbcXyzMatrix,
   classifyReorderUrgency,
+  computeSafetyStockRecommendations,
   detectSalesAnomalies,
   holtLinearForecast,
   linearTrendRegression,
   mineBasketAffinities,
+  predictCounterStaffingWindows,
 } from "@/lib/workspace/edge-ml";
 import type { DailyPoint, IntelSale, ProductIntel } from "@/lib/workspace/intelligence";
 
@@ -81,5 +84,57 @@ describe("On-Device Edge ML Engine", () => {
     const scored = classifyReorderUrgency(prods);
     expect(scored[0].tier).toBe("urgent");
     expect(scored[0].score).toBeGreaterThanOrEqual(85);
+  });
+
+  it("computes 95% Z-score safety stock, ABC-XYZ demand segmentation, and rush counter staffing windows", () => {
+    const now = new Date("2026-11-18T12:00:00Z");
+    const sales: IntelSale[] = [1, 2, 3, 4, 5, 6].map((i) => ({
+      id: `ml-${i}`,
+      actorName: "Cashier",
+      totalTzs: 25000,
+      itemCount: 3,
+      paymentMethod: "cash",
+      lines: [
+        { productId: "p1", brandName: "Coartem", category: "Malaria", qty: 3, unitPriceTzs: 6500, unitCostTzs: 4800 },
+      ],
+      createdAt: new Date(2026, 10, 10 + i, 10, 15).toISOString(),
+    }));
+    const prods: ProductIntel[] = [
+      {
+        productId: "p1",
+        brandName: "Coartem",
+        genericName: "AL",
+        category: "Malaria",
+        unitsSold: 18,
+        revenue: 117000,
+        cogs: 86400,
+        grossProfit: 30600,
+        marginPct: 26,
+        velocityPerDay: 0.6,
+        onHand: 3,
+        daysOfCover: 5,
+        stockoutDate: "2026-11-23",
+        abcClass: "A",
+        revenueSharePct: 100,
+        trendPct: 12,
+        reorderQty: 20,
+        status: "stockout_risk",
+      },
+    ];
+
+    const safety = computeSafetyStockRecommendations(sales, prods, 4, now);
+    expect(safety).toHaveLength(1);
+    expect(safety[0].safetyStockUnits).toBeGreaterThanOrEqual(2);
+    expect(safety[0].status).toBe("under_safety");
+    expect(safety[0].recommendedOrderQty).toBeGreaterThan(0);
+
+    const matrix = classifyAbcXyzMatrix(sales, prods, now);
+    expect(matrix).toHaveLength(1);
+    expect(matrix[0].abcClass).toBe("A");
+    expect(["X", "Y", "Z"]).toContain(matrix[0].xyzClass);
+
+    const staffing = predictCounterStaffingWindows(sales);
+    expect(staffing.length).toBeGreaterThan(0);
+    expect(staffing[0].hourLabel).toBe("10:00");
   });
 });

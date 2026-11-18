@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { formatTzs } from "@cervos/core";
+import { hqSurfaceTokens } from "./hqSurface";
 import type { HqPackageRecord } from "./types";
 
 interface HQPackagesSectionProps {
@@ -50,16 +51,11 @@ export default function HQPackagesSection({
     };
   });
 
-  const cardCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-slate-200 text-slate-900";
-  const subCls = isDark
-    ? "bg-[#171D28] border-slate-800 text-slate-200"
-    : "bg-slate-50 border-slate-200 text-slate-800";
-  const inputCls = isDark
-    ? "bg-[#090C12] border-slate-700 text-slate-100 placeholder:text-slate-500"
-    : "bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400";
-  const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
+  const t = hqSurfaceTokens(isDark);
+  const cardCls = t.panelCls;
+  const subCls = t.wellCls;
+  const inputCls = t.inputCls;
+  const mutedCls = t.mutedCls;
 
   const loadIntoEditor = (pkg: HqPackageRecord) => {
     setSelectedId(pkg.id);
@@ -412,9 +408,12 @@ export default function HQPackagesSection({
           <button
             type="submit"
             disabled={busy}
-            className="w-full h-10 rounded-xl bg-[#1039B9] text-white text-xs font-semibold hover:bg-[#0d2e94] disabled:opacity-50 cursor-pointer"
+            className={`w-full h-11 rounded-2xl text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${t.primaryBtnCls}`}
           >
-            {busy ? "Saving..." : "Save Package Pricing to Live Store"}
+            {busy && (
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+            )}
+            <span>{busy ? "Saving..." : "Save Package Pricing to Live Store"}</span>
           </button>
         </form>
       </div>

@@ -265,3 +265,177 @@ export function classifyReorderUrgency(products: readonly ProductIntel[]): Reord
     })
     .sort((a, b) => b.score - a.score);
 }
+
+export interface SafetyStockRecommendation {
+  productId: string;
+  brandName: string;
+  dailyMeanUnits: number;
+  dailyStdDev: number;
+  safetyStockUnits: number;
+  reorderPointUnits: number;
+  recommendedOrderQty: number;
+  currentValidQty: number;
+  status: "under_safety" | "optimal" | "overstocked";
+}
+
+/**
+ * 6. Dynamic Z-Score Safety Stock (95% service level, Z=1.65) + Lead-Time Reorder Point.
+ * Computes per-SKU daily demand standard deviation to prevent both counter stockouts and dead capital.
+ */
+export function computeSafetyStockRecommendations(
+  sales: readonly IntelSale[],
+  products: readonly ProductIntel[],
+  leadTimeDays = 4,
+  now = new Date()
+): SafetyStockRecommendation[] {
+  const cutoffMs = now.getTime() - 30 * DAY_MS;
+  const recentSales = sales.filter((s) => Date.parse(s.createdAt) >= cutoffMs);
+  const perDayProductUnits = new Map<string, Map<string, number>>();
+
+  for (const s of recentSales) {
+    const day = s.createdAt.slice(0, 10);
+    for (const ln of s.lines ?? []) {
+      const dayMap = perDayProductUnits.get(ln.productId) ?? new Map<string, number>();
+      dayMap.set(day, (dayMap.get(day) ?? 0) + (ln.qty || 1));
+      perDayProductUnits.set(ln.productId, dayMap);
+    }
+  }
+
+  const windowDays = 30;
+  return products
+    .filter((p) => p.unitsSold > 0 || p.onHand > 0)
+    .map((p) => {
+      const dayMap = perDayProductUnits.get(p.productId);
+      let sum = 0;
+      const dailyVals: number[] = [];
+      for (let i = 0; i < windowDays; i++) {
+        const dIso = new Date(now.getTime() - i * DAY_MS).toISOString().slice(0, 10);
+        const u = dayMap?.get(dIso) ?? 0;
+        dailyVals.push(u);
+        sum += u;
+      }
+      const mean = sum / windowDays;
+      const variance =
+        dailyVals.reduce((acc, val) => acc + (val - mean) * (val - mean), 0) / windowDays;
+      const stdDev = Math.sqrt(variance);
+      const safetyStock = Math.max(2, Math.ceil(1.65 * stdDev * Math.sqrt(leadTimeDays)));
+      const reorderPoint = Math.ceil(mean * leadTimeDays + safetyStock);
+      const targetCycleStock = Math.ceil(mean * 21 + safetyStock);
+      const status: SafetyStockRecommendation["status"] =
+        p.onHand <= reorderPoint
+          ? "under_safety"
+          : mean > 0 && p.onHand > mean * 45
+            ? "overstocked"
+            : "optimal";
+
+      return {
+        productId: p.productId,
+        brandName: p.brandName,
+        dailyMeanUnits: Math.round(mean * 100) / 100,
+        dailyStdDev: Math.round(stdDev * 100) / 100,
+        safetyStockUnits: safetyStock,
+        reorderPointUnits: reorderPoint,
+        recommendedOrderQty: Math.max(0, targetCycleStock - p.onHand),
+        currentValidQty: p.onHand,
+        status,
+      };
+    })
+    .sort((a, b) => (a.status === "under_safety" ? -1 : 1) - (b.status === "under_safety" ? -1 : 1) || b.dailyMeanUnits - a.dailyMeanUnits)
+    .slice(0, 10);
+}
+
+export interface AbcXyzCell {
+  productId: string;
+  brandName: string;
+  abcClass: "A" | "B" | "C";
+  xyzClass: "X" | "Y" | "Z";
+  segment: string; // e.g. "AX", "BZ"
+  cv: number;
+  revenueSharePct: number;
+  strategyHint: string;
+}
+
+/**
+ * 7. ABC-XYZ Demand Volatility Classifier combining cumulative revenue share (ABC)
+ * with Coefficient of Variation (CV = stdDev / mean) across sales days.
+ */
+export function classifyAbcXyzMatrix(
+  sales: readonly IntelSale[],
+  products: readonly ProductIntel[],
+  now = new Date()
+): AbcXyzCell[] {
+  const safety = computeSafetyStockRecommendations(sales, products, 4, now);
+  const safetyById = new Map(safety.map((s) => [s.productId, s]));
+  const totalRev = Math.max(1, products.reduce((s, p) => s + p.revenue, 0));
+
+  return products
+    .filter((p) => p.revenue > 0)
+    .slice(0, 12)
+    .map((p) => {
+      const stat = safetyById.get(p.productId);
+      const mean = stat?.dailyMeanUnits ?? 0;
+      const stdDev = stat?.dailyStdDev ?? 0;
+      const cv = mean > 0 ? Math.round((stdDev / mean) * 100) / 100 : 1.5;
+      const xyzClass: AbcXyzCell["xyzClass"] = cv <= 0.65 ? "X" : cv <= 1.25 ? "Y" : "Z";
+      const segment = `${p.abcClass}${xyzClass}`;
+      const strategyHint =
+        xyzClass === "X"
+          ? "Auto-replenish steady runner"
+          : xyzClass === "Y"
+            ? "Buffer safety stock for surges"
+            : p.abcClass === "C"
+              ? "Order strictly on demand"
+              : "Monitor irregular bulk requests";
+
+      return {
+        productId: p.productId,
+        brandName: p.brandName,
+        abcClass: p.abcClass,
+        xyzClass,
+        segment,
+        cv,
+        revenueSharePct: Math.round((p.revenue / totalRev) * 1000) / 10,
+        strategyHint,
+      };
+    });
+}
+
+export interface StaffingWindowPrediction {
+  hourLabel: string;
+  hour24: number;
+  avgReceiptsPerDay: number;
+  loadTier: "peak" | "busy" | "quiet";
+  recommendedCounters: number;
+}
+
+/**
+ * 8. Hourly Counter Staffing & Traffic Predictor: analyzes timestamped receipt clusters
+ * to tell managers exactly which hours need 2+ counter operators on duty.
+ */
+export function predictCounterStaffingWindows(sales: readonly IntelSale[]): StaffingWindowPrediction[] {
+  if (sales.length === 0) return [];
+  const hourBuckets = new Array<number>(24).fill(0);
+  const distinctDays = new Set<string>();
+  for (const s of sales) {
+    const dt = new Date(s.createdAt);
+    if (Number.isNaN(dt.getTime())) continue;
+    distinctDays.add(s.createdAt.slice(0, 10));
+    hourBuckets[dt.getHours()] += 1;
+  }
+  const dayCount = Math.max(1, distinctDays.size);
+  const rows: StaffingWindowPrediction[] = [];
+  for (let h = 7; h <= 22; h++) {
+    const avg = Math.round((hourBuckets[h] / dayCount) * 10) / 10;
+    const loadTier: StaffingWindowPrediction["loadTier"] =
+      avg >= 2.5 ? "peak" : avg >= 1 ? "busy" : "quiet";
+    const recommendedCounters = avg >= 3 ? 2 : avg > 0 ? 1 : 1;
+    rows.push({
+      hourLabel: `${String(h).padStart(2, "0")}:00`,
+      hour24: h,
+      avgReceiptsPerDay: avg,
+      loadTier,
+      recommendedCounters,
+    });
+  }
+  return rows.sort((a, b) => b.avgReceiptsPerDay - a.avgReceiptsPerDay).slice(0, 5);
+}

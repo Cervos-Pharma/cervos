@@ -26,6 +26,26 @@ import {
 import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
 import WebpPhotoInput from "@/components/WebpPhotoInput";
+import WorkspaceTour from "@/components/WorkspaceTour";
+import HardwareAndAudioStudio from "@/components/dashboards/HardwareAndAudioStudio";
+import { loadHardwareConfig, type HardwareConfigState } from "@/lib/hardware/devices";
+import { playAppSound } from "@/lib/sounds";
+
+const DEFAULT_DRUG_CATEGORIES = [
+  "Essential",
+  "Antibiotics",
+  "Antimalarials",
+  "Analgesics & Fever",
+  "ORS & Electrolytes",
+  "Respiratory & Inhalers",
+  "Diabetes & Chronic",
+  "Cardiovascular",
+  "Vitamins & Supplements",
+  "Dermatology & Topical",
+  "Gastrointestinal",
+  "Maternal & Pediatric",
+  "Diagnostics & Devices",
+] as const;
 
 export type PharmacyTab =
   | "overview"
@@ -246,6 +266,7 @@ export interface PharmacyDashboardProps {
     subscriptionInGraceDay?: boolean;
     trialEndsAt?: string;
     billingOverdue?: boolean;
+    customCategories?: string[];
     customization?: {
       brandLogoUrl?: string;
       brandAccent?: string;
@@ -270,6 +291,7 @@ export interface PharmacyDashboardProps {
   hqMessages?: DashboardHqMessage[];
   savedCustomers?: DashboardSavedCustomer[];
   shiftLogs?: DashboardShiftLog[];
+  orgBranchComparison?: ReturnType<typeof branchComparison>;
   notificationEnv?: NotificationEnvInfo;
   stockAlerts: { nearExpiryCount: number; expiredCount: number; lowStockCount: number };
   tab: PharmacyTab;
@@ -307,6 +329,7 @@ export default function PharmacyDashboard({
   hqMessages = [],
   savedCustomers = [],
   shiftLogs = [],
+  orgBranchComparison = [],
   notificationEnv,
   stockAlerts,
   tab,
@@ -340,6 +363,31 @@ export default function PharmacyDashboard({
     [resolvedCapabilities, activeProfileRole, canManageAdmin]
   );
 
+  // Hardware & Audio state + First-launch Guided Tour + Auto Clock-Out guard
+  const [hwConfig, setHwConfig] = useState<HardwareConfigState>(() => loadHardwareConfig());
+  const [tourOpen, setTourOpen] = useState(false);
+  const [shiftPromptDismissed, setShiftPromptDismissed] = useState(false);
+  const [autoClockOutNotice, setAutoClockOutNotice] = useState<string | null>(null);
+  const hardwareSectionRef = useRef<HTMLDivElement>(null);
+  const autoClockCheckedRef = useRef(false);
+
+  useEffect(() => {
+    setHwConfig(loadHardwareConfig());
+  }, [tab]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeProfileId) return;
+    const key = `cervos-tour-done-${activeProfileId}`;
+    try {
+      if (!window.localStorage.getItem(key)) {
+        const timer = setTimeout(() => setTourOpen(true), 650);
+        return () => clearTimeout(timer);
+      }
+    } catch {
+      // Ignore storage error
+    }
+  }, [activeProfileId]);
+
   // Reports subpage navigation
   const [reportView, setReportView] = useState<ExtendedReportView>("brief");
   const openReport = (sub: ExtendedReportView) => {
@@ -366,24 +414,55 @@ export default function PharmacyDashboard({
   const [billingNotice, setBillingNotice] = useState<string | null>(null);
   const [expenseBusy, setExpenseBusy] = useState(false);
   const [settlementBusy, setSettlementBusy] = useState(false);
-  const [mpesaPaybill, setMpesaPaybill] = useState(paymentSettings?.mpesaPaybill || "5582901");
-  const [tigoLipaNumber, setTigoLipaNumber] = useState(paymentSettings?.tigoLipaNumber || "8104421");
-  const [bankName, setBankName] = useState(paymentSettings?.bankName || "CRDB Bank Tanzania");
-  const [bankAccount, setBankAccount] = useState(paymentSettings?.bankAccount || "0152 0482 11900");
+  const [mpesaPaybill, setMpesaPaybill] = useState(paymentSettings?.mpesaPaybill ?? "");
+  const [tigoLipaNumber, setTigoLipaNumber] = useState(paymentSettings?.tigoLipaNumber ?? "");
+  const [bankName, setBankName] = useState(paymentSettings?.bankName ?? "");
+  const [bankAccount, setBankAccount] = useState(paymentSettings?.bankAccount ?? "");
   const [settlementCycle, setSettlementCycle] = useState<"daily" | "instant" | "weekly">(
     paymentSettings?.settlementCycle || "daily"
   );
-  const [vatRegistered, setVatRegistered] = useState(paymentSettings?.vatRegistered ?? true);
+  const [vatRegistered, setVatRegistered] = useState(paymentSettings?.vatRegistered ?? false);
+  const [invBusyKey, setInvBusyKey] = useState<string | null>(null);
+  const invBusy = invBusyKey !== null;
+  const [opEditBusy, setOpEditBusy] = useState(false);
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [customCatMode, setCustomCatMode] = useState(false);
+  const [editCustomCatMode, setEditCustomCatMode] = useState(false);
 
   useEffect(() => {
-    if (!paymentSettings) return;
-    setMpesaPaybill(paymentSettings.mpesaPaybill);
-    setTigoLipaNumber(paymentSettings.tigoLipaNumber);
-    setBankName(paymentSettings.bankName);
-    setBankAccount(paymentSettings.bankAccount);
+    if (!paymentSettings) {
+      setMpesaPaybill("");
+      setTigoLipaNumber("");
+      setBankName("");
+      setBankAccount("");
+      setSettlementCycle("daily");
+      setVatRegistered(false);
+      return;
+    }
+    setMpesaPaybill(paymentSettings.mpesaPaybill ?? "");
+    setTigoLipaNumber(paymentSettings.tigoLipaNumber ?? "");
+    setBankName(paymentSettings.bankName ?? "");
+    setBankAccount(paymentSettings.bankAccount ?? "");
     setSettlementCycle(paymentSettings.settlementCycle);
     setVatRegistered(paymentSettings.vatRegistered);
   }, [paymentSettings]);
+
+  const drugCategoryOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const pushCat = (raw?: string) => {
+      const clean = (raw || "").trim();
+      if (!clean) return;
+      const lower = clean.toLowerCase();
+      if (seen.has(lower)) return;
+      seen.add(lower);
+      out.push(clean);
+    };
+    DEFAULT_DRUG_CATEGORIES.forEach(pushCat);
+    (account.customCategories ?? []).forEach(pushCat);
+    batches.forEach((b) => pushCat(b.category));
+    return out;
+  }, [account.customCategories, batches]);
 
   // Shift Reconciliation state
   const [openingCash, setOpeningCash] = useState("50000");
@@ -442,6 +521,30 @@ export default function PharmacyDashboard({
   const [newImageUrl, setNewImageUrl] = useState("");
   const [newDateEntered, setNewDateEntered] = useState(() => new Date().toISOString().slice(0, 10));
   const [newRequiresRx, setNewRequiresRx] = useState(false);
+
+  const restockPresets = useMemo(() => {
+    const qBrand = newBrand.trim().toLowerCase();
+    if (!qBrand) return [];
+    const byBrand = new Map<string, DashboardBatch>();
+    for (const b of batches) {
+      const key = b.brandName.trim().toLowerCase();
+      if (!key) continue;
+      const existing = byBrand.get(key);
+      if (!existing || (b.imageUrl && !existing.imageUrl)) {
+        byBrand.set(key, b);
+      }
+    }
+    const list = Array.from(byBrand.values());
+    if (list.some((b) => b.brandName.trim().toLowerCase() === qBrand)) return [];
+    return list
+      .filter(
+        (b) =>
+          b.brandName.toLowerCase().includes(qBrand) ||
+          b.genericName.toLowerCase().includes(qBrand) ||
+          b.category.toLowerCase().includes(qBrand)
+      )
+      .slice(0, 6);
+  }, [batches, newBrand]);
 
   // POS Customer, Split Checkout Preview & Receipt Animation
   const [customerSearch, setCustomerSearch] = useState("");
@@ -632,6 +735,7 @@ export default function PharmacyDashboard({
 
   const adjustCart = (productId: string, delta: number) => {
     setPosMsg(null);
+    if (delta > 0) playAppSound("cart-add");
     setCart((prev) => ({ ...prev, [productId]: Math.max(0, (prev[productId] || 0) + delta) }));
   };
 
@@ -680,6 +784,7 @@ export default function PharmacyDashboard({
     setEditBatchBrand(b.brandName);
     setEditBatchGeneric(b.genericName);
     setEditBatchCategory(b.category);
+    setEditCustomCatMode(false);
     setEditBatchNumber(b.batchNumber);
     setEditBatchQty(String(b.quantity));
     setEditBatchCost(String(b.costPriceTzs));
@@ -732,9 +837,13 @@ export default function PharmacyDashboard({
         shift?: { durationMinutes?: number };
       };
       if (!res.ok || !out.ok) {
+        playAppSound("alert");
         setShiftResultMsg(out.error || `Shift clock ${clockType} failed.`);
         return;
       }
+      playAppSound("shift-clock");
+      setShiftPromptDismissed(false);
+      setAutoClockOutNotice(null);
       setShiftResultMsg(
         clockType === "in"
           ? out.alreadyClockedIn
@@ -839,9 +948,11 @@ export default function PharmacyDashboard({
         error?: string;
       };
       if (!res.ok || !out.ok) {
+        playAppSound("alert");
         setPosMsg({ ok: false, text: out.error || "Dispense failed." });
         return;
       }
+      playAppSound("sale-complete");
       setCart({});
       setPrescriptionRef("");
       setCheckoutPreviewOpen(false);
@@ -859,27 +970,32 @@ export default function PharmacyDashboard({
   };
 
   const submitShiftClose = async () => {
+    setReconcileBusy(true);
     setShiftResultMsg(null);
-    const res = await fetch("/api/workspace/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "reconcile_shift",
-        openingCashTzs: Number(openingCash) || 0,
-        cashSalesTzs,
-        mobileMoneySalesTzs: mobileSalesTzs,
-        declaredCashTzs: Number(declaredCash) || 0,
-      }),
-    });
-    const out = (await res.json()) as {
-      ok?: boolean;
-      reconciliation?: { status: string; expectedCashTzs: number; varianceTzs: number };
-    };
-    if (res.ok && out.reconciliation) {
-      setShiftResultMsg(
-        `Shift reconciled (${out.reconciliation.status.toUpperCase()}): Expected TZS ${out.reconciliation.expectedCashTzs.toLocaleString("en-US")}, Variance TZS ${out.reconciliation.varianceTzs.toLocaleString("en-US")}`
-      );
-      await onRefreshState();
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reconcile_shift",
+          openingCashTzs: Number(openingCash) || 0,
+          cashSalesTzs,
+          mobileMoneySalesTzs: mobileSalesTzs,
+          declaredCashTzs: Number(declaredCash) || 0,
+        }),
+      });
+      const out = (await res.json()) as {
+        ok?: boolean;
+        reconciliation?: { status: string; expectedCashTzs: number; varianceTzs: number };
+      };
+      if (res.ok && out.reconciliation) {
+        setShiftResultMsg(
+          `Shift reconciled (${out.reconciliation.status.toUpperCase()}): Expected TZS ${out.reconciliation.expectedCashTzs.toLocaleString("en-US")}, Variance TZS ${out.reconciliation.varianceTzs.toLocaleString("en-US")}`
+        );
+        await onRefreshState();
+      }
+    } finally {
+      setReconcileBusy(false);
     }
   };
 
@@ -928,49 +1044,60 @@ export default function PharmacyDashboard({
     await onRefreshState();
   };
 
-  const handleManageBatch = async (payload: Record<string, unknown>, msg: string) => {
+  const handleManageBatch = async (payload: Record<string, unknown>, msg: string, busyKey?: string) => {
+    const key = busyKey || String(payload.subAction ?? "batch");
+    setInvBusyKey(key);
     setInvNotice(null);
-    const res = await fetch("/api/workspace/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "manage_batch", ...payload }),
-    });
-    const out = (await res.json()) as { ok?: boolean; error?: string };
-    if (!res.ok || !out.ok) {
-      setInvNotice(out.error || "Batch update failed.");
-      return;
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "manage_batch", ...payload }),
+      });
+      const out = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !out.ok) {
+        setInvNotice(out.error || "Batch update failed.");
+        return;
+      }
+      setInvNotice(msg);
+      await onRefreshState();
+    } finally {
+      setInvBusyKey(null);
     }
-    setInvNotice(msg);
-    await onRefreshState();
   };
 
   const handleSaveOperatorEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProfileId) return;
+    setOpEditBusy(true);
     setTeamNotice(null);
-    const res = await fetch("/api/workspace/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "edit_profile",
-        profileId: editingProfileId,
-        displayName: editName,
-        username: editUsername.trim() || undefined,
-        role: editRole,
-        centreId: editCentreId,
-        capabilities: editCaps,
-        newPin: editPin.trim() || undefined,
-      }),
-    });
-    const out = (await res.json()) as { ok?: boolean; error?: string };
-    if (!res.ok || !out.ok) {
-      setTeamNotice(out.error || "Could not update operator.");
-      return;
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "edit_profile",
+          profileId: editingProfileId,
+          displayName: editName,
+          username: editUsername.trim() || undefined,
+          role: editRole,
+          centreId: editCentreId,
+          capabilities: editCaps,
+          newPin: editPin.trim() || undefined,
+        }),
+      });
+      const out = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !out.ok) {
+        setTeamNotice(out.error || "Could not update operator.");
+        return;
+      }
+      setEditingProfileId(null);
+      setEditPin("");
+      setTeamNotice("Operator profile & permissions updated remotely.");
+      await onRefreshState();
+    } finally {
+      setOpEditBusy(false);
     }
-    setEditingProfileId(null);
-    setEditPin("");
-    setTeamNotice("Operator profile & permissions updated remotely.");
-    await onRefreshState();
   };
 
   const processScannedCode = (rawInput: string) => {
@@ -996,10 +1123,12 @@ export default function PharmacyDashboard({
       );
 
     if (!prodMatch) {
+      playAppSound("alert");
       setPosMsg({ ok: false, text: `No matching stock found for "${clean}".` });
       return;
     }
     if (batchMatch && (batchMatch.quarantined || batchMatch.expiryDate < todayIso)) {
+      playAppSound("alert");
       setPosMsg({
         ok: false,
         text: `${batchMatch.brandName} lot ${batchMatch.batchNumber} is expired or quarantined. FEFO blocked dispensing.`,
@@ -1007,9 +1136,11 @@ export default function PharmacyDashboard({
       return;
     }
     if (prodMatch.validQty <= (cart[prodMatch.productId] || 0)) {
+      playAppSound("alert");
       setPosMsg({ ok: false, text: `All valid units of ${prodMatch.brandName} are already in basket.` });
       return;
     }
+    playAppSound("scan");
     adjustCart(prodMatch.productId, 1);
     setScanCode("");
     setScannerOpen(false);
@@ -1175,6 +1306,91 @@ export default function PharmacyDashboard({
     () => shiftLogs.find((s) => s.profileId === activeProfileId && !s.clockOutAt) ?? null,
     [shiftLogs, activeProfileId]
   );
+
+  // Automatic away/idle shift clock-out + activity heartbeat
+  useEffect(() => {
+    if (typeof window === "undefined" || !activeProfileId) return;
+    const heartbeatKey = `cervos-shift-active-at-${activeProfileId}`;
+    const AUTO_CLOCKOUT_AWAY_MS = 4 * 60 * 60 * 1000; // 4 hours out of app -> auto clock out
+    const MAX_SHIFT_AGE_MS = 12 * 60 * 60 * 1000;
+
+    const recordHeartbeat = () => {
+      try {
+        window.localStorage.setItem(heartbeatKey, String(Date.now()));
+      } catch {
+        // Ignore storage errors
+      }
+    };
+
+    const checkAwayClockOut = async () => {
+      if (!activeShift || autoClockCheckedRef.current) return;
+      try {
+        const lastActiveRaw = Number(window.localStorage.getItem(heartbeatKey));
+        const now = Date.now();
+        const awayMs = Number.isFinite(lastActiveRaw) && lastActiveRaw > 0 ? now - lastActiveRaw : 0;
+        const shiftAgeMs = now - Date.parse(activeShift.clockInAt);
+        if (awayMs >= AUTO_CLOCKOUT_AWAY_MS || shiftAgeMs >= MAX_SHIFT_AGE_MS) {
+          autoClockCheckedRef.current = true;
+          const awayMinutes = Math.max(
+            1,
+            Math.round((awayMs >= AUTO_CLOCKOUT_AWAY_MS ? awayMs : shiftAgeMs) / 60000)
+          );
+          const res = await fetch("/api/workspace/state", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "shift_clock",
+              clockType: "auto_out",
+              awayMinutes,
+            }),
+          });
+          if (res.ok) {
+            const hrs = Math.floor(awayMinutes / 60);
+            const mins = awayMinutes % 60;
+            playAppSound("shift-clock");
+            setAutoClockOutNotice(
+              isSw
+                ? `Ulitolewa zamu kiotomatiki baada ya kuwa nje ya app kwa saa ${hrs} dak ${mins}. Ingia tena kama unaanza zamu mpya.`
+                : `You were away for ${hrs}h ${mins}m, so your previous shift was auto clocked out cleanly.`
+            );
+            await onRefreshState();
+          }
+        }
+      } catch {
+        // Ignore
+      } finally {
+        recordHeartbeat();
+      }
+    };
+
+    void checkAwayClockOut();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void checkAwayClockOut();
+      } else {
+        recordHeartbeat();
+      }
+    };
+    window.addEventListener("pointerdown", recordHeartbeat, { passive: true });
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("pointerdown", recordHeartbeat);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeProfileId, activeShift, isSw, onRefreshState]);
+
+  useEffect(() => {
+    if (!focusedBatch && !focusedReceipt && !selectedTrailItem) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFocusedBatch(null);
+        setFocusedReceipt(null);
+        setSelectedTrailItem(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusedBatch, focusedReceipt, selectedTrailItem]);
 
   const recCombinedQ = combineSearchQueries(receiptSearch, q);
   const visibleReceipts = useMemo(() => {
@@ -1582,6 +1798,23 @@ export default function PharmacyDashboard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTourOpen(true)}
+            className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer transition-colors ${chipCls} hover:border-slate-400`}
+          >
+            {isSw ? "Mwongozo" : "Quick Tour"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab("operations");
+              setTimeout(() => hardwareSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 90);
+            }}
+            className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer transition-colors ${chipCls} hover:border-slate-400`}
+          >
+            {isSw ? "Vifaa & Sauti" : "Hardware & Sound"}
+          </button>
           {tab !== "overview" ? (
             <button
               type="button"
@@ -1659,6 +1892,7 @@ export default function PharmacyDashboard({
           orders={wholesaleOrders}
           expenses={expenses}
           centres={centres}
+          orgBranchComparison={orgBranchComparison}
           activeCentreId={activeCentre?.id}
           accent={accent}
           isDark={isDark}
@@ -1722,7 +1956,7 @@ export default function PharmacyDashboard({
                 ))}
               </div>
 
-              {focusedBatch && (() => {
+              {focusedBatch && typeof document !== "undefined" && (() => {
                 const sameProductBatches = batches.filter((x) => x.productId === focusedBatch.productId);
                 const prodSalesLines = sales.flatMap((s) =>
                   (s.lines ?? [])
@@ -1741,8 +1975,19 @@ export default function PharmacyDashboard({
                 const unitMargin = focusedBatch.salePriceTzs - focusedBatch.costPriceTzs;
                 const marginPct = focusedBatch.salePriceTzs > 0 ? Math.round((unitMargin / focusedBatch.salePriceTzs) * 100) : 0;
 
-                return (
-                  <div className={`p-5 rounded-[22px] border space-y-4 ring-2 animate-stage-pop ${chipCls}`} style={{ borderColor: accent }}>
+                return createPortal(
+                  <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={focusedBatch.brandName}
+                    className="fixed inset-0 z-[125] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+                    onClick={() => setFocusedBatch(null)}
+                  >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className={`w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 rounded-[26px] border space-y-4 ring-2 shadow-2xl animate-stage-pop ${cardCls}`}
+                    style={{ borderColor: accent }}
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="flex items-center gap-3.5">
                         {focusedBatch.imageUrl ? (
@@ -1852,7 +2097,62 @@ export default function PharmacyDashboard({
                           </div>
                           <div>
                             <label className={`block text-[10px] mb-1 ${mutedCls}`}>Type / Category</label>
-                            <input type="text" value={editBatchCategory} onChange={(e) => setEditBatchCategory(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            {editCustomCatMode ? (
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="text"
+                                  value={editBatchCategory}
+                                  onChange={(e) => setEditBatchCategory(e.target.value)}
+                                  placeholder="Type custom category"
+                                  autoFocus
+                                  className={`flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border ${inputCls}`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditCustomCatMode(false);
+                                    if (!editBatchCategory.trim()) {
+                                      setEditBatchCategory(drugCategoryOptions[0] || "Essential");
+                                    }
+                                  }}
+                                  className={`px-2 py-1.5 rounded-lg border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                                >
+                                  List
+                                </button>
+                              </div>
+                            ) : (
+                              <select
+                                value={
+                                  drugCategoryOptions.some(
+                                    (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
+                                  )
+                                    ? drugCategoryOptions.find(
+                                        (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
+                                      )
+                                    : "__current__"
+                                }
+                                onChange={(e) => {
+                                  if (e.target.value === "__custom__") {
+                                    setEditCustomCatMode(true);
+                                    setEditBatchCategory("");
+                                  } else {
+                                    setEditBatchCategory(e.target.value);
+                                  }
+                                }}
+                                className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`}
+                              >
+                                {editBatchCategory.trim() &&
+                                  !drugCategoryOptions.some(
+                                    (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
+                                  ) && <option value="__current__">{editBatchCategory}</option>}
+                                {drugCategoryOptions.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
+                                <option value="__custom__">+ Custom category...</option>
+                              </select>
+                            )}
                           </div>
                           <div>
                             <label className={`block text-[10px] mb-1 ${mutedCls}`}>Batch Number</label>
@@ -1898,13 +2198,23 @@ export default function PharmacyDashboard({
                             <input type="checkbox" checked={editBatchRx} onChange={(e) => setEditBatchRx(e.target.checked)} />
                             <span>Prescription Required (Rx)</span>
                           </label>
-                          <button type="submit" className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
-                            Save Product Updates
+                          <button
+                            type="submit"
+                            disabled={invBusy}
+                            className="px-4 py-2 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            style={{ backgroundColor: accent }}
+                          >
+                            {invBusyKey === "edit_batch" && (
+                              <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                            )}
+                            <span>{invBusyKey === "edit_batch" ? "Saving..." : "Save Product Updates"}</span>
                           </button>
                         </div>
                       </form>
                     )}
                   </div>
+                  </div>,
+                  document.body
                 );
               })()}
 
@@ -1961,27 +2271,37 @@ export default function PharmacyDashboard({
                           <>
                             <button
                               type="button"
+                              disabled={invBusy}
                               onClick={() =>
                                 handleManageBatch(
                                   { subAction: "adjust_qty", batchId: b.id, quantity: b.quantity + 10 },
-                                  `Added +10 units to ${b.batchNumber}`
+                                  `Added +10 units to ${b.batchNumber}`,
+                                  `adj_${b.id}`
                                 )
                               }
-                              className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                              className={`px-2.5 py-1 rounded-full border text-[10px] font-semibold inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer ${chipCls}`}
                             >
-                              +10
+                              {invBusyKey === `adj_${b.id}` && (
+                                <span className="w-2.5 h-2.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                              )}
+                              <span>+10</span>
                             </button>
                             <button
                               type="button"
+                              disabled={invBusy}
                               onClick={() =>
                                 handleManageBatch(
                                   { subAction: "toggle_quarantine", batchId: b.id },
-                                  `${b.quarantined ? "Restored" : "Quarantined"} lot ${b.batchNumber}`
+                                  `${b.quarantined ? "Restored" : "Quarantined"} lot ${b.batchNumber}`,
+                                  `quar_${b.id}`
                                 )
                               }
-                              className="px-2.5 py-1 rounded-full border border-rose-300/60 text-rose-500 text-[10px] font-semibold cursor-pointer"
+                              className="px-2.5 py-1 rounded-full border border-rose-300/60 text-rose-500 text-[10px] font-semibold inline-flex items-center gap-1 disabled:opacity-50 cursor-pointer"
                             >
-                              {b.quarantined ? "Restore" : "Quarantine"}
+                              {invBusyKey === `quar_${b.id}` && (
+                                <span className="w-2.5 h-2.5 rounded-full border-2 border-rose-500 border-t-transparent animate-spin" />
+                              )}
+                              <span>{b.quarantined ? "Restore" : "Quarantine"}</span>
                             </button>
                           </>
                         )}
@@ -2007,6 +2327,41 @@ export default function PharmacyDashboard({
                       placeholder="e.g. Azithromycin 500mg"
                       className={`w-full px-3.5 py-2 rounded-xl border text-xs ${inputCls}`}
                     />
+                    {restockPresets.length > 0 && (
+                      <div className={`mt-1.5 rounded-xl border p-1.5 space-y-1 ${isDark ? "border-slate-700 bg-slate-900/90" : "border-slate-200 bg-slate-50"}`}>
+                        <div className={`px-1.5 text-[9px] font-bold uppercase tracking-wider ${mutedCls}`}>
+                          Quick Restock Autofill (click to preload)
+                        </div>
+                        {restockPresets.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => {
+                              setNewBrand(preset.brandName);
+                              setNewGeneric(preset.genericName);
+                              setNewCategory(preset.category || "Essential");
+                              setCustomCatMode(false);
+                              setNewCostPrice(String(preset.costPriceTzs || 2500));
+                              setNewPrice(String(preset.salePriceTzs || 3500));
+                              setNewThreshold(String(preset.lowStockThreshold ?? 25));
+                              setNewRequiresRx(Boolean(preset.requiresPrescription));
+                              if (preset.imageUrl) setNewImageUrl(preset.imageUrl);
+                            }}
+                            className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] flex items-center justify-between gap-2 transition cursor-pointer ${isDark ? "hover:bg-slate-800" : "hover:bg-white"}`}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-semibold truncate">{preset.brandName}</div>
+                              <div className={`text-[10px] truncate ${mutedCls}`}>
+                                {preset.genericName} · {preset.category}
+                              </div>
+                            </div>
+                            <span className="shrink-0 font-mono text-[10px] font-semibold" style={{ color: accent }}>
+                              {formatTzs(preset.salePriceTzs)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
@@ -2030,7 +2385,62 @@ export default function PharmacyDashboard({
                       <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
                         Type / Category
                       </label>
-                      <input type="text" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`} />
+                      {customCatMode ? (
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            value={newCategory}
+                            onChange={(e) => setNewCategory(e.target.value)}
+                            placeholder="Custom category..."
+                            autoFocus
+                            className={`flex-1 min-w-0 px-3 py-2 rounded-xl border text-xs ${inputCls}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomCatMode(false);
+                              if (!newCategory.trim()) {
+                                setNewCategory(drugCategoryOptions[0] || "Essential");
+                              }
+                            }}
+                            className={`px-2.5 py-2 rounded-xl border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                          >
+                            List
+                          </button>
+                        </div>
+                      ) : (
+                        <select
+                          value={
+                            drugCategoryOptions.some(
+                              (c) => c.toLowerCase() === newCategory.trim().toLowerCase()
+                            )
+                              ? drugCategoryOptions.find(
+                                  (c) => c.toLowerCase() === newCategory.trim().toLowerCase()
+                                )
+                              : "__current__"
+                          }
+                          onChange={(e) => {
+                            if (e.target.value === "__custom__") {
+                              setCustomCatMode(true);
+                              setNewCategory("");
+                            } else {
+                              setNewCategory(e.target.value);
+                            }
+                          }}
+                          className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`}
+                        >
+                          {newCategory.trim() &&
+                            !drugCategoryOptions.some(
+                              (c) => c.toLowerCase() === newCategory.trim().toLowerCase()
+                            ) && <option value="__current__">{newCategory}</option>}
+                          {drugCategoryOptions.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                          <option value="__custom__">+ Custom category...</option>
+                        </select>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
@@ -2102,14 +2512,15 @@ export default function PharmacyDashboard({
                   </div>
                   <button
                     type="button"
-                    disabled={!newBrand.trim()}
+                    disabled={invBusy || !newBrand.trim()}
                     onClick={async () => {
+                      const cleanCat = newCategory.trim() || "Essential";
                       await handleManageBatch(
                         {
                           subAction: "add_batch",
                           brandName: newBrand,
                           genericName: newGeneric.trim() || newBrand,
-                          category: newCategory.trim() || "Essential",
+                          category: cleanCat,
                           quantity: Number(newQty) || 20,
                           costPriceTzs: Number(newCostPrice) || 2500,
                           salePriceTzs: Number(newPrice) || 3500,
@@ -2120,17 +2531,22 @@ export default function PharmacyDashboard({
                           expiryDate: newExpiry,
                           gs1Barcode: newLotGs1,
                         },
-                        `Added remote stock batch for ${newBrand}`
+                        `Added remote stock batch for ${newBrand}`,
+                        "add_batch"
                       );
                       setNewBrand("");
                       setNewGeneric("");
+                      setCustomCatMode(false);
                       setNewImageUrl("");
                       setNewLotGs1("");
                     }}
-                    className="w-full py-2.5 rounded-full text-white text-xs font-semibold disabled:opacity-45 cursor-pointer"
+                    className="w-full py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-45 cursor-pointer"
                     style={{ backgroundColor: accent }}
                   >
-                    + Add Stock Lot
+                    {invBusyKey === "add_batch" && (
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    )}
+                    <span>{invBusyKey === "add_batch" ? "Adding Stock Lot..." : "+ Add Stock Lot"}</span>
                   </button>
                 </div>
               </div>
@@ -2352,10 +2768,14 @@ export default function PharmacyDashboard({
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-full text-white text-xs font-semibold cursor-pointer"
+                    disabled={opEditBusy}
+                    className="flex-1 py-2.5 rounded-full text-white text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                     style={{ backgroundColor: accent }}
                   >
-                    Save Operator Changes
+                    {opEditBusy && (
+                      <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    )}
+                    <span>{opEditBusy ? "Saving..." : "Save Operator Changes"}</span>
                   </button>
                   <button
                     type="button"
@@ -2795,7 +3215,7 @@ export default function PharmacyDashboard({
                 >
                   {posBusy
                     ? "Allocating FEFO Lots..."
-                    : isSw ? "Kagua & Uza (Preview Focus) ->" : "Review & Sell (70/30 Preview) ->"}
+                    : isSw ? "Kagua & Uza ->" : "Review & Sell ->"}
                 </button>
               </div>
 
@@ -2850,21 +3270,29 @@ export default function PharmacyDashboard({
                     {shiftResultMsg}
                   </div>
                 )}
-                <button type="button" onClick={submitShiftClose} className={`w-full py-2 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}>
-                  Reconcile &amp; Log Shift Drawer
+                <button
+                  type="button"
+                  disabled={reconcileBusy}
+                  onClick={submitShiftClose}
+                  className={`w-full py-2 rounded-full border text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${chipCls}`}
+                >
+                  {reconcileBusy && (
+                    <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                  )}
+                  <span>{reconcileBusy ? "Reconciling..." : "Reconcile & Log Shift Drawer"}</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* 70% / 30% Split POS Sale Preview Focus Card (Portaled to viewport center, never drifts on scroll) */}
+          {/* POS Sale Summary & Receipt Review Dialog (Portaled to viewport center) */}
           {checkoutPreviewOpen &&
             typeof document !== "undefined" &&
             createPortal(
               <div
                 role="dialog"
                 aria-modal="true"
-                aria-label={isSw ? "Uhakiki wa Mauzo na Risiti" : "Sale Preview Focus Card"}
+                aria-label={isSw ? "Uhakiki wa Mauzo na Risiti" : "Sale Summary & Receipt Review"}
                 className="fixed inset-0 z-[120] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4"
                 onClick={() => setCheckoutPreviewOpen(false)}
               >
@@ -2875,7 +3303,7 @@ export default function PharmacyDashboard({
                   <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-500/15">
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                        {isSw ? "UHAKIKI WA MAUZO & RISITI" : "SALE PREVIEW FOCUS CARD (70 / 30 SPLIT)"}
+                        {isSw ? "UHAKIKI WA MAUZO & RISITI" : "SALE SUMMARY & RECEIPT REVIEW"}
                       </div>
                       <h2 className="text-xl font-bold mt-0.5">
                         {posCustomerName.trim() ? `${posCustomerName.trim()} - ` : ""}
@@ -2963,12 +3391,49 @@ export default function PharmacyDashboard({
                           ))}
                         </div>
 
-                        <div className={`p-3 rounded-xl border text-[10px] space-y-1 ${cardCls}`}>
-                          <div className="font-bold text-emerald-500 flex items-center justify-between">
-                            <span>80mm Thermal / USB Printer</span>
-                            <span>READY</span>
+                        <div className={`p-3 rounded-xl border text-[10px] space-y-1.5 ${cardCls}`}>
+                          <div className="font-bold flex items-center justify-between gap-2">
+                            <span>
+                              {hwConfig.printerTransport === "web_serial" ||
+                              hwConfig.printerTransport === "web_usb" ||
+                              hwConfig.printerTransport === "bluetooth"
+                                ? `${hwConfig.printerName} (${hwConfig.paperWidthMm}mm)`
+                                : `OS System Print Dialog (${hwConfig.paperWidthMm}mm)`}
+                            </span>
+                            <span
+                              className={
+                                hwConfig.printerTransport === "system_print"
+                                  ? "text-amber-500"
+                                  : hwConfig.printerTransport === "none"
+                                    ? "text-rose-500"
+                                    : "text-emerald-500"
+                              }
+                            >
+                              {hwConfig.printerTransport === "system_print"
+                                ? "NO USB/BT PAIRED"
+                                : hwConfig.printerTransport === "none"
+                                  ? "NOT CONFIGURED"
+                                  : "CONNECTED"}
+                            </span>
                           </div>
-                          <div className={mutedCls}>QR &amp; Barcode Scanner: Connected (Keyboard Wedge / Cam)</div>
+                          <div className={mutedCls}>
+                            Scanner: {hwConfig.scannerName}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCheckoutPreviewOpen(false);
+                              setTab("operations");
+                              setTimeout(
+                                () => hardwareSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+                                100
+                              );
+                            }}
+                            className="text-[10px] font-semibold underline cursor-pointer"
+                            style={{ color: accent }}
+                          >
+                            {isSw ? "Unganisha / Tatua Vifaa ->" : "Connect Hardware / Troubleshoot ->"}
+                          </button>
                         </div>
                       </div>
 
@@ -2990,6 +3455,18 @@ export default function PharmacyDashboard({
               </div>,
               document.body
             )}
+
+          <div ref={hardwareSectionRef} className="pt-2">
+            <HardwareAndAudioStudio
+              orgName={account.orgName}
+              branchName={activeCentre?.name || account.region}
+              hwConfig={hwConfig}
+              onHwConfigChange={setHwConfig}
+              isDark={isDark}
+              isSw={isSw}
+              accent={accent}
+            />
+          </div>
         </div>
       )}
 
@@ -3024,8 +3501,19 @@ export default function PharmacyDashboard({
               />
             </div>
 
-            {focusedReceipt && (
-              <div className={`p-5 rounded-[22px] border space-y-3 ring-2 animate-stage-pop ${chipCls}`} style={{ borderColor: accent }}>
+            {focusedReceipt && typeof document !== "undefined" && createPortal(
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={focusedReceipt.receiptNumber || "Receipt"}
+                className="fixed inset-0 z-[125] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+                onClick={() => setFocusedReceipt(null)}
+              >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-xl max-h-[88vh] overflow-y-auto p-6 rounded-[26px] border space-y-3 ring-2 shadow-2xl animate-stage-pop ${cardCls}`}
+                style={{ borderColor: accent }}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
@@ -3061,7 +3549,7 @@ export default function PharmacyDashboard({
                 </div>
                 <div className="space-y-1.5 text-xs">
                   {(focusedReceipt.lines ?? []).map((ln, idx) => (
-                    <div key={`${ln.productId}-${idx}`} className={`p-2.5 rounded-xl border flex justify-between ${cardCls}`}>
+                    <div key={`${ln.productId}-${idx}`} className={`p-2.5 rounded-xl border flex justify-between ${chipCls}`}>
                       <span>
                         <strong>{ln.brandName}</strong> &times; {ln.qty}{" "}
                         <span className={`font-mono text-[10px] ${mutedCls}`}>(Batch {ln.batchNumber || "FEFO"})</span>
@@ -3077,6 +3565,8 @@ export default function PharmacyDashboard({
                   </div>
                 </div>
               </div>
+              </div>,
+              document.body
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -3545,6 +4035,7 @@ export default function PharmacyDashboard({
                       type="text"
                       value={mpesaPaybill}
                       onChange={(e) => setMpesaPaybill(e.target.value)}
+                      placeholder="e.g. 5582901"
                       className={`w-full px-3 py-2 rounded-xl border font-mono text-xs ${inputCls}`}
                     />
                   </div>
@@ -3554,6 +4045,7 @@ export default function PharmacyDashboard({
                       type="text"
                       value={tigoLipaNumber}
                       onChange={(e) => setTigoLipaNumber(e.target.value)}
+                      placeholder="e.g. 8104421"
                       className={`w-full px-3 py-2 rounded-xl border font-mono text-xs ${inputCls}`}
                     />
                   </div>
@@ -3565,6 +4057,7 @@ export default function PharmacyDashboard({
                       type="text"
                       value={bankName}
                       onChange={(e) => setBankName(e.target.value)}
+                      placeholder="e.g. CRDB Bank Tanzania"
                       className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`}
                     />
                   </div>
@@ -3574,6 +4067,7 @@ export default function PharmacyDashboard({
                       type="text"
                       value={bankAccount}
                       onChange={(e) => setBankAccount(e.target.value)}
+                      placeholder="e.g. 0152 0482 11900"
                       className={`w-full px-3 py-2 rounded-xl border font-mono text-xs ${inputCls}`}
                     />
                   </div>
@@ -3679,6 +4173,83 @@ export default function PharmacyDashboard({
       {/* ================================================================ */}
       {tab === "overview" && (
         <>
+          {/* Home Launch Shift Attendance Check (Immediate Visibility on App Home + Auto Clock-Out Alert) */}
+          {autoClockOutNotice && (
+            <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2 mb-4">
+              <span>{autoClockOutNotice}</span>
+              <button
+                type="button"
+                onClick={() => setAutoClockOutNotice(null)}
+                className="text-xs underline cursor-pointer shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {!shiftPromptDismissed && (
+            <div className={`rounded-[22px] border p-4 sm:p-5 mb-4 flex flex-wrap items-center justify-between gap-3 ${cardCls}`}>
+              <div className="space-y-0.5">
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                  {activeShift
+                    ? isSw ? "ZAMU INAENDELEA" : "ACTIVE SHIFT LOGGED"
+                    : isSw ? "UKAGUZI WA ZAMU KWENYE UZINDUZI" : "LAUNCH SHIFT ATTENDANCE CHECK"}
+                </div>
+                <div className="text-sm font-semibold">
+                  {activeShift
+                    ? isSw
+                      ? `Uko zamu katika tawi la ${activeCentre?.name || account.orgName} tangu saa ${activeShift.clockInAt.slice(11, 16)}.`
+                      : `You are clocked in at ${activeCentre?.name || account.orgName} since ${activeShift.clockInAt.slice(11, 16)}.`
+                    : isSw
+                      ? `Je, uko zamu sasa hivi kwenye tawi la ${activeCentre?.name || account.orgName}?`
+                      : `Are you on shift right now at ${activeCentre?.name || account.orgName}?`}
+                </div>
+                <p className={`text-[11px] ${mutedCls}`}>
+                  {activeShift
+                    ? isSw
+                      ? "Ukitoka nje ya programu kwa zaidi ya saa 4 bila shughuli, zamu itafungwa kiotomatiki."
+                      : "Staying away from the app for over 4 hours automatically clocks out your shift."
+                    : isSw
+                      ? "Anza zamu kabla ya kuuza kaunta ili kuhakiki muda wa kazi na droo ya fedha."
+                      : "Clock in right here on Home before counter sales so shift hours & cash drawer stay accurate."}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {activeShift ? (
+                  <button
+                    type="button"
+                    disabled={shiftBusy}
+                    onClick={() => handleShiftClock("out")}
+                    className="px-4 py-2 rounded-full border border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {shiftBusy && <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />}
+                    <span>{shiftBusy ? "Updating..." : isSw ? "Maliza Zamu (Clock Out)" : "Clock Out Now"}</span>
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      disabled={shiftBusy}
+                      onClick={() => handleShiftClock("in")}
+                      className="px-4 py-2 rounded-full text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      style={{ backgroundColor: accent }}
+                    >
+                      {shiftBusy && <span className="w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />}
+                      <span>{shiftBusy ? "Clocking In..." : isSw ? "Ndiyo, Anza Zamu (Clock In)" : "Yes, Clock In Now"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShiftPromptDismissed(true)}
+                      className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
+                    >
+                      {isSw ? "Sipo Zamu" : "Not on Shift"}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {canManageAdmin && orgScope === "all" && (
             <div className="space-y-6 animate-stage-pop">
               {/* TOP ROW: Simple Greeting + Neat 2x2 Analytics Cubes (Left) + Thin Action Trail (Right) */}
@@ -3748,8 +4319,14 @@ export default function PharmacyDashboard({
                     </span>
                   </div>
 
-                  {selectedTrailItem && (
-                    <div className={`p-4 rounded-2xl border space-y-3 ring-2 animate-stage-pop text-xs ${chipCls}`} style={{ borderColor: accent }}>
+                  {selectedTrailItem && typeof document !== "undefined" && createPortal(
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      className="fixed inset-0 z-[125] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+                      onClick={() => setSelectedTrailItem(null)}
+                    >
+                    <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-lg max-h-[88vh] overflow-y-auto p-6 rounded-[26px] border space-y-3 ring-2 shadow-2xl animate-stage-pop text-xs ${cardCls}`} style={{ borderColor: accent }}>
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
@@ -3893,6 +4470,8 @@ export default function PharmacyDashboard({
                         </div>
                       )}
                     </div>
+                    </div>,
+                    document.body
                   )}
 
                   <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 text-xs">
@@ -3956,7 +4535,7 @@ export default function PharmacyDashboard({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {branchComparison(sales, batches, centres).map((b) => {
+                  {(orgBranchComparison.length > 0 ? orgBranchComparison : branchComparison(sales, batches, centres)).map((b) => {
                     const ctr = centres.find((c) => c.id === b.centreId);
                     const staffCount = profiles.filter((p) => p.centreId === b.centreId).length;
                     return (
@@ -4792,7 +5371,7 @@ export default function PharmacyDashboard({
                         onClick={() => openReport("people")}
                         className="hover:underline cursor-pointer"
                       >
-                        {profiles.length} staff &middot; View League &rarr;
+                        {profiles.filter((p) => !activeCentre?.id || p.centreId === activeCentre.id).length} staff &middot; View League &rarr;
                       </button>
                       <button type="button" onClick={onOpenChat} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
                         Open Branch Chat &rarr;
@@ -4835,6 +5414,25 @@ export default function PharmacyDashboard({
           </div>
         )
       }
+      <WorkspaceTour
+        open={tourOpen}
+        onClose={(markDone) => {
+          setTourOpen(false);
+          if (markDone && typeof window !== "undefined" && activeProfileId) {
+            try {
+              window.localStorage.setItem(`cervos-tour-done-${activeProfileId}`, "1");
+            } catch {
+              // Ignore
+            }
+          }
+        }}
+        orgName={account.orgName}
+        branchName={activeCentre?.name || account.region}
+        isDark={isDark}
+        isSw={isSw}
+        accent={accent}
+        onJumpTab={(nextTab) => setTab(nextTab)}
+      />
     </div >
   );
 }

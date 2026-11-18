@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { COMMERCIAL_PLAN_CATALOG, formatTzs } from "@cervos/core";
 import { matchesSearch } from "@/lib/search";
+import { hqSurfaceTokens } from "./hqSurface";
 import type { HqAuditEvent, HqFleetAccount, HqPackageRecord } from "./types";
 
 interface HQFleetSectionProps {
@@ -66,16 +67,11 @@ export default function HQFleetSection({
   // Inline PIN reset draft per operator
   const [pinDrafts, setPinDrafts] = useState<Record<string, string>>({});
 
-  const cardCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-slate-200 text-slate-900";
-  const chipCls = isDark
-    ? "bg-[#171D28] border-slate-800 text-slate-200"
-    : "bg-slate-50 border-slate-200 text-slate-800";
-  const inputCls = isDark
-    ? "bg-[#090C12] border-slate-700 text-slate-100 placeholder:text-slate-500"
-    : "bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400";
-  const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
+  const t = hqSurfaceTokens(isDark);
+  const cardCls = t.panelCls;
+  const chipCls = t.wellCls;
+  const inputCls = t.inputCls;
+  const mutedCls = t.mutedCls;
 
   const filtered = useMemo(() => {
     return accounts.filter((a) => {
@@ -552,6 +548,46 @@ export default function HQFleetSection({
                       +14d Trial
                     </button>
                   </div>
+                </div>
+
+                {/* Owner-Configured Kasri Payout / Settlement Channels */}
+                <div className={`rounded-xl border p-4 space-y-2 ${chipCls}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider">Kasri Settlement Channels</span>
+                    <span className={`text-[10px] font-mono ${mutedCls}`}>
+                      {selectedOrg.paymentSettings
+                        ? `Cycle: ${selectedOrg.paymentSettings.settlementCycle}${selectedOrg.paymentSettings.vatRegistered ? " · VAT Reg" : ""}`
+                        : "Unconfigured"}
+                    </span>
+                  </div>
+                  {!selectedOrg.paymentSettings ? (
+                    <p className={`text-xs ${mutedCls}`}>
+                      Owner has not configured payout wallets or bank account yet.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                      <div className={`p-2.5 rounded-lg border ${cardCls}`}>
+                        <div className={`text-[10px] uppercase ${mutedCls}`}>M-Pesa Paybill / Till</div>
+                        <div className="font-mono font-semibold mt-0.5">
+                          {selectedOrg.paymentSettings.mpesaPaybill || "Not set"}
+                        </div>
+                      </div>
+                      <div className={`p-2.5 rounded-lg border ${cardCls}`}>
+                        <div className={`text-[10px] uppercase ${mutedCls}`}>Tigo / Mixx Lipa</div>
+                        <div className="font-mono font-semibold mt-0.5">
+                          {selectedOrg.paymentSettings.tigoLipaNumber || "Not set"}
+                        </div>
+                      </div>
+                      <div className={`p-2.5 rounded-lg border ${cardCls}`}>
+                        <div className={`text-[10px] uppercase ${mutedCls}`}>Bank Settlement</div>
+                        <div className="font-semibold mt-0.5 truncate">
+                          {selectedOrg.paymentSettings.bankName
+                            ? `${selectedOrg.paymentSettings.bankName} · ${selectedOrg.paymentSettings.bankAccount}`
+                            : selectedOrg.paymentSettings.bankAccount || "Not set"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

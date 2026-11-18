@@ -12,6 +12,7 @@ import WorkspaceShell, {
 const CervosMap = dynamic(() => import("@/components/CervosMap"), { ssr: false });
 import PwaLaunchSplash from "@/components/PwaLaunchSplash";
 import { requestOpenBranchChat, WORKSPACE_REFRESH_EVENT } from "@/components/ShellBranchChat";
+import { playAppSound } from "@/lib/sounds";
 import PharmacyDashboard, {
   type DashboardBatch,
   type DashboardCatalogItem,
@@ -69,6 +70,7 @@ interface AppWorkspaceData {
     billingOverdue?: boolean;
     trialEndsAt?: string;
     accessLock?: { locked: boolean; source: "hq" | "billing" | null; reason: string };
+    customCategories?: string[];
     customization?: {
       brandLogoUrl?: string;
       brandAccent?: string;
@@ -91,6 +93,16 @@ interface AppWorkspaceData {
   hqMessages?: DashboardHqMessage[];
   savedCustomers?: DashboardSavedCustomer[];
   shiftLogs?: DashboardShiftLog[];
+  orgBranchComparison?: Array<{
+    centreId: string;
+    name: string;
+    revenue: number;
+    profit: number;
+    tx: number;
+    marginPct: number;
+    stockAtCost: number;
+    turnover: number;
+  }>;
   notificationEnv?: NotificationEnvInfo;
   stockAlerts?: { nearExpiryCount: number; expiredCount: number; lowStockCount: number };
   notifications?: WorkspaceNotificationItem[];
@@ -156,8 +168,8 @@ export default function WorkspaceHomePage() {
           ? "Matawi Yote"
           : "All Branches"
         : data?.centres?.find((c) => c.id === data.activeCentreId)?.name ||
-          data?.centres?.[0]?.name ||
-          "Branch";
+        data?.centres?.[0]?.name ||
+        "Branch";
     showSwitchToast(targetName, nextScope);
   };
   const [searchQuery, setSearchQuery] = useState("");
@@ -297,12 +309,13 @@ export default function WorkspaceHomePage() {
     if (isAdmin && isPharm) {
       try {
         const sp = new URLSearchParams(window.location.search);
-        const urlTab = sp.get("tab");
-        if (sp.get("scope") !== "branch" && urlTab !== "operations" && urlTab !== "inventory") {
+        if (sp.get("scope") === "all") {
           setOrgScope("all");
+        } else {
+          setOrgScope("branch");
         }
       } catch {
-        setOrgScope("all");
+        setOrgScope("branch");
       }
       userChoseScopeRef.current = true;
     }
@@ -396,6 +409,7 @@ export default function WorkspaceHomePage() {
       const matchedName =
         data?.centres?.find((c) => c.id === centreId)?.name ||
         (data?.account?.lang === "SW" ? "Tawi Limebadilishwa" : "Switched Branch");
+      playAppSound("switch");
       showSwitchToast(matchedName, "branch");
       await fetchState();
       window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
@@ -592,17 +606,88 @@ export default function WorkspaceHomePage() {
 
   const navItems: WorkspaceNavItem[] = isGeneralOrgHub
     ? [
+      {
+        id: "overview",
+        label: isSw ? "Matawi Yote" : "All Centres",
+        active: tab === "overview",
+        onClick: () => setTab("overview"),
+      },
+      {
+        id: "billing",
+        label: isSw ? "Fedha & Kulinganisha" : "Finance & Compare",
+        active: tab === "billing",
+        onClick: () => setTab("billing"),
+      },
+      {
+        id: "reports",
+        label: isSw ? "Ripoti & Akili" : "Reports & Insights",
+        active: tab === "reports",
+        onClick: () => setTab("reports"),
+      },
+      {
+        id: "network",
+        label: isSw ? "Jumla & B2B" : "B2B Wholesale",
+        active: tab === "network",
+        locked: !account.networkUnlocked,
+        onClick: () => setTab("network"),
+      },
+      {
+        id: "team",
+        label: isSw ? "Timu & Ufikiaji" : "Team & Access",
+        active: tab === "team",
+        onClick: () => setTab("team"),
+      },
+      {
+        id: "user_settings",
+        label: isSw ? "Wasifu Wangu" : "My Settings",
+        href: "/app/settings?tab=user",
+      },
+      {
+        id: "settings",
+        label: isSw ? "Mipangilio ya Shirika" : "Org Settings",
+        href: "/app/settings?tab=org",
+      },
+    ]
+    : isPharmacyWorkspace
+      ? [
         {
           id: "overview",
-          label: isSw ? "Matawi Yote" : "All Centres",
+          label: isSw ? "Muhtasari" : "Overview",
           active: tab === "overview",
           onClick: () => setTab("overview"),
         },
+        ...(resolvedCaps.canSellPos
+          ? [
+            {
+              id: "operations",
+              label: isSw ? "Kaunta ya POS" : "Counter POS",
+              active: tab === "operations",
+              onClick: () => setTab("operations"),
+            },
+          ]
+          : []),
         {
-          id: "billing",
-          label: isSw ? "Fedha & Kulinganisha" : "Finance & Compare",
-          active: tab === "billing",
-          onClick: () => setTab("billing"),
+          id: "receipts",
+          label: isSw ? "Risiti Zote" : "Receipts",
+          active: tab === "receipts",
+          onClick: () => setTab("receipts"),
+        },
+        ...(resolvedCaps.canEditInventory || resolvedCaps.canViewOrgReports
+          ? [
+            {
+              id: "inventory",
+              label: isSw ? "Hifadhi & FEFO" : "Inventory & FEFO",
+              active: tab === "inventory",
+              onClick: () => setTab("inventory"),
+            },
+          ]
+          : []),
+        {
+          id: "network",
+          label: isSw ? "Bohari & Kasri" : "Wholesale & Kasri",
+          active: tab === "network",
+          locked: !account.networkUnlocked,
+          onClick: () => setTab("network"),
         },
         {
           id: "reports",
@@ -610,104 +695,33 @@ export default function WorkspaceHomePage() {
           active: tab === "reports",
           onClick: () => setTab("reports"),
         },
-        {
-          id: "network",
-          label: isSw ? "Jumla & B2B" : "B2B Wholesale",
-          active: tab === "network",
-          locked: !account.networkUnlocked,
-          onClick: () => setTab("network"),
-        },
-        {
-          id: "team",
-          label: isSw ? "Timu & Ufikiaji" : "Team & Access",
-          active: tab === "team",
-          onClick: () => setTab("team"),
-        },
+        ...(resolvedCaps.canViewFinance || canManageAdmin
+          ? [
+            {
+              id: "billing",
+              label: isSw ? "Fedha & Malipo" : "Finance & Billing",
+              active: tab === "billing",
+              onClick: () => setTab("billing"),
+            },
+          ]
+          : []),
+        ...(resolvedCaps.canManageTeam || canManageAdmin
+          ? [
+            {
+              id: "team",
+              label: isSw ? "Timu & Vibali" : "Team & Permits",
+              active: tab === "team",
+              onClick: () => setTab("team"),
+            },
+          ]
+          : []),
         {
           id: "user_settings",
           label: isSw ? "Wasifu Wangu" : "My Settings",
           href: "/app/settings?tab=user",
         },
-        {
-          id: "settings",
-          label: isSw ? "Mipangilio ya Shirika" : "Org Settings",
-          href: "/app/settings?tab=org",
-        },
       ]
-    : isPharmacyWorkspace
-      ? [
-          {
-            id: "overview",
-            label: isSw ? "Muhtasari" : "Overview",
-            active: tab === "overview",
-            onClick: () => setTab("overview"),
-          },
-          ...(resolvedCaps.canSellPos
-            ? [
-                {
-                  id: "operations",
-                  label: isSw ? "Kaunta ya POS" : "Counter POS",
-                  active: tab === "operations",
-                  onClick: () => setTab("operations"),
-                },
-              ]
-            : []),
-          {
-            id: "receipts",
-            label: isSw ? "Risiti Zote" : "Receipts",
-            active: tab === "receipts",
-            onClick: () => setTab("receipts"),
-          },
-          ...(resolvedCaps.canEditInventory || resolvedCaps.canViewOrgReports
-            ? [
-                {
-                  id: "inventory",
-                  label: isSw ? "Hifadhi & FEFO" : "Inventory & FEFO",
-                  active: tab === "inventory",
-                  onClick: () => setTab("inventory"),
-                },
-              ]
-            : []),
-          {
-            id: "network",
-            label: isSw ? "Bohari & Kasri" : "Wholesale & Kasri",
-            active: tab === "network",
-            locked: !account.networkUnlocked,
-            onClick: () => setTab("network"),
-          },
-          {
-            id: "reports",
-            label: isSw ? "Ripoti & Akili" : "Reports & Insights",
-            active: tab === "reports",
-            onClick: () => setTab("reports"),
-          },
-          ...(resolvedCaps.canViewFinance || canManageAdmin
-            ? [
-                {
-                  id: "billing",
-                  label: isSw ? "Fedha & Malipo" : "Finance & Billing",
-                  active: tab === "billing",
-                  onClick: () => setTab("billing"),
-                },
-              ]
-            : []),
-          ...(resolvedCaps.canManageTeam || canManageAdmin
-            ? [
-                {
-                  id: "team",
-                  label: isSw ? "Timu & Vibali" : "Team & Permits",
-                  active: tab === "team",
-                  onClick: () => setTab("team"),
-                },
-              ]
-            : []),
-          {
-            id: "user_settings",
-            label: isSw ? "Wasifu Wangu" : "My Settings",
-            href: "/app/settings?tab=user",
-          },
-        ]
-    : [
+      : [
         {
           id: "overview",
           label: isSw ? "Muhtasari" : "Overview",
@@ -729,25 +743,25 @@ export default function WorkspaceHomePage() {
         },
         ...(canManageAdmin
           ? [
-              {
-                id: "billing",
-                label: isSw ? "Mpango & Malipo" : "Plan & Billing",
-                active: tab === "billing",
-                onClick: () => setTab("billing"),
-              },
-              {
-                id: "settings",
-                label: isSw ? "Mipangilio ya Shirika" : "Org Settings",
-                href: "/app/settings?tab=org",
-              },
-            ]
+            {
+              id: "billing",
+              label: isSw ? "Mpango & Malipo" : "Plan & Billing",
+              active: tab === "billing",
+              onClick: () => setTab("billing"),
+            },
+            {
+              id: "settings",
+              label: isSw ? "Mipangilio ya Shirika" : "Org Settings",
+              href: "/app/settings?tab=org",
+            },
+          ]
           : [
-              {
-                id: "user_settings",
-                label: isSw ? "Wasifu Wangu" : "My Settings",
-                href: "/app/settings?tab=user",
-              },
-            ]),
+            {
+              id: "user_settings",
+              label: isSw ? "Wasifu Wangu" : "My Settings",
+              href: "/app/settings?tab=user",
+            },
+          ]),
       ];
 
   const cardSurface = isDark
@@ -906,17 +920,15 @@ export default function WorkspaceHomePage() {
         {/* Background Payment Celebration / Retry Banner */}
         {paymentCelebration && (
           <div
-            className={`rounded-[22px] border p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 animate-stage-pop ${
-              paymentCelebration.status === "completed"
-                ? "bg-emerald-500/12 border-emerald-500/40"
-                : "bg-rose-500/10 border-rose-500/40"
-            }`}
+            className={`rounded-[22px] border p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4 animate-stage-pop ${paymentCelebration.status === "completed"
+              ? "bg-emerald-500/12 border-emerald-500/40"
+              : "bg-rose-500/10 border-rose-500/40"
+              }`}
           >
             <div className="flex items-start gap-3">
               <span
-                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white ${
-                  paymentCelebration.status === "completed" ? "bg-emerald-500" : "bg-rose-500"
-                }`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-white ${paymentCelebration.status === "completed" ? "bg-emerald-500" : "bg-rose-500"
+                  }`}
               >
                 {paymentCelebration.status === "completed" ? (
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -957,9 +969,8 @@ export default function WorkspaceHomePage() {
               <button
                 type="button"
                 onClick={() => setPaymentCelebration(null)}
-                className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${
-                  isDark ? "border-slate-700 text-slate-300" : "border-slate-300 text-slate-600"
-                }`}
+                className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${isDark ? "border-slate-700 text-slate-300" : "border-slate-300 text-slate-600"
+                  }`}
               >
                 {isSw ? "Funga" : "Dismiss"}
               </button>
@@ -972,11 +983,10 @@ export default function WorkspaceHomePage() {
           typeof account.subscriptionDaysLeft === "number" &&
           account.subscriptionDaysLeft <= 7 &&
           !account.accessLock?.locked && (
-            <div className={`rounded-[20px] border px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-stage-pop ${
-              account.subscriptionInGraceDay
-                ? "bg-rose-500/10 border-rose-500/35"
-                : "bg-amber-500/10 border-amber-500/35"
-            }`}>
+            <div className={`rounded-[20px] border px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-stage-pop ${account.subscriptionInGraceDay
+              ? "bg-rose-500/10 border-rose-500/35"
+              : "bg-amber-500/10 border-amber-500/35"
+              }`}>
               <div className="text-xs">
                 <strong className={account.subscriptionInGraceDay ? "text-rose-500" : "text-amber-600 dark:text-amber-300"}>
                   {(() => {
@@ -1014,11 +1024,10 @@ export default function WorkspaceHomePage() {
         {/* Post-Login Infrequent Install & Cross-Device Convenience Tip */}
         {showInstallOffer && (!isInstalled || installNotice) && (
           <div
-            className={`rounded-lg border p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-stage-pop ${
-              isDark
-                ? "bg-[#11161F]/95 border-slate-700 text-slate-100"
-                : "bg-white border-[#E2E8F0] text-[#0F172A] shadow-sm"
-            }`}
+            className={`rounded-lg border p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 animate-stage-pop ${isDark
+              ? "bg-[#11161F]/95 border-slate-700 text-slate-100"
+              : "bg-white border-[#E2E8F0] text-[#0F172A] shadow-sm"
+              }`}
           >
             <div className="flex items-start gap-3">
               <span
@@ -1081,11 +1090,10 @@ export default function WorkspaceHomePage() {
                       : `Downloading ${fname} for your other device in the background.`
                   );
                 }}
-                className={`px-3.5 py-2 rounded-md border text-xs font-semibold cursor-pointer ${
-                  isDark
-                    ? "border-slate-700 hover:bg-slate-800 text-slate-100"
-                    : "border-[#E2E8F0] hover:bg-slate-50 text-[#0F172A]"
-                }`}
+                className={`px-3.5 py-2 rounded-md border text-xs font-semibold cursor-pointer ${isDark
+                  ? "border-slate-700 hover:bg-slate-800 text-slate-100"
+                  : "border-[#E2E8F0] hover:bg-slate-50 text-[#0F172A]"
+                  }`}
               >
                 {deviceKind === "desktop"
                   ? isSw ? "Pakua Android APK" : "Get Android App"
@@ -1109,11 +1117,10 @@ export default function WorkspaceHomePage() {
         )}
         {showInstallOffer && isInstalled && !installNotice && (
           <div
-            className={`rounded-lg border px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-stage-pop ${
-              isDark
-                ? "bg-[#11161F]/90 border-slate-800 text-slate-200"
-                : "bg-white border-[#E2E8F0] text-[#0F172A]"
-            }`}
+            className={`rounded-lg border px-4 py-3 flex flex-wrap items-center justify-between gap-3 animate-stage-pop ${isDark
+              ? "bg-[#11161F]/90 border-slate-800 text-slate-200"
+              : "bg-white border-[#E2E8F0] text-[#0F172A]"
+              }`}
           >
             <div className="text-xs">
               <span className="inline-block px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-bold text-[10px] mr-2">
@@ -1251,9 +1258,8 @@ export default function WorkspaceHomePage() {
                       key={p.id}
                       type="button"
                       onClick={() => setTab("team")}
-                      className={`px-3 py-1.5 rounded-full border text-[11px] font-semibold cursor-pointer ${
-                        isDark ? "border-slate-700 bg-slate-800/70 text-slate-200" : "border-slate-200 bg-slate-100 text-slate-700"
-                      }`}
+                      className={`px-3 py-1.5 rounded-full border text-[11px] font-semibold cursor-pointer ${isDark ? "border-slate-700 bg-slate-800/70 text-slate-200" : "border-slate-200 bg-slate-100 text-slate-700"
+                        }`}
                     >
                       Staff: {p.displayName} ({p.role.replace(/_/g, " ")})
                     </button>
@@ -1283,6 +1289,7 @@ export default function WorkspaceHomePage() {
             hqMessages={data.hqMessages ?? []}
             savedCustomers={data.savedCustomers ?? []}
             shiftLogs={data.shiftLogs ?? []}
+            orgBranchComparison={data.orgBranchComparison ?? []}
             notificationEnv={data.notificationEnv}
             stockAlerts={data.stockAlerts ?? { nearExpiryCount: 0, expiredCount: 0, lowStockCount: 0 }}
             tab={tab}
@@ -1350,9 +1357,8 @@ export default function WorkspaceHomePage() {
                 </button>
                 <Link
                   href="/app/settings?tab=user"
-                  className={`px-4 py-2.5 rounded-full border text-xs font-semibold min-h-[44px] inline-flex items-center ${
-                    isDark ? "border-slate-700 hover:bg-white/5" : "border-[#E2E8F0] hover:bg-slate-50"
-                  }`}
+                  className={`px-4 py-2.5 rounded-full border text-xs font-semibold min-h-[44px] inline-flex items-center ${isDark ? "border-slate-700 hover:bg-white/5" : "border-[#E2E8F0] hover:bg-slate-50"
+                    }`}
                 >
                   {isSw ? "Mipangilio Yangu" : "My Settings"}
                 </Link>

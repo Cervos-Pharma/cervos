@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { hqSurfaceTokens } from "./hqSurface";
 import type {
   HqFleetAccount,
   HqJoinRequestRecord,
@@ -59,16 +60,11 @@ export default function HQLoungeAndUpdates({
   const [ctaLabel, setCtaLabel] = useState("Open Module");
   const [ctaTarget, setCtaTarget] = useState<HqUpdateRecord["ctaTarget"]>("reports");
 
-  const cardCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-[#EAECF0] text-[#111317]";
-  const chipCls = isDark
-    ? "bg-[#171D28] border-slate-800 text-slate-200"
-    : "bg-[#F8FAFC] border-[#EAECF0] text-[#111317]";
-  const inputCls = isDark
-    ? "bg-[#090C12] border-slate-700 text-slate-100 placeholder:text-slate-500"
-    : "bg-[#F8FAFC] border-[#CBD5E1] text-[#111317] placeholder:text-slate-400";
-  const mutedCls = isDark ? "text-slate-400" : "text-[#64748B]";
+  const t = hqSurfaceTokens(isDark);
+  const cardCls = t.panelCls;
+  const chipCls = t.wellCls;
+  const inputCls = t.inputCls;
+  const mutedCls = t.mutedCls;
 
   const filteredRequests = joinRequests.filter(
     (r) => statusFilter === "all" || r.status === statusFilter
@@ -453,9 +449,12 @@ export default function HQLoungeAndUpdates({
           <button
             type="submit"
             disabled={busy || title.trim().length < 3 || summary.trim().length < 8}
-            className="w-full h-9 rounded-xl bg-[#1039B9] hover:bg-[#0d2e94] text-white font-semibold disabled:opacity-50 cursor-pointer"
+            className={`w-full h-10 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${t.primaryBtnCls}`}
           >
-            {busy ? "Publishing..." : "Publish Capability Update"}
+            {busy && (
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+            )}
+            <span>{busy ? "Publishing..." : "Publish Capability Update"}</span>
           </button>
         </form>
 

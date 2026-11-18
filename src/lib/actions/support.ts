@@ -28,6 +28,13 @@ import {
   HQ_COOKIE_NAME,
   isValidHQToken,
 } from "@/lib/hq-auth";
+import {
+  createWorkspaceSupportTicket,
+  flushWorkspaceDb,
+  getWorkspaceDb,
+  saveWorkspaceDb,
+  warmDbFromSupabase,
+} from "@/lib/workspace/store";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -147,32 +154,57 @@ export async function submitSupportTicket(opts: {
   }
 
   // 4. Resolve account_id if logged in
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
   let accountId: string | null = null;
-  if (user) {
-    const { data: acct } = await supabase
-      .from("accounts")
-      .select("id")
-      .eq("auth_user_id", user.id)
-      .single();
-    accountId = acct?.id ?? null;
+  let userEmail = email;
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      if (user.email) userEmail = user.email.toLowerCase();
+      const { data: acct } = await supabase
+        .from("accounts")
+        .select("id")
+        .eq("auth_user_id", user.id)
+        .single();
+      accountId = acct?.id ?? null;
+    }
+  } catch {
+    // Offline or cookie-less submission still persists into workspace DB
   }
 
-  // 5. Insert (use service client so anon users can write despite RLS)
-  const svc = await createServiceClient();
-  const { error } = await svc.from("support_tickets").insert({
-    subject:       opts.subject.trim().slice(0, LIMITS.subject.max),
-    message:       opts.message.trim().slice(0, LIMITS.message.max),
-    category:      opts.category,
-    contact_email: email.slice(0, LIMITS.email.max),
-    account_id:    accountId,
-    status:        "open",
-    source:        "web",
+  // 5. Persist cleanly into workspace DB (so HQ Support Desk always receives every ticket)
+  await warmDbFromSupabase();
+  const db = getWorkspaceDb();
+  const created = createWorkspaceSupportTicket(db, {
+    accountId,
+    contactEmail: email.slice(0, LIMITS.email.max) || userEmail,
+    subject: opts.subject.trim().slice(0, LIMITS.subject.max),
+    message: opts.message.trim().slice(0, LIMITS.message.max),
+    category: opts.category,
+    source: "web",
   });
+  saveWorkspaceDb(db);
+  await flushWorkspaceDb();
 
-  if (error) return { error: error.message };
+  // 6. Mirror into Supabase support_tickets when configured (non-fatal if offline/mock)
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const svc = await createServiceClient();
+      await svc.from("support_tickets").insert({
+        id: created.id,
+        subject: created.subject,
+        message: created.message,
+        category: created.category,
+        contact_email: created.contactEmail,
+        account_id: created.accountId,
+        status: "open",
+        source: "web",
+      });
+    } catch {
+      // Primary ticket already recorded inside workspace DB
+    }
+  }
+
   return { error: null };
 }
 

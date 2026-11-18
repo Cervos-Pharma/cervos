@@ -5,11 +5,14 @@ import { formatTzs } from "@cervos/core";
 import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import type { ProfileCapabilities } from "@/lib/workspace/permissions";
 import {
+  classifyAbcXyzMatrix,
   classifyReorderUrgency,
+  computeSafetyStockRecommendations,
   detectSalesAnomalies,
   holtLinearForecast,
   linearTrendRegression,
   mineBasketAffinities,
+  predictCounterStaffingWindows,
 } from "@/lib/workspace/edge-ml";
 import {
   branchComparison,
@@ -64,6 +67,7 @@ interface ReportsIntelligenceViewProps {
   orders: IntelOrder[];
   expenses: IntelExpense[];
   centres: Array<{ id: string; name: string }>;
+  orgBranchComparison?: ReturnType<typeof branchComparison>;
   activeCentreId?: string;
   accent: string;
   isDark: boolean;
@@ -109,6 +113,7 @@ export default function ReportsIntelligenceView({
   orders,
   expenses,
   centres,
+  orgBranchComparison,
   activeCentreId,
   accent,
   isDark,
@@ -214,12 +219,27 @@ export default function ReportsIntelligenceView({
     [scopedSales, scopedBatches, windowDays]
   );
   const urgencyList = useMemo(() => classifyReorderUrgency(products), [products]);
+  const safetyStockList = useMemo(
+    () => computeSafetyStockRecommendations(scopedSales, products, 4),
+    [scopedSales, products]
+  );
+  const abcXyzList = useMemo(
+    () => classifyAbcXyzMatrix(scopedSales, products),
+    [scopedSales, products]
+  );
+  const staffingWindows = useMemo(
+    () => predictCounterStaffingWindows(scopedSales),
+    [scopedSales]
+  );
   const velocityMap = useMemo(() => new Map(products.map((p) => [p.productId, p.velocityPerDay])), [products]);
   const lotRisk = useMemo(() => expiryRiskProjection(scopedBatches, velocityMap), [scopedBatches, velocityMap]);
   const valuation = useMemo(() => inventoryValuation(scopedBatches), [scopedBatches]);
   const mix = useMemo(() => paymentMix(scopedSales), [scopedSales]);
   const staff = useMemo(() => staffPerformance(scopedSales), [scopedSales]);
-  const branches = useMemo(() => branchComparison(sales, batches, centres), [sales, batches, centres]);
+  const branches = useMemo(
+    () => (orgBranchComparison && orgBranchComparison.length > 0 ? orgBranchComparison : branchComparison(sales, batches, centres)),
+    [orgBranchComparison, sales, batches, centres]
+  );
   const suppliers = useMemo(() => supplierSpend(orders), [orders]);
   const pnl = useMemo(() => {
     const isCleanSlate = scopedSales.length === 0 && expenses.length === 0;
@@ -1428,6 +1448,123 @@ export default function ReportsIntelligenceView({
                         </span>
                         <span className={`font-mono ${mutedCls}`}>{pair.lift}x lift</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Edge-ML Suite: Dynamic Safety Stock (Z-Score), ABC-XYZ Volatility & Rush Staffing */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className={`lg:col-span-5 rounded-[24px] border p-5 space-y-3 ${cardCls}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                    {isSw ? "ML · AKIBA YA USALAMA (95%)" : "EDGE ML · 95% SAFETY STOCK & REORDER"}
+                  </div>
+                  <h3 className="text-sm font-semibold mt-0.5">
+                    {isSw ? "Kiwango cha Chini & Pendekezo la Agizo" : "Optimal Reorder Points (Sigma Adjusted)"}
+                  </h3>
+                </div>
+              </div>
+              {safetyStockList.length === 0 ? (
+                <div className={`p-3 rounded-xl border text-xs ${chipCls} ${mutedCls}`}>
+                  {isSw ? "Rekodi mauzo zaidi ili kukokotoa kiwango cha usalama." : "Record counter sales to calculate dynamic safety stock levels."}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {safetyStockList.slice(0, 6).map((item) => (
+                    <div key={item.productId} className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
+                      <div className="min-w-0">
+                        <div className="font-semibold truncate">{item.brandName}</div>
+                        <div className={`text-[10px] ${mutedCls}`}>
+                          {item.dailyMeanUnits}/d avg · Safety: {item.safetyStockUnits}u · ROP: {item.reorderPointUnits}u
+                        </div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                          item.status === "under_safety"
+                            ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                            : item.status === "overstocked"
+                              ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
+                              : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+                        }`}
+                      >
+                        {item.status === "under_safety"
+                          ? `Order +${item.recommendedOrderQty}`
+                          : item.status === "overstocked"
+                            ? "Heavy Stock"
+                            : "Healthy"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={`lg:col-span-4 rounded-[24px] border p-5 space-y-3 ${cardCls}`}>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                  {isSw ? "ML · MGAWANYO WA ABC-XYZ" : "EDGE ML · ABC-XYZ DEMAND VOLATILITY"}
+                </div>
+                <h3 className="text-sm font-semibold mt-0.5">
+                  {isSw ? "Uthabiti wa Mahitaji ya Bidhaa" : "Revenue Weight vs Demand Stability"}
+                </h3>
+              </div>
+              {abcXyzList.length === 0 ? (
+                <div className={`p-3 rounded-xl border text-xs ${chipCls} ${mutedCls}`}>
+                  {isSw ? "Hakuna data ya mgawanyo bado." : "Waiting on branch receipt lines for volatility scoring."}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {abcXyzList.slice(0, 6).map((cell) => (
+                    <div key={cell.productId} className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
+                      <div className="min-w-0">
+                        <div className="font-semibold truncate">{cell.brandName}</div>
+                        <div className={`text-[10px] truncate ${mutedCls}`}>{cell.strategyHint}</div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-[#1039B9]/12 text-[#1039B9] dark:text-sky-300 shrink-0">
+                        {cell.segment} · CV {cell.cv}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={`lg:col-span-3 rounded-[24px] border p-5 space-y-3 ${cardCls}`}>
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                  {isSw ? "ML · RATIBA YA KAUNTA" : "EDGE ML · STAFFING WINDOWS"}
+                </div>
+                <h3 className="text-sm font-semibold mt-0.5">
+                  {isSw ? "Saa za Msongamano" : "Recommended Counter Coverage"}
+                </h3>
+              </div>
+              {staffingWindows.length === 0 ? (
+                <div className={`p-3 rounded-xl border text-xs ${chipCls} ${mutedCls}`}>
+                  {isSw ? "Hakuna rekodi za saa za mauzo." : "Not enough timed receipts yet."}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {staffingWindows.map((win) => (
+                    <div key={win.hourLabel} className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
+                      <div>
+                        <div className="font-mono font-bold">{win.hourLabel}</div>
+                        <div className={`text-[10px] ${mutedCls}`}>{win.avgReceiptsPerDay} tx/day</div>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          win.loadTier === "peak"
+                            ? "bg-rose-500/15 text-rose-600 dark:text-rose-300"
+                            : win.loadTier === "busy"
+                              ? "bg-amber-500/15 text-amber-600 dark:text-amber-300"
+                              : "bg-slate-500/15 text-slate-600 dark:text-slate-300"
+                        }`}
+                      >
+                        {win.recommendedCounters} {win.recommendedCounters > 1 ? "Cashiers" : "Cashier"}
+                      </span>
                     </div>
                   ))}
                 </div>

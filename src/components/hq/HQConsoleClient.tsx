@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconShield } from "@/components/LandingIcons";
 import { formatTzs } from "@cervos/core";
+import { HQ_ROLE_METADATA } from "@/lib/hq-workers";
+import { CERVOS_HQ_ASSETS, hqSurfaceTokens } from "./hqSurface";
 import HQOverviewSection from "./HQOverviewSection";
+import HQSupportDeskSection from "./HQSupportDeskSection";
+import HQTeamSection from "./HQTeamSection";
 import HQFleetSection from "./HQFleetSection";
 import HQPackagesSection from "./HQPackagesSection";
 import HQFinanceSection from "./HQFinanceSection";
@@ -113,68 +116,117 @@ export default function HQConsoleClient({
     router.refresh();
   };
 
-  const pageCls = isDark
-    ? "bg-[#090D14] text-slate-100"
-    : "bg-[#F4F6F9] text-slate-900";
-  const surfaceCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-slate-200 text-slate-900";
-  const chipCls = isDark
-    ? "bg-[#171D28] border-slate-800 text-slate-200"
-    : "bg-slate-50 border-slate-200 text-slate-700";
-  const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
+  const t = hqSurfaceTokens(isDark);
 
   if (loading && !data) {
     return (
-      <div className={`min-h-screen flex items-center justify-center p-6 ${pageCls}`}>
-        <div className="text-sm font-semibold animate-pulse">Loading Cervos HQ Command...</div>
+      <div className={`min-h-screen flex flex-col items-center justify-center gap-4 p-6 ${t.canvasCls}`}>
+        <div className={`w-16 h-16 rounded-2xl p-2 flex items-center justify-center ${t.panelCls}`}>
+          <img
+            src={
+              isDark
+                ? CERVOS_HQ_ASSETS.companyLogoCircularDark
+                : CERVOS_HQ_ASSETS.companyLogoCircular
+            }
+            alt="Cervos HQ"
+            className="w-full h-full object-contain rounded-xl"
+          />
+        </div>
+        <div className="inline-flex items-center gap-2 text-sm font-semibold">
+          <span className="w-4 h-4 rounded-full border-2 border-[#1039B9] dark:border-sky-400 border-t-transparent animate-spin" />
+          <span>Synchronizing Cervos HQ Command...</span>
+        </div>
       </div>
     );
   }
 
   const summary = data?.fleetSummary;
   const env = data?.notificationEnv;
+  const worker = data?.currentWorker;
+  const roleMeta = worker ? HQ_ROLE_METADATA[worker.role] : HQ_ROLE_METADATA.hq_master;
 
   const heldOrdersCount =
     data?.wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length ?? 0;
 
-  const navItems: Array<{ key: HqTab; label: string; sub: string; badge?: number }> = [
-    { key: "overview", label: "Overview & Map", sub: "Peak telemetry, CSV, map" },
-    { key: "fleet", label: "Orgs & Branches", sub: "Quota, locks, PINs", badge: summary?.totalOrgs },
+  const navItems: Array<{ key: HqTab; label: string; sub: string; badge?: number; urgent?: boolean }> = [
+    { key: "overview", label: "Overview & Map", sub: "Peak telemetry, CSV, assets" },
+    {
+      key: "support",
+      label: "Support Desk",
+      sub: "Tickets, replies & SLA",
+      badge: summary?.openSupportTickets ?? 0,
+      urgent: (summary?.urgentSupportTickets ?? 0) > 0,
+    },
+    {
+      key: "team",
+      label: "HQ Team & Shifts",
+      sub: "Worker onboarding & notes",
+      badge: (data?.hqWorkers?.length ?? 0) || undefined,
+    },
+    { key: "fleet", label: "Orgs & Branches", sub: "Quota, locks, Kasri Payouts", badge: summary?.totalOrgs },
     { key: "packages", label: "Packages & Prices", sub: "Plans & 5,000 TZS floor", badge: data?.packages.length },
     { key: "finance", label: "Wholesale & Escrow", sub: "Kasri PO holds & settlement", badge: heldOrdersCount },
-    { key: "onboarding", label: "Onboarding & Quotes", sub: "Joins, quotes, invites, news", badge: (summary?.pendingJoinRequests ?? 0) + (data?.quoteRequests.length ?? 0) },
+    {
+      key: "onboarding",
+      label: "Onboarding & Quotes",
+      sub: "Joins, quotes, invites, news",
+      badge: (summary?.pendingJoinRequests ?? 0) + (data?.quoteRequests.length ?? 0),
+    },
     { key: "journal", label: "Dispatch Journal", sub: "Write essays & WebP covers", badge: data?.journalArticles?.length },
     { key: "comms", label: "Comms & Audit", sub: "SMS, broadcasts, event log", badge: summary?.unreadHqMessages },
   ];
 
   return (
-    <div className={`min-h-screen ${pageCls}`}>
-      <div className="max-w-[1520px] mx-auto px-4 sm:px-6 py-5 flex flex-col lg:flex-row gap-6 items-start">
-        {/* Left Navigation Rail */}
-        <aside className={`w-full lg:w-64 shrink-0 rounded-2xl border p-4 space-y-4 lg:sticky lg:top-5 ${surfaceCls}`}>
-          <div className="space-y-1.5 pb-3 border-b border-slate-500/15">
+    <div className={`min-h-screen ${t.canvasCls}`}>
+      <div className="max-w-[1540px] mx-auto px-4 sm:px-6 py-5 flex flex-col lg:flex-row gap-6 items-start">
+        {/* Claymorphic Command Navigation Rail */}
+        <aside className={`w-full lg:w-72 shrink-0 p-4 sm:p-5 space-y-4 lg:sticky lg:top-5 ${t.panelCls}`}>
+          {/* Brand Logo Lockup */}
+          <div className={`flex items-center justify-between gap-2 pb-3 border-b ${t.subtleBorderCls}`}>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className={`w-10 h-10 rounded-xl p-1 shrink-0 ${t.pillCls}`}>
+                <img
+                  src={
+                    isDark
+                      ? CERVOS_HQ_ASSETS.companyLogoCircularDark
+                      : CERVOS_HQ_ASSETS.companyLogoCircular
+                  }
+                  alt="Cervos Emblem"
+                  className="w-full h-full object-contain rounded-lg"
+                />
+              </div>
+              <div className="min-w-0">
+                <img
+                  src={CERVOS_HQ_ASSETS.companyLogoTransparent}
+                  alt="Cervos"
+                  className={`h-4 w-auto object-contain ${isDark ? "brightness-0 invert" : ""}`}
+                />
+                <div className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 truncate ${t.mutedCls}`}>
+                  Operations HQ
+                </div>
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono uppercase font-bold shrink-0">
+              {env?.mode || (mockMode ? "mock" : "live")}
+            </span>
+          </div>
+
+          {/* Signed-in Operator Role Well */}
+          <div className={`p-3 space-y-1 ${t.wellCls}`}>
             <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-[#1039B9] dark:text-sky-400">
-                <IconShield className="w-3.5 h-3.5" />
-                Cervos HQ
+              <span className="text-xs font-semibold truncate">
+                {data?.operator || initialOperator}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[10px] font-mono uppercase font-bold">
-                {env?.mode || (mockMode ? "mock" : "live")}
+              <span className="px-2 py-0.5 rounded-full bg-[#1039B9] text-white font-mono text-[9px] font-bold shrink-0">
+                {roleMeta.shortTag}
               </span>
             </div>
-            <h1
-              className="text-base font-semibold tracking-tight"
-              style={{ fontFamily: "Outfit, Inter, sans-serif" }}
-            >
-              Operations Terminal
-            </h1>
-            <div className={`text-[11px] font-mono truncate ${mutedCls}`}>
-              Op: {data?.operator || initialOperator}
+            <div className={`text-[10px] truncate ${t.mutedCls}`}>
+              {worker?.title || roleMeta.defaultTitle}
             </div>
           </div>
 
-          <nav className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-1.5">
+          <nav className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2">
             {navItems.map((item) => {
               const active = activeTab === item.key;
               return (
@@ -182,22 +234,24 @@ export default function HQConsoleClient({
                   key={item.key}
                   type="button"
                   onClick={() => setActiveTab(item.key)}
-                  className={`w-full text-left rounded-xl px-3 py-2.5 transition-colors flex items-center justify-between gap-2 cursor-pointer ${
-                    active
-                      ? "bg-[#1039B9] text-white"
-                      : `hover:bg-slate-500/10 ${mutedCls} hover:text-current`
+                  className={`w-full text-left rounded-2xl px-3.5 py-2.5 transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                    active ? t.primaryBtnCls : `${t.pillCls} hover:scale-[1.01]`
                   }`}
                 >
                   <div className="min-w-0">
                     <div className="text-xs font-semibold truncate">{item.label}</div>
-                    <div className={`text-[10px] truncate hidden lg:block ${active ? "text-blue-100" : mutedCls}`}>
+                    <div className={`text-[10px] truncate hidden lg:block ${active ? "text-blue-100" : t.mutedCls}`}>
                       {item.sub}
                     </div>
                   </div>
                   {typeof item.badge === "number" && item.badge > 0 && (
                     <span
-                      className={`px-1.5 py-0.5 rounded-full font-mono text-[10px] shrink-0 ${
-                        active ? "bg-white/20 text-white" : "bg-slate-500/15 text-current"
+                      className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold shrink-0 ${
+                        active
+                          ? "bg-white/25 text-white"
+                          : item.urgent
+                            ? "bg-rose-500 text-white"
+                            : "bg-[#1039B9]/12 text-[#1039B9] dark:text-sky-300"
                       }`}
                     >
                       {item.badge}
@@ -208,24 +262,27 @@ export default function HQConsoleClient({
             })}
           </nav>
 
-          <div className="pt-3 border-t border-slate-500/15 space-y-2">
-            <div className={`text-[10px] font-mono leading-relaxed ${mutedCls}`}>
+          <div className={`pt-3 border-t ${t.subtleBorderCls} space-y-2.5`}>
+            <div className={`text-[10px] font-mono leading-relaxed ${t.mutedCls}`}>
               Grace: {env?.trialGraceDays ?? 15}d &middot; Webhook:{" "}
               {env?.exceptionWebhookConfigured ? "Active" : "Local Log"}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void loadFleet()}
                 disabled={loading || busy}
-                className={`flex-1 h-8 rounded-lg border text-xs font-semibold cursor-pointer ${chipCls}`}
+                className={`flex-1 h-9 rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer ${t.pillCls}`}
               >
-                {loading ? "Syncing..." : "Refresh"}
+                {loading && (
+                  <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                )}
+                <span>{loading ? "Syncing..." : "Refresh"}</span>
               </button>
               <button
                 type="button"
                 onClick={toggleTheme}
-                className={`h-8 px-2.5 rounded-lg border text-xs font-semibold cursor-pointer ${chipCls}`}
+                className={`h-9 px-3 rounded-xl text-xs font-semibold cursor-pointer ${t.pillCls}`}
               >
                 {isDark ? "Light" : "Dark"}
               </button>
@@ -233,7 +290,7 @@ export default function HQConsoleClient({
             <button
               type="button"
               onClick={handleSignOut}
-              className="w-full h-8 rounded-lg border border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300 text-xs font-semibold cursor-pointer"
+              className="w-full h-9 rounded-xl border border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs font-semibold cursor-pointer hover:bg-rose-500/18 transition-colors"
             >
               Lock Ops Session
             </button>
@@ -242,69 +299,78 @@ export default function HQConsoleClient({
 
         {/* Main Workspace Canvas */}
         <main className="flex-1 min-w-0 w-full space-y-5">
-          {/* Compact 4-Column Executive KPI Header */}
+          {/* Tactile Neumorphic 4-Column Executive KPI Strip */}
           {summary && (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              <div className={`rounded-2xl border p-4 ${surfaceCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className={`p-4 space-y-1.5 ${t.panelCls}`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
                   Organizations &amp; Access
                 </div>
-                <div className="flex items-baseline justify-between mt-1">
+                <div className={`px-3 py-2 flex items-baseline justify-between ${t.wellCls}`}>
                   <span className="text-2xl font-bold tabular-nums">{summary.totalOrgs}</span>
-                  <span className={`text-[11px] font-semibold ${summary.lockedOrgs > 0 ? "text-red-500" : mutedCls}`}>
+                  <span className={`text-[11px] font-semibold ${summary.lockedOrgs > 0 ? "text-rose-500" : t.mutedCls}`}>
                     {summary.lockedOrgs} locked
                   </span>
                 </div>
-                <div className={`text-[11px] mt-0.5 ${mutedCls}`}>
+                <div className={`text-[11px] ${t.mutedCls}`}>
                   {summary.activeOrgs} paid &middot; {summary.trialOrgs} trial &middot; {summary.verifiedOrgs} verified
                 </div>
               </div>
 
-              <div className={`rounded-2xl border p-4 ${surfaceCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>
-                  Branches &amp; Operators
+              <div className={`p-4 space-y-1.5 ${t.panelCls}`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                  Support &amp; HQ Team
                 </div>
-                <div className="text-2xl font-bold tabular-nums mt-1">
-                  {summary.totalBranches} <span className={`text-sm font-normal ${mutedCls}`}>branches</span>
+                <div className={`px-3 py-2 flex items-baseline justify-between ${t.wellCls}`}>
+                  <span className="text-2xl font-bold tabular-nums">
+                    {summary.openSupportTickets ?? 0}
+                  </span>
+                  <span className={`text-[11px] font-semibold ${(summary.urgentSupportTickets ?? 0) > 0 ? "text-rose-500" : "text-emerald-600 dark:text-emerald-400"}`}>
+                    open tickets
+                  </span>
                 </div>
-                <div className={`text-[11px] mt-0.5 ${mutedCls}`}>
-                  {summary.totalOperators} active operators synced
+                <div className={`text-[11px] ${t.mutedCls}`}>
+                  {summary.activeHqWorkers ?? 0} active HQ staff &middot; {summary.invitedHqWorkers ?? 0} invited
                 </div>
               </div>
 
-              <div className={`rounded-2xl border p-4 ${surfaceCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>
+              <div className={`p-4 space-y-1.5 ${t.panelCls}`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
                   Fleet POS Volume
                 </div>
-                <div className="text-xl font-bold tabular-nums mt-1 truncate">
-                  {formatTzs(summary.totalSalesRevenueTzs)}
+                <div className={`px-3 py-2 ${t.wellCls}`}>
+                  <div className="text-xl font-bold tabular-nums truncate">
+                    {formatTzs(summary.totalSalesRevenueTzs)}
+                  </div>
                 </div>
-                <div className={`text-[11px] mt-0.5 ${mutedCls}`}>
-                  {summary.totalSalesCount} counter receipts
+                <div className={`text-[11px] ${t.mutedCls}`}>
+                  {summary.totalSalesCount} counter receipts &middot; {summary.totalBranches} branches
                 </div>
               </div>
 
-              <div className={`rounded-2xl border p-4 ${surfaceCls}`}>
-                <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>
+              <div className={`p-4 space-y-1.5 ${t.panelCls}`}>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
                   Inventory Value &amp; Expiry
                 </div>
-                <div className="text-xl font-bold tabular-nums mt-1 truncate">
-                  {formatTzs(summary.totalStockCostTzs)}
+                <div className={`px-3 py-2 ${t.wellCls}`}>
+                  <div className="text-xl font-bold tabular-nums truncate">
+                    {formatTzs(summary.totalStockCostTzs)}
+                  </div>
                 </div>
-                <div className={`text-[11px] mt-0.5 ${mutedCls}`}>
-                  {summary.expiredBatches} expired &middot; {summary.nearExpiryBatches} near
+                <div className={`text-[11px] ${t.mutedCls}`}>
+                  {summary.expiredBatches} expired &middot; {summary.nearExpiryBatches} near expiry
                 </div>
               </div>
             </div>
           )}
 
-          {/* Action Banner */}
+          {/* Action Feedback Toast */}
           {banner && (
             <div
-              className={`rounded-xl border px-4 py-3 text-xs font-semibold flex items-center justify-between gap-2 ${
+              className={`rounded-2xl border px-4 py-3 text-xs font-semibold flex items-center justify-between gap-2 ${
                 banner.type === "ok"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+                  ? "border-emerald-500/35 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+                  : "border-rose-500/35 bg-rose-500/12 text-rose-700 dark:text-rose-300"
               }`}
             >
               <span>{banner.text}</span>
@@ -318,7 +384,7 @@ export default function HQConsoleClient({
             </div>
           )}
 
-          {/* Active Workspace View */}
+          {/* Active Workspace Views */}
           {data && summary && activeTab === "overview" && (
             <HQOverviewSection
               summary={summary}
@@ -326,9 +392,40 @@ export default function HQConsoleClient({
               accounts={data.accounts}
               wholesaleOrders={data.wholesaleOrders}
               auditLogs={data.auditLogs}
+              supportTickets={data.supportTickets ?? []}
+              hqTeamNotes={data.hqTeamNotes ?? []}
               onSwitchTab={setActiveTab}
               onSelectOrg={setSelectedOrgId}
               isDark={isDark}
+            />
+          )}
+
+          {data && activeTab === "support" && (
+            <HQSupportDeskSection
+              tickets={data.supportTickets ?? []}
+              workers={data.hqWorkers ?? []}
+              accounts={data.accounts}
+              currentWorker={data.currentWorker}
+              onRunAction={runAction}
+              onJumpToOrg={(accountId) => {
+                setSelectedOrgId(accountId);
+                setActiveTab("fleet");
+              }}
+              isDark={isDark}
+              busy={busy}
+            />
+          )}
+
+          {data && activeTab === "team" && (
+            <HQTeamSection
+              gateSlug={gateSlug}
+              workers={data.hqWorkers ?? []}
+              notes={data.hqTeamNotes ?? []}
+              currentWorker={data.currentWorker}
+              onRunAction={runAction}
+              onRefresh={loadFleet}
+              isDark={isDark}
+              busy={busy}
             />
           )}
 
@@ -401,12 +498,12 @@ export default function HQConsoleClient({
 
           {data && activeTab === "comms" && (
             <div className="space-y-4">
-              <div className={`inline-flex rounded-xl border p-1 gap-1 ${surfaceCls}`}>
+              <div className={`inline-flex rounded-2xl p-1.5 gap-1.5 ${t.wellCls}`}>
                 <button
                   type="button"
                   onClick={() => setCommsView("messages")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                    commsView === "messages" ? "bg-[#1039B9] text-white" : mutedCls
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer ${
+                    commsView === "messages" ? t.primaryBtnCls : t.mutedCls
                   }`}
                 >
                   Broadcasts &amp; Textify SMS ({data.hqMessages.length})
@@ -414,8 +511,8 @@ export default function HQConsoleClient({
                 <button
                   type="button"
                   onClick={() => setCommsView("events")}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                    commsView === "events" ? "bg-[#1039B9] text-white" : mutedCls
+                  className={`px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer ${
+                    commsView === "events" ? t.primaryBtnCls : t.mutedCls
                   }`}
                 >
                   Audit Event Explorer ({data.auditLogs.length})

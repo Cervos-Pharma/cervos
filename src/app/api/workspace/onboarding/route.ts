@@ -198,6 +198,30 @@ export async function POST(request: NextRequest) {
     masterProfile.pinHash = pinHash;
   }
 
+  const ps = (body.paymentSettings && typeof body.paymentSettings === "object"
+    ? body.paymentSettings
+    : null) as Record<string, unknown> | null;
+  if (ps && !hasAnyInjection([ps.mpesaPaybill, ps.tigoLipaNumber, ps.bankName, ps.bankAccount])) {
+    const mpesaPaybill = sanitizeText(ps.mpesaPaybill, 40);
+    const tigoLipaNumber = sanitizeText(ps.tigoLipaNumber, 40);
+    const bankName = sanitizeText(ps.bankName, 80);
+    const bankAccount = sanitizeText(ps.bankAccount, 40);
+    if (mpesaPaybill || tigoLipaNumber || bankName || bankAccount) {
+      db.paymentSettings ??= {};
+      db.paymentSettings[account.id] = {
+        mpesaPaybill,
+        tigoLipaNumber,
+        bankName,
+        bankAccount,
+        settlementCycle:
+          ps.settlementCycle === "instant" || ps.settlementCycle === "weekly"
+            ? ps.settlementCycle
+            : "daily",
+        vatRegistered: Boolean(ps.vatRegistered),
+      };
+    }
+  }
+
   appendAuditLog(db, {
     accountId: account.id,
     actor: fullName,

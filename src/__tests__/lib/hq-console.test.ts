@@ -13,6 +13,7 @@ import {
 import { GET as legacyHqGet, POST as legacyHqPost } from "@/app/api/workspace/hq/route";
 import { GET as dispatchGet, POST as dispatchPost } from "@/app/api/ops-v9k4m/dispatch/route";
 import { POST as sessionPost } from "@/app/api/ops-v9k4m/session/route";
+import { createWorkspaceSupportTicket, getWorkspaceDb } from "@/lib/workspace/store";
 
 const TEST_SECRET = "cervos-test-hq-secret-2026-strong-key-0123456789";
 
@@ -269,5 +270,188 @@ describe("Obfuscated Ops Auth & Dispatch Telemetry API", () => {
       })
     );
     expect(cmdRes.status).toBe(200);
+  });
+
+  it("onboards HQ workers with invite codes, enforces RBAC clearance, answers support tickets, and logs team notes", async () => {
+    const masterToken = deriveAdminSessionToken(TEST_SECRET, "master-key", "hq_master");
+    const gate = getHqPortalGateSlug();
+    const email = `amina.support.${Date.now()}@cervos.online`;
+
+    // 1. HQ Master invites a Support Specialist
+    const inviteRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `OpsToken ${masterToken}`,
+        },
+        body: JSON.stringify({
+          action: "create_hq_worker",
+          name: "Amina Yusuf",
+          email,
+          role: "support_specialist",
+          region: "Dar es Salaam HQ",
+        }),
+      })
+    );
+    expect(inviteRes.status).toBe(200);
+    const inviteJson = await inviteRes.json();
+    expect(inviteJson.inviteCode).toMatch(/^CVHQ-/);
+    expect(inviteJson.worker.status).toBe("invited");
+    expect(inviteJson.worker.role).toBe("support_specialist");
+
+    // 2. Worker claims invite with permanent password & PIN, receiving scoped token
+    const claimRes = await sessionPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Ops-Gate": gate,
+          "X-Ops-Mode": "bearer",
+        },
+        body: JSON.stringify({
+          action: "claim_worker_invite",
+          gateSlug: gate,
+          email,
+          inviteCode: inviteJson.inviteCode,
+          password: "StrongSupportPass!2026",
+          pin: "4917",
+        }),
+      })
+    );
+    expect(claimRes.status).toBe(200);
+    const claimJson = await claimRes.json();
+    expect(claimJson.role).toBe("support_specialist");
+    const workerToken = claimJson.token as string;
+    expect(isValidHQToken(workerToken)).toBe(true);
+
+    // Worker signs back in via email + password + PIN
+    const loginRes = await sessionPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Ops-Gate": gate,
+          "X-Ops-Mode": "bearer",
+        },
+        body: JSON.stringify({
+          action: "login_credentials",
+          gateSlug: gate,
+          email,
+          password: "StrongSupportPass!2026",
+          workerPin: "4917",
+        }),
+      })
+    );
+    expect(loginRes.status).toBe(200);
+
+    // 3. Support Specialist is blocked from Master-only actions (RBAC 403)
+    const blockedRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `OpsToken ${workerToken}`,
+        },
+        body: JSON.stringify({
+          action: "upsert_package",
+          id: "unauthorized_pkg",
+          name: "Should Fail",
+          pricePerBranchMonthlyTzs: 15000,
+          priceMonthlyTzs: 15000,
+        }),
+      })
+    );
+    expect(blockedRes.status).toBe(403);
+
+    // 4. Support Specialist answers a live customer ticket & posts HQ shift note
+    const db = getWorkspaceDb();
+    const targetAccount = db.accounts[0];
+    const ticket = createWorkspaceSupportTicket(db, {
+      accountId: targetAccount?.id ?? null,
+      orgName: targetAccount?.orgName,
+      contactEmail: targetAccount?.email ?? "owner@pharmacy.co.tz",
+      subject: "Counter Receipt Printer Pairing Help",
+      message: "Need help reconnecting Bluetooth 58mm thermal printer.",
+      category: "technical",
+      source: "workspace",
+    });
+
+    const replyRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `OpsToken ${workerToken}`,
+        },
+        body: JSON.stringify({
+          action: "reply_support_ticket",
+          ticketId: ticket.id,
+          replyBody: "Reconnect Bluetooth under Settings -> Counter Hardware and print a test slip.",
+          nextStatus: "waiting_user",
+        }),
+      })
+    );
+    expect(replyRes.status).toBe(200);
+    const replyJson = await replyRes.json();
+    expect(replyJson.ticket.status).toBe("waiting_user");
+    expect(replyJson.ticket.replies).toHaveLength(1);
+    expect(
+      (db.hqMessages ?? []).some(
+        (m) => m.accountId === targetAccount?.id && m.title.includes(ticket.ticketRef)
+      )
+    ).toBe(true);
+
+    const noteRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `OpsToken ${workerToken}`,
+        },
+        body: JSON.stringify({
+          action: "post_hq_team_note",
+          topic: "shift_handoff",
+          body: `Handing over ${ticket.ticketRef} to night shift for confirmation.`,
+          pinned: true,
+        }),
+      })
+    );
+    expect(noteRes.status).toBe(200);
+    const noteJson = await noteRes.json();
+    expect(noteJson.note.pinned).toBe(true);
+
+    // 5. Master suspends worker -> immediate 403 rejection on active token
+    const suspRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `OpsToken ${masterToken}`,
+        },
+        body: JSON.stringify({
+          action: "update_hq_worker",
+          workerId: inviteJson.worker.id,
+          status: "suspended",
+        }),
+      })
+    );
+    expect(suspRes.status).toBe(200);
+
+    const suspendedCall = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `OpsToken ${workerToken}`,
+        },
+        body: JSON.stringify({
+          action: "post_hq_team_note",
+          topic: "general",
+          body: "Should be rejected because account is suspended.",
+        }),
+      })
+    );
+    expect(suspendedCall.status).toBe(403);
   });
 });

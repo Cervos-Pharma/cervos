@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { hqSurfaceTokens } from "./hqSurface";
 import type { HqFleetAccount, HqMessageRecord } from "./types";
 
 interface HQMessageComposerProps {
@@ -75,16 +76,11 @@ export default function HQMessageComposer({
   const [previewLang, setPreviewLang] = useState<"EN" | "SW">("EN");
   const [historyFilterOrg, setHistoryFilterOrg] = useState("ALL");
 
-  const cardCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-[#EAECF0] text-[#111317]";
-  const chipCls = isDark
-    ? "bg-[#171D28] border-slate-800 text-slate-200"
-    : "bg-[#F8FAFC] border-[#EAECF0] text-[#111317]";
-  const inputCls = isDark
-    ? "bg-[#090C12] border-slate-700 text-slate-100 placeholder:text-slate-500"
-    : "bg-[#F8FAFC] border-[#CBD5E1] text-[#111317] placeholder:text-slate-400";
-  const mutedCls = isDark ? "text-slate-400" : "text-[#64748B]";
+  const t = hqSurfaceTokens(isDark);
+  const cardCls = t.panelCls;
+  const chipCls = t.wellCls;
+  const inputCls = t.inputCls;
+  const mutedCls = t.mutedCls;
 
   const applyTemplate = (tpl: (typeof TEMPLATES)[number]) => {
     setSeverity(tpl.severity);
@@ -422,13 +418,18 @@ export default function HQMessageComposer({
         <button
           type="submit"
           disabled={busy || title.trim().length < 3 || body.trim().length < 5}
-          className="w-full h-11 rounded-xl bg-[#1039B9] hover:bg-[#0d2e94] text-white text-sm font-semibold disabled:opacity-50 cursor-pointer"
+          className={`w-full h-11 rounded-2xl text-sm font-semibold inline-flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer ${t.primaryBtnCls}`}
         >
-          {busy
-            ? "Dispatching..."
-            : targetAccountId === "ALL"
-            ? `Broadcast to All ${accounts.length} Organizations`
-            : "Send Live HQ Notice"}
+          {busy && (
+            <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+          )}
+          <span>
+            {busy
+              ? "Dispatching..."
+              : targetAccountId === "ALL"
+              ? `Broadcast to All ${accounts.length} Organizations`
+              : "Send Live HQ Notice"}
+          </span>
         </button>
       </form>
 

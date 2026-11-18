@@ -31,6 +31,7 @@ interface ChatStateSlice {
   branchMessages?: BranchChatMsg[];
   batches?: Array<{
     id: string;
+    centreId?: string;
     brandName: string;
     batchNumber: string;
     quantity: number;
@@ -157,23 +158,30 @@ export function useShellBranchChat() {
   ).length;
 
   const members: BranchChatMember[] = useMemo(() => {
-    return (state?.profiles ?? []).map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      handle:
-        (p.username && p.username.trim()) ||
-        p.displayName.trim().toLowerCase().replace(/\s+/g, "."),
-      role: p.role,
-    }));
-  }, [state?.profiles]);
+    const targetCentre = state?.activeCentreId;
+    return (state?.profiles ?? [])
+      .filter((p) => !targetCentre || p.centreId === targetCentre)
+      .map((p) => ({
+        id: p.id,
+        displayName: p.displayName,
+        handle:
+          (p.username && p.username.trim()) ||
+          p.displayName.trim().toLowerCase().replace(/\s+/g, "."),
+        role: p.role,
+      }));
+  }, [state?.profiles, state?.activeCentreId]);
 
   const attachableRecords = useMemo(() => {
-    const batchOpts = (state?.batches ?? []).slice(0, 8).map((b) => ({
-      kind: "batch" as const,
-      refId: b.id,
-      title: `${b.brandName} (${b.batchNumber})`,
-      subtitle: `${b.quantity} packs · Exp ${b.expiryDate} · ${b.quarantined ? "Quarantined" : "Active FEFO"}`,
-    }));
+    const targetCentre = state?.activeCentreId;
+    const batchOpts = (state?.batches ?? [])
+      .filter((b) => !targetCentre || !b.centreId || b.centreId === targetCentre)
+      .slice(0, 8)
+      .map((b) => ({
+        kind: "batch" as const,
+        refId: b.id,
+        title: `${b.brandName} (${b.batchNumber})`,
+        subtitle: `${b.quantity} packs · Exp ${b.expiryDate} · ${b.quarantined ? "Quarantined" : "Active FEFO"}`,
+      }));
     const orderOpts = (state?.wholesaleOrders ?? []).slice(0, 5).map((o) => ({
       kind: "order" as const,
       refId: o.orderReference,
@@ -181,7 +189,7 @@ export function useShellBranchChat() {
       subtitle: `${o.quantity} packs · TZS ${o.totalTzs.toLocaleString("en-US")} (${o.escrowStatus.replace(/_/g, " ")})`,
     }));
     return [...batchOpts, ...orderOpts];
-  }, [state?.batches, state?.wholesaleOrders]);
+  }, [state?.batches, state?.wholesaleOrders, state?.activeCentreId]);
 
   const send = async (
     body: string,

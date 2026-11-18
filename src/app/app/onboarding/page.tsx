@@ -95,10 +95,14 @@ export default function WorkspaceOnboardingPage() {
   const [layoutType, setLayoutType] = useState<"balanced" | "focus" | "executive">("balanced");
   const [themePref, setThemePref] = useState<"light" | "dark" | "system">("light");
 
-  // Step 4: Skippable Regulatory Certificates
+  // Step 4: Skippable Regulatory Certificates & Optional Settlement Channels
   const [docType, setDocType] = useState("Pharmacy Operating Permit");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [certificateFileName, setCertificateFileName] = useState("");
+  const [mpesaPaybill, setMpesaPaybill] = useState("");
+  const [tigoLipaNumber, setTigoLipaNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
 
   const isSw = langPreset === "SW";
 
@@ -260,6 +264,17 @@ export default function WorkspaceOnboardingPage() {
             layoutType,
             themePref,
           },
+          paymentSettings:
+            mpesaPaybill.trim() || tigoLipaNumber.trim() || bankName.trim() || bankAccount.trim()
+              ? {
+                  mpesaPaybill: mpesaPaybill.trim(),
+                  tigoLipaNumber: tigoLipaNumber.trim(),
+                  bankName: bankName.trim(),
+                  bankAccount: bankAccount.trim(),
+                  settlementCycle: "daily",
+                  vatRegistered: false,
+                }
+              : undefined,
         }),
       });
       const data = (await res.json()) as { ok?: boolean; redirectTo?: string; error?: string };
@@ -1103,6 +1118,45 @@ export default function WorkspaceOnboardingPage() {
                       isDark={isDark}
                       isSw={isSw}
                     />
+                  </div>
+
+                  {/* Optional Owner Payout Channels (No prefilled dummy numbers) */}
+                  <div className="pt-3 border-t border-slate-500/15 space-y-2.5">
+                    <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>
+                      {isSw
+                        ? "Njia za Malipo / Akaunti ya Kupokea Fedha (Hiari - unaweza kujaza baadaye)"
+                        : "Kasri Settlement Channels (Optional - edit anytime in Billing)"}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <input
+                        type="text"
+                        value={mpesaPaybill}
+                        onChange={(e) => setMpesaPaybill(e.target.value)}
+                        placeholder={isSw ? "M-Pesa Paybill / Till" : "M-Pesa Paybill / Till #"}
+                        className={`w-full px-3 py-2 rounded-md border text-xs font-mono focus:outline-none ${inputBase}`}
+                      />
+                      <input
+                        type="text"
+                        value={tigoLipaNumber}
+                        onChange={(e) => setTigoLipaNumber(e.target.value)}
+                        placeholder={isSw ? "Tigo / Mixx Lipa" : "Tigo / Mixx Lipa #"}
+                        className={`w-full px-3 py-2 rounded-md border text-xs font-mono focus:outline-none ${inputBase}`}
+                      />
+                      <input
+                        type="text"
+                        value={bankName}
+                        onChange={(e) => setBankName(e.target.value)}
+                        placeholder={isSw ? "Jina la Benki (Mf. CRDB / NMB)" : "Bank Name (e.g. CRDB / NMB)"}
+                        className={`w-full px-3 py-2 rounded-md border text-xs focus:outline-none ${inputBase}`}
+                      />
+                      <input
+                        type="text"
+                        value={bankAccount}
+                        onChange={(e) => setBankAccount(e.target.value)}
+                        placeholder={isSw ? "Namba ya Akaunti ya Benki" : "Bank Account Number"}
+                        className={`w-full px-3 py-2 rounded-md border text-xs font-mono focus:outline-none ${inputBase}`}
+                      />
+                    </div>
                   </div>
                 </div>
 

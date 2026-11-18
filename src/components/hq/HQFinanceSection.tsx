@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatTzs } from "@cervos/core";
+import { hqSurfaceTokens } from "./hqSurface";
 import type { HqFleetAccount, HqPackageRecord, HqWholesaleOrderRecord } from "./types";
 
 interface HQFinanceSectionProps {
@@ -26,13 +27,10 @@ export default function HQFinanceSection({
 }: HQFinanceSectionProps) {
   const [escrowFilter, setEscrowFilter] = useState<"all" | "escrow_held" | "released" | "cancelled">("all");
 
-  const cardCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-slate-200 text-slate-900";
-  const subCls = isDark
-    ? "bg-[#171D28] border-slate-800 text-slate-200"
-    : "bg-slate-50 border-slate-200 text-slate-800";
-  const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
+  const t = hqSurfaceTokens(isDark);
+  const cardCls = t.panelCls;
+  const subCls = t.wellCls;
+  const mutedCls = t.mutedCls;
 
   const filteredOrders = wholesaleOrders.filter(
     (o) => escrowFilter === "all" || o.escrowStatus === escrowFilter

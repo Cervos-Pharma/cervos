@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import {
   computePlanCheckoutQuote,
+  DEFAULT_DRUG_CATEGORIES,
   getSubscriptionExpiryInfo,
   getWorkspaceDb,
   isAccountAccessLocked,
@@ -11,9 +12,12 @@ import {
 } from "@/lib/workspace/store";
 import { hashSecret, normalizeSecurityAnswer } from "@/lib/security/harness";
 import { createAccountCookieValue, createProfileCookieValue, WS_ACCOUNT_COOKIE, WS_PROFILE_COOKIE } from "@/lib/security/session";
-import { POST as statePost } from "@/app/api/workspace/state/route";
+import { GET as stateGet, POST as statePost } from "@/app/api/workspace/state/route";
+import { POST as onboardingPost } from "@/app/api/workspace/onboarding/route";
 import { GET as cronGet } from "@/app/api/cron/daily-summary/route";
 import { GET as dispatchGet } from "@/app/api/dispatch/route";
+import { GET as opsDispatchGet } from "@/app/api/ops-v9k4m/dispatch/route";
+import { deriveAdminSessionToken } from "@/lib/hq-auth";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
 
 function makeAccount(id: string, overrides: Partial<WorkspaceAccount> = {}): WorkspaceAccount {
@@ -347,5 +351,358 @@ describe("Plan Upgrades, Expiry Cutoff & Personalized Daily Summary Cron", () =>
     const out = await res.json();
     expect(out.article.slug).toBe(article.slug);
     expect(out.article.titleEn).toContain("WebP");
+  });
+
+  it("persists custom drug categories via manage_batch without duplicating defaults", async () => {
+    const db = getWorkspaceDb();
+    const now = Date.now();
+    const acc = makeAccount(`acc_cat_${now}`);
+    const ctrId = `ctr_cat_${now}`;
+    const profId = `prof_cat_${now}`;
+    db.accounts.push(acc);
+    db.centres.push({
+      id: ctrId,
+      accountId: acc.id,
+      name: "Eden Care",
+      region: "Dar es Salaam",
+      address: "Mikocheni",
+      phone: "+255712340099",
+      isPrimary: true,
+      createdAt: new Date().toISOString(),
+    });
+    db.profiles.push({
+      id: profId,
+      accountId: acc.id,
+      centreId: ctrId,
+      username: "nadia",
+      displayName: "Nadia Mwangi",
+      role: "pharmacy_owner",
+      pinHash: hashSecret("1947").hash,
+      isMasterAdmin: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    const accCookie = createAccountCookieValue(acc.id, acc.email);
+    const profCookie = createProfileCookieValue(acc.id, ctrId, profId, "pharmacy_owner");
+    const cookieHeader = `${WS_ACCOUNT_COOKIE}=${accCookie}; ${WS_PROFILE_COOKIE}=${profCookie}`;
+
+    // Default category should NOT be added to customCategories
+    const defRes = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+        body: JSON.stringify({
+          action: "manage_batch",
+          subAction: "add_batch",
+          brandName: "Amoxil 500",
+          genericName: "Amoxicillin",
+          category: DEFAULT_DRUG_CATEGORIES[1],
+          quantity: 30,
+          salePriceTzs: 4500,
+        }),
+      })
+    );
+    expect(defRes.status).toBe(200);
+    expect(acc.customCategories ?? []).toHaveLength(0);
+
+    // Custom category IS persisted on add_batch and again on edit_batch (deduplicated)
+    const custRes = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+        body: JSON.stringify({
+          action: "manage_batch",
+          subAction: "add_batch",
+          brandName: "Herbal Relief Syrup",
+          genericName: "Eucalyptus Mix",
+          category: "Oncology & Specialty",
+          quantity: 12,
+          salePriceTzs: 9500,
+        }),
+      })
+    );
+    expect(custRes.status).toBe(200);
+    expect(acc.customCategories).toEqual(["Oncology & Specialty"]);
+    const createdBatch = db.batches?.find(
+      (b) => b.accountId === acc.id && b.brandName === "Herbal Relief Syrup"
+    );
+    expect(createdBatch).toBeDefined();
+
+    const editRes = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+        body: JSON.stringify({
+          action: "manage_batch",
+          subAction: "edit_batch",
+          batchId: createdBatch!.id,
+          category: "Cold Chain Biologics",
+        }),
+      })
+    );
+    expect(editRes.status).toBe(200);
+    expect(acc.customCategories).toEqual(["Oncology & Specialty", "Cold Chain Biologics"]);
+  });
+
+  it("saves optional Kasri payout channels in onboarding and exposes them to HQ fleet", async () => {
+    const db = getWorkspaceDb();
+    const now = Date.now();
+    const withPayout = makeAccount(`acc_pay_${now}`, { onboardingDone: false });
+    const withoutPayout = makeAccount(`acc_nopay_${now}`, { onboardingDone: false });
+    db.accounts.push(withPayout, withoutPayout);
+
+    const cookieWith = `${WS_ACCOUNT_COOKIE}=${createAccountCookieValue(withPayout.id, withPayout.email)}`;
+    const cookieWithout = `${WS_ACCOUNT_COOKIE}=${createAccountCookieValue(withoutPayout.id, withoutPayout.email)}`;
+
+    const res1 = await onboardingPost(
+      new NextRequest("http://localhost:3000/api/workspace/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieWith },
+        body: JSON.stringify({
+          fullName: "Nadia Mwangi",
+          centreName: "Eden Care",
+          region: "Dar es Salaam",
+          address: "Mikocheni B",
+          phone: "+255712345678",
+          securityQuestion: "First school attended?",
+          securityAnswer: "Kilimani",
+          masterPin: "4829",
+          skipCompliance: true,
+          paymentSettings: {
+            mpesaPaybill: "5589100",
+            tigoLipaNumber: "8109200",
+            bankName: "CRDB Bank",
+            bankAccount: "0152 9981 001",
+            settlementCycle: "instant",
+            vatRegistered: true,
+          },
+        }),
+      })
+    );
+    expect(res1.status).toBe(200);
+    expect(db.paymentSettings?.[withPayout.id]?.mpesaPaybill).toBe("5589100");
+    expect(db.paymentSettings?.[withPayout.id]?.settlementCycle).toBe("instant");
+
+    const res2 = await onboardingPost(
+      new NextRequest("http://localhost:3000/api/workspace/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieWithout },
+        body: JSON.stringify({
+          fullName: "Juma Kileo",
+          centreName: "Boma Pharmacy",
+          region: "Arusha",
+          address: "Sokoine Road",
+          phone: "+255712345679",
+          securityQuestion: "Favorite town?",
+          securityAnswer: "Arusha",
+          masterPin: "7391",
+          skipCompliance: true,
+        }),
+      })
+    );
+    expect(res2.status).toBe(200);
+    expect(db.paymentSettings?.[withoutPayout.id]).toBeUndefined();
+
+    // Verify HQ Fleet endpoint exposes settlement channels when configured & null otherwise
+    const prevSecret = process.env.HQ_SECRET;
+    process.env.HQ_SECRET = "cervos-test-hq-secret-2026-strong-key-0123456789";
+    try {
+      const token = deriveAdminSessionToken(process.env.HQ_SECRET, "ops-lead", "ops_admin");
+      const fleetRes = await opsDispatchGet(
+        new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch?scope=fleet", {
+          method: "GET",
+          headers: { Authorization: `OpsToken ${token}` },
+        })
+      );
+      expect(fleetRes.status).toBe(200);
+      const fleetJson = await fleetRes.json();
+      const rowWith = (fleetJson.accounts as Array<{ id: string; paymentSettings?: { mpesaPaybill?: string } | null }>).find(
+        (a) => a.id === withPayout.id
+      );
+      const rowWithout = (fleetJson.accounts as Array<{ id: string; paymentSettings?: unknown }>).find(
+        (a) => a.id === withoutPayout.id
+      );
+      expect(rowWith?.paymentSettings?.mpesaPaybill).toBe("5589100");
+      expect(rowWithout?.paymentSettings).toBeNull();
+    } finally {
+      process.env.HQ_SECRET = prevSecret;
+    }
+  });
+
+  it("isolates inventory, FEFO dispense, sales, branch chat @mentions across branches and handles auto shift clock-out", async () => {
+    const db = getWorkspaceDb();
+    const now = Date.now();
+    const acc = makeAccount(`acc_iso_${now}`, {
+      subscriptionPlan: "Enterprise Chain",
+    });
+    const branchA = `ctr_a_${now}`;
+    const branchB = `ctr_b_${now}`;
+    const ownerProfId = `prof_owner_${now}`;
+    const staffBProfId = `prof_b_${now}`;
+
+    db.accounts.push(acc);
+    db.centres.push(
+      {
+        id: branchA,
+        accountId: acc.id,
+        name: "Branch Alpha",
+        region: "Dar es Salaam",
+        address: "Mikocheni",
+        phone: "+255712340001",
+        isPrimary: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: branchB,
+        accountId: acc.id,
+        name: "Branch Beta",
+        region: "Arusha",
+        address: "Sokoine",
+        phone: "+255712340002",
+        isPrimary: false,
+        createdAt: new Date().toISOString(),
+      }
+    );
+    db.profiles.push(
+      {
+        id: ownerProfId,
+        accountId: acc.id,
+        centreId: branchA,
+        username: "alice",
+        displayName: "Alice Owner",
+        role: "pharmacy_owner",
+        pinHash: hashSecret("1947").hash,
+        isMasterAdmin: true,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: staffBProfId,
+        accountId: acc.id,
+        centreId: branchB,
+        username: "bob_arusha",
+        displayName: "Bob Arusha",
+        role: "pos_cashier",
+        pinHash: hashSecret("7391").hash,
+        isMasterAdmin: false,
+        createdAt: new Date().toISOString(),
+      }
+    );
+    db.batches ??= [];
+    db.batches.push(
+      {
+        id: `bat_a_${now}`,
+        accountId: acc.id,
+        centreId: branchA,
+        productId: `prod_only_a_${now}`,
+        genericName: "Amoxicillin",
+        brandName: "AlphaAmox",
+        category: "Antibiotics",
+        batchNumber: "LOT-A1",
+        quantity: 25,
+        costPriceTzs: 2000,
+        salePriceTzs: 3500,
+        expiryDate: "2028-06-01",
+        requiresPrescription: false,
+        isControlled: false,
+        quarantined: false,
+        createdAt: new Date().toISOString(),
+      },
+      {
+        id: `bat_b_${now}`,
+        accountId: acc.id,
+        centreId: branchB,
+        productId: `prod_only_b_${now}`,
+        genericName: "Paracetamol",
+        brandName: "BetaPara",
+        category: "Essential",
+        batchNumber: "LOT-B1",
+        quantity: 40,
+        costPriceTzs: 1000,
+        salePriceTzs: 2000,
+        expiryDate: "2028-06-01",
+        requiresPrescription: false,
+        isControlled: false,
+        quarantined: false,
+        createdAt: new Date().toISOString(),
+      }
+    );
+
+    const accCookie = createAccountCookieValue(acc.id, acc.email);
+    const cookieA = `${WS_ACCOUNT_COOKIE}=${accCookie}; ${WS_PROFILE_COOKIE}=${createProfileCookieValue(
+      acc.id,
+      branchA,
+      ownerProfId,
+      "pharmacy_owner"
+    )}`;
+    const cookieB = `${WS_ACCOUNT_COOKIE}=${accCookie}; ${WS_PROFILE_COOKIE}=${createProfileCookieValue(
+      acc.id,
+      branchB,
+      ownerProfId,
+      "pharmacy_owner"
+    )}`;
+
+    // 1. State GET in Branch A sees ONLY Branch A batches (not BetaPara)
+    const resA = await stateGet(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        headers: { Cookie: cookieA },
+      })
+    );
+    expect(resA.status).toBe(200);
+    const dataA = await resA.json();
+    expect((dataA.batches as Array<{ brandName: string }>).some((b) => b.brandName === "AlphaAmox")).toBe(true);
+    expect((dataA.batches as Array<{ brandName: string }>).some((b) => b.brandName === "BetaPara")).toBe(false);
+
+    // 2. Trying to dispense Branch A's SKU while inside Branch B MUST fail (no cross-branch stock deduction)
+    const crossDispense = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieB },
+        body: JSON.stringify({
+          action: "dispense_pos",
+          items: [{ productId: `prod_only_a_${now}`, qty: 2 }],
+          paymentMethod: "cash",
+        }),
+      })
+    );
+    expect(crossDispense.status).toBe(400);
+
+    // 3. @mention from Branch A for Branch B user (@bob_arusha) does NOT bleed across branches
+    const crossChat = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieA },
+        body: JSON.stringify({
+          action: "send_branch_chat",
+          centreId: branchA,
+          body: "Checking with @bob_arusha @alice",
+        }),
+      })
+    );
+    expect(crossChat.status).toBe(200);
+    const chatOut = await crossChat.json();
+    expect(chatOut.message.mentions).toContain("Alice Owner");
+    expect(chatOut.message.mentions).not.toContain("Bob Arusha");
+
+    // 4. Clock IN then automatic away Clock OUT ("auto_out")
+    const cin = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieA },
+        body: JSON.stringify({ action: "shift_clock", clockType: "in" }),
+      })
+    );
+    expect(cin.status).toBe(200);
+
+    const coutAuto = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieA },
+        body: JSON.stringify({ action: "shift_clock", clockType: "auto_out", awayMinutes: 260 }),
+      })
+    );
+    expect(coutAuto.status).toBe(200);
+    const autoJson = await coutAuto.json();
+    expect(autoJson.autoClockedOut).toBe(true);
+    expect(autoJson.shift.clockOutAt).toBeTruthy();
   });
 });

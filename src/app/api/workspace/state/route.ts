@@ -4,6 +4,7 @@ import {
   parseGs1Barcode,
   reconcileCashShift,
 } from "@cervos/core";
+import { branchComparison } from "@/lib/workspace/intelligence";
 import { normalizeMsisdn } from "@cervos/textify";
 import { initiateCollection, queryTransaction } from "@/lib/payme";
 import {
@@ -38,6 +39,7 @@ import {
   checkPharmacyPlanQuota,
   clampProfileCapabilities,
   computePlanCheckoutQuote,
+  createWorkspaceSupportTicket,
   ensureAccountDomainData,
   flushWorkspaceDb,
   getHqUpdates,
@@ -49,6 +51,7 @@ import {
   publicJoinRequestSummary,
   publicProfileSummary,
   pushHqMessage,
+  recordCustomDrugCategory,
   saveWorkspaceDb,
   suggestUniqueUsername,
   warmDbFromSupabase,
@@ -266,22 +269,39 @@ export async function GET(request: NextRequest) {
     ? (db.auditLogs ?? []).filter((log) => log.accountId === account.id).slice(0, 15)
     : [];
 
-  const batches = (db.batches ?? []).filter((b) => b.accountId === account.id);
-  const allSales = (db.sales ?? []).filter((s) => s.accountId === account.id);
+  const primaryCentreId = centres[0]?.id ?? activeCentreId;
+  const matchesActiveCentre = (cid?: string) =>
+    !activeCentreId || (cid ? cid === activeCentreId : activeCentreId === primaryCentreId);
+
+  const allAccountBatches = (db.batches ?? []).filter((b) => b.accountId === account.id);
+  const allAccountSales = (db.sales ?? []).filter((s) => s.accountId === account.id);
+  const batches = allAccountBatches.filter((b) => matchesActiveCentre(b.centreId));
+  const branchSalesAll = allAccountSales.filter((s) => matchesActiveCentre(s.centreId));
   const sales = activeCaps.canViewOrgReports
-    ? allSales
-    : allSales.filter((s) => s.profileId === activeProfile.id);
-  const wholesaleOrders = (db.wholesaleOrders ?? []).filter((o) => o.accountId === account.id);
+    ? branchSalesAll
+    : branchSalesAll.filter((s) => s.profileId === activeProfile.id);
+  const orgBranchComparison = activeCaps.canViewOrgReports
+    ? branchComparison(allAccountSales, allAccountBatches, centres)
+    : [];
+  const wholesaleOrders = (db.wholesaleOrders ?? []).filter(
+    (o) => o.accountId === account.id && matchesActiveCentre(o.centreId)
+  );
   const branchMessages = (db.branchMessages ?? []).filter(
     (m) => m.accountId === account.id && m.centreId === activeCentreId
   );
-  const notifications = (db.notifications ?? []).filter((n) => n.accountId === account.id).slice(0, 12);
+  const notifications = (db.notifications ?? [])
+    .filter((n) => n.accountId === account.id && (!n.centreId || n.centreId === activeCentreId))
+    .slice(0, 12);
   const hqMessages = (db.hqMessages ?? []).filter((m) => m.accountId === account.id).slice(0, 15);
   const expenses = activeCaps.canViewFinance
-    ? (db.expenses ?? []).filter((e) => e.accountId === account.id)
+    ? (db.expenses ?? []).filter((e) => e.accountId === account.id && matchesActiveCentre(e.centreId))
     : [];
-  const savedCustomers = (db.savedCustomers ?? []).filter((c) => c.accountId === account.id);
-  const shiftLogs = (db.shiftLogs ?? []).filter((s) => s.accountId === account.id).slice(0, 25);
+  const savedCustomers = (db.savedCustomers ?? []).filter(
+    (c) => c.accountId === account.id && matchesActiveCentre(c.centreId)
+  );
+  const shiftLogs = (db.shiftLogs ?? [])
+    .filter((s) => s.accountId === account.id && matchesActiveCentre(s.centreId))
+    .slice(0, 25);
   const paymentSettings = activeCaps.canViewFinance ? (db.paymentSettings?.[account.id] ?? null) : null;
   const joinRequests = isOwnerSession
     ? (db.joinRequests ?? [])
@@ -313,6 +333,7 @@ export async function GET(request: NextRequest) {
     hqMessages,
     savedCustomers,
     shiftLogs,
+    orgBranchComparison,
     notificationEnv: getNotificationEnvStatus(),
     expenses,
     paymentSettings,
@@ -406,9 +427,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (action === "shift_clock") {
-    ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
+    ensureAccountDomainData(db, account.id, effectiveCentreId);
     db.shiftLogs ??= [];
-    const clockType = body.clockType === "out" ? "out" : "in";
+    const clockType =
+      body.clockType === "out" ? "out" : body.clockType === "auto_out" ? "auto_out" : "in";
     const openShift = db.shiftLogs.find(
       (s) => s.accountId === account.id && s.profileId === unlockedProfile.id && !s.clockOutAt
     );
@@ -434,12 +456,13 @@ export async function POST(request: NextRequest) {
         action: `Clocked IN shift at ${nowIso.slice(11, 16)}`,
       });
       saveWorkspaceDb(db);
-    await flushWorkspaceDb();
+      await flushWorkspaceDb();
       return noStoreJson({ ok: true, shift: created });
     } else {
       if (!openShift) {
         return noStoreJson({ error: "No active clocked-in shift found." }, { status: 400 });
       }
+      const awayMinutes = Math.max(0, Math.round(Number(body.awayMinutes) || 0));
       openShift.clockOutAt = nowIso;
       openShift.durationMinutes = Math.max(
         1,
@@ -449,11 +472,14 @@ export async function POST(request: NextRequest) {
         accountId: account.id,
         actor: unlockedProfile.displayName,
         category: "POS",
-        action: `Clocked OUT shift (${openShift.durationMinutes} min logged)`,
+        action:
+          clockType === "auto_out"
+            ? `Auto clocked OUT shift after ${awayMinutes || openShift.durationMinutes} min away (${openShift.durationMinutes} min logged)`
+            : `Clocked OUT shift (${openShift.durationMinutes} min logged)`,
       });
       saveWorkspaceDb(db);
-    await flushWorkspaceDb();
-      return noStoreJson({ ok: true, shift: openShift });
+      await flushWorkspaceDb();
+      return noStoreJson({ ok: true, shift: openShift, autoClockedOut: clockType === "auto_out" });
     }
   }
 
@@ -464,7 +490,7 @@ export async function POST(request: NextRequest) {
     if (hasAnyInjection([body.customerName, body.phone, body.note])) {
       return noStoreJson({ error: "Unsupported characters in customer preset." }, { status: 400 });
     }
-    ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
+    ensureAccountDomainData(db, account.id, effectiveCentreId);
     db.savedCustomers ??= [];
     const customerName = sanitizeText(body.customerName, 80);
     const phone = sanitizeText(body.phone, 40);
@@ -485,7 +511,7 @@ export async function POST(request: NextRequest) {
     const created = {
       id: newId("cust"),
       accountId: account.id,
-      centreId: unlockedProfile.centreId,
+      centreId: effectiveCentreId,
       customerName,
       phone: phone || undefined,
       note: note || undefined,
@@ -564,8 +590,11 @@ export async function POST(request: NextRequest) {
     const prescriptionRef = sanitizeText(body.prescriptionRef, 60);
     const pharmacistLicenseNo = sanitizeText(body.pharmacistLicenseNo, 60);
 
-    ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
-    const accountBatches = (db.batches ?? []).filter((b) => b.accountId === account.id);
+    ensureAccountDomainData(db, account.id, effectiveCentreId);
+    const branchBatches = (db.batches ?? []).filter(
+      (b) => b.accountId === account.id && b.centreId === effectiveCentreId
+    );
+    const accountBatches = branchBatches;
 
     let totalTzs = 0;
     let totalUnits = 0;
@@ -636,7 +665,7 @@ export async function POST(request: NextRequest) {
     const saleRecord: WorkspaceSaleRecord = {
       id: newId("sale"),
       accountId: account.id,
-      centreId: unlockedProfile.centreId,
+      centreId: effectiveCentreId,
       profileId: unlockedProfile.id,
       actorName: unlockedProfile.displayName,
       receiptNumber,
@@ -656,7 +685,7 @@ export async function POST(request: NextRequest) {
       db.savedCustomers.unshift({
         id: newId("cust"),
         accountId: account.id,
-        centreId: unlockedProfile.centreId,
+        centreId: effectiveCentreId,
         customerName,
         phone: customerPhone || undefined,
         note: prescriptionRef ? `Rx ${prescriptionRef}` : "Saved from Counter POS",
@@ -803,15 +832,19 @@ export async function POST(request: NextRequest) {
 
     const replyToId = sanitizeText(body.replyToId, 60);
     const repliedMsg = replyToId
-      ? (db.branchMessages ?? []).find((m) => m.id === replyToId && m.accountId === account.id)
+      ? (db.branchMessages ?? []).find(
+          (m) => m.id === replyToId && m.accountId === account.id && m.centreId === targetCentreId
+        )
       : undefined;
 
     const mentionMatches = new Set<string>();
-    const orgProfiles = db.profiles.filter((p) => p.accountId === account.id);
+    const branchProfiles = db.profiles.filter(
+      (p) => p.accountId === account.id && p.centreId === targetCentreId
+    );
     const rawMentions = text.match(/@([a-zA-Z0-9._-]+)/g) ?? [];
     for (const rawM of rawMentions) {
       const handle = rawM.slice(1).toLowerCase();
-      const matchedProf = orgProfiles.find(
+      const matchedProf = branchProfiles.find(
         (p) =>
           (p.username && p.username.toLowerCase() === handle) ||
           p.displayName.toLowerCase().replace(/\s+/g, ".") === handle ||
@@ -871,7 +904,7 @@ export async function POST(request: NextRequest) {
         ? body.kind
         : "thumbs_up";
     const msg = (db.branchMessages ?? []).find(
-      (m) => m.id === messageId && m.accountId === account.id
+      (m) => m.id === messageId && m.accountId === account.id && m.centreId === effectiveCentreId
     );
     if (!msg) {
       return noStoreJson({ error: "Message not found." }, { status: 404 });
@@ -1100,12 +1133,15 @@ export async function POST(request: NextRequest) {
       return noStoreJson({ error: "Unsupported characters in batch details." }, { status: 400 });
     }
     ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
+    ensureAccountDomainData(db, account.id, effectiveCentreId);
     const subAction = sanitizeText(body.subAction, 30);
 
     if (subAction === "toggle_quarantine") {
       const batchId = sanitizeText(body.batchId, 40);
-      const batch = db.batches!.find((b) => b.id === batchId && b.accountId === account.id);
-      if (!batch) return noStoreJson({ error: "Batch not found." }, { status: 404 });
+      const batch = db.batches!.find(
+        (b) => b.id === batchId && b.accountId === account.id && b.centreId === effectiveCentreId
+      );
+      if (!batch) return noStoreJson({ error: "Batch not found in active branch." }, { status: 404 });
       batch.quarantined = !batch.quarantined;
       appendAuditLog(db, {
         accountId: account.id,
@@ -1121,8 +1157,10 @@ export async function POST(request: NextRequest) {
     if (subAction === "adjust_qty") {
       const batchId = sanitizeText(body.batchId, 40);
       const nextQty = Math.max(0, Math.min(10000, Math.round(Number(body.quantity) || 0)));
-      const batch = db.batches!.find((b) => b.id === batchId && b.accountId === account.id);
-      if (!batch) return noStoreJson({ error: "Batch not found." }, { status: 404 });
+      const batch = db.batches!.find(
+        (b) => b.id === batchId && b.accountId === account.id && b.centreId === effectiveCentreId
+      );
+      if (!batch) return noStoreJson({ error: "Batch not found in active branch." }, { status: 404 });
       batch.quantity = nextQty;
       appendAuditLog(db, {
         accountId: account.id,
@@ -1160,14 +1198,16 @@ export async function POST(request: NextRequest) {
       if (brandName.length < 2) {
         return noStoreJson({ error: "Medicine name is required." }, { status: 400 });
       }
+      const resolvedCategory = sanitizeText(body.category, 40) || "Essential";
+      recordCustomDrugCategory(account, resolvedCategory);
       db.batches!.unshift({
         id: newId("bat"),
         accountId: account.id,
-        centreId: unlockedProfile.centreId,
+        centreId: effectiveCentreId,
         productId: sanitizeText(body.productId, 40) || newId("prod"),
         genericName,
         brandName,
-        category: sanitizeText(body.category, 40) || "Essential",
+        category: resolvedCategory,
         batchNumber,
         quantity: qty,
         costPriceTzs,
@@ -1194,15 +1234,20 @@ export async function POST(request: NextRequest) {
 
     if (subAction === "edit_batch") {
       const batchId = sanitizeText(body.batchId, 40);
-      const batch = db.batches!.find((b) => b.id === batchId && b.accountId === account.id);
-      if (!batch) return noStoreJson({ error: "Batch not found." }, { status: 404 });
+      const batch = db.batches!.find(
+        (b) => b.id === batchId && b.accountId === account.id && b.centreId === effectiveCentreId
+      );
+      if (!batch) return noStoreJson({ error: "Batch not found in active branch." }, { status: 404 });
       const brandName = sanitizeText(body.brandName, 80);
       const genericName = sanitizeText(body.genericName, 80);
       const category = sanitizeText(body.category, 40);
       const batchNumber = sanitizeText(body.batchNumber, 40);
       if (brandName.length >= 2) batch.brandName = brandName;
       if (genericName.length >= 2) batch.genericName = genericName;
-      if (category.length >= 2) batch.category = category;
+      if (category.length >= 2) {
+        batch.category = category;
+        recordCustomDrugCategory(account, category);
+      }
       if (batchNumber.length >= 2) batch.batchNumber = batchNumber;
       if (body.quantity !== undefined) batch.quantity = Math.max(0, Math.min(10000, Math.round(Number(body.quantity) || 0)));
       if (body.costPriceTzs !== undefined) batch.costPriceTzs = Math.max(50, Math.round(Number(body.costPriceTzs) || batch.costPriceTzs));
@@ -1818,8 +1863,10 @@ export async function POST(request: NextRequest) {
     }
     const messageId = sanitizeText(body.messageId, 60);
     const decision = body.decision === "decline" ? "decline" : "approve";
-    ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
-    const msg = db.branchMessages!.find((m) => m.id === messageId && m.accountId === account.id);
+    ensureAccountDomainData(db, account.id, effectiveCentreId);
+    const msg = db.branchMessages!.find(
+      (m) => m.id === messageId && m.accountId === account.id && m.centreId === effectiveCentreId
+    );
     if (!msg || !msg.attachment || msg.attachment.kind !== "wholesale_request") {
       return noStoreJson({ error: "Approval request message not found." }, { status: 404 });
     }
@@ -2162,6 +2209,41 @@ export async function POST(request: NextRequest) {
     saveWorkspaceDb(db);
     await flushWorkspaceDb();
     return noStoreJson({ ok: true, hqMessage: created });
+  }
+
+  if (action === "submit_support_ticket") {
+    const subject = sanitizeText(body.subject, 180);
+    const msgBody = sanitizeText(body.message, 4000);
+    const categoryRaw = sanitizeText(body.category, 24);
+    const category =
+      categoryRaw === "billing" || categoryRaw === "technical" || categoryRaw === "other"
+        ? categoryRaw
+        : "general";
+    if (subject.length < 3 || msgBody.length < 8) {
+      return noStoreJson(
+        { error: "Support subject and detailed description are required." },
+        { status: 400 }
+      );
+    }
+    const ticket = createWorkspaceSupportTicket(db, {
+      accountId: account.id,
+      orgName: account.orgName,
+      contactEmail: account.email,
+      contactName: unlockedProfile.displayName,
+      subject,
+      message: msgBody,
+      category,
+      source: "workspace",
+    });
+    appendAuditLog(db, {
+      accountId: account.id,
+      actor: unlockedProfile.displayName,
+      category: "COMPLIANCE",
+      action: `Submitted support ticket ${ticket.ticketRef}: ${ticket.subject}`,
+    });
+    saveWorkspaceDb(db);
+    await flushWorkspaceDb();
+    return noStoreJson({ ok: true, ticket });
   }
 
   return noStoreJson({ error: "Unsupported workspace action." }, { status: 400 });

@@ -12,6 +12,7 @@
  */
 
 import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { sanitizeHqRole, type HqWorkerRole } from "@/lib/hq-workers";
 
 export const HQ_COOKIE_NAME = "cv_ops_k9";
 export const HQ_OP_COOKIE = "cv_ops_op";
@@ -88,11 +89,36 @@ export function deriveHQSessionToken(secret: string): string {
   return createHmac("sha256", secret).update("hq:session:v1").digest("hex");
 }
 
-export function deriveAdminSessionToken(secret: string, adminId: string, role = "ops_admin"): string {
+export function deriveAdminSessionToken(secret: string, adminId: string, role = "hq_master"): string {
   const issuedAt = Math.floor(Date.now() / 1000);
   const payload = `v2.${adminId}.${role}.${issuedAt}`;
   const sig = createHmac("sha256", secret).update(payload).digest("hex");
   return `${payload}.${sig}`;
+}
+
+export interface ParsedHqSession {
+  adminId: string;
+  role: HqWorkerRole;
+  rawRole: string;
+}
+
+export function parseHqToken(token: string | undefined): ParsedHqSession | null {
+  if (!isValidHQToken(token) || !token) return null;
+  if (token.startsWith("v2.")) {
+    const parts = token.split(".");
+    if (parts.length !== 5) return null;
+    const [, adminId, rawRole] = parts;
+    return {
+      adminId,
+      role: sanitizeHqRole(rawRole),
+      rawRole,
+    };
+  }
+  return {
+    adminId: "master",
+    role: "hq_master",
+    rawRole: "ops_admin",
+  };
 }
 
 /**

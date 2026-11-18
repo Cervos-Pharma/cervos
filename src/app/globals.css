@@ -41,12 +41,24 @@
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     background-color: #f8fafc;
     color: #0f172a;
     font-family: "Inter", sans-serif;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Prevent iOS Safari automatic viewport zoom when tapping <input>/<select> */
+  @media (max-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 }
 
@@ -93,6 +105,147 @@
   /* Leaflet map fix — remove default icon broken image in Next.js */
   .leaflet-default-icon-path {
     background-image: url("https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png");
+  }
+
+  /* ── Cervos HQ: Claymorphism + Soft Neumorphism Design System ────── */
+  .hq-canvas-light {
+    background-color: #e6ecf5;
+    background-image:
+      radial-gradient(at 10% 8%, rgba(56, 189, 248, 0.14) 0px, transparent 48%),
+      radial-gradient(at 92% 14%, rgba(16, 57, 185, 0.11) 0px, transparent 44%),
+      radial-gradient(at 80% 88%, rgba(16, 185, 129, 0.09) 0px, transparent 46%);
+    color: #0f172a;
+  }
+
+  .hq-canvas-dark {
+    background-color: #0c111b;
+    background-image:
+      radial-gradient(at 12% 10%, rgba(16, 57, 185, 0.24) 0px, transparent 52%),
+      radial-gradient(at 88% 12%, rgba(56, 189, 248, 0.12) 0px, transparent 45%),
+      radial-gradient(at 78% 88%, rgba(16, 185, 129, 0.08) 0px, transparent 44%);
+    color: #f1f5f9;
+  }
+
+  .hq-clay-panel-light {
+    background: linear-gradient(145deg, #f4f7fc, #e7edf6);
+    border: 1px solid rgba(255, 255, 255, 0.82);
+    border-radius: 26px;
+    box-shadow:
+      10px 10px 24px rgba(148, 163, 184, 0.34),
+      -8px -8px 20px rgba(255, 255, 255, 0.92),
+      inset 2px 2px 6px rgba(255, 255, 255, 0.95),
+      inset -3px -4px 10px rgba(148, 163, 184, 0.16);
+    color: #0f172a;
+  }
+
+  .hq-clay-panel-dark {
+    background: linear-gradient(145deg, #171f2f, #101622);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 26px;
+    box-shadow:
+      12px 12px 28px rgba(4, 7, 14, 0.72),
+      -6px -6px 18px rgba(34, 48, 72, 0.24),
+      inset 1.5px 1.5px 4px rgba(255, 255, 255, 0.07),
+      inset -3px -4px 10px rgba(4, 7, 14, 0.45);
+    color: #f1f5f9;
+  }
+
+  .hq-neu-well-light {
+    background: #dfe7f2;
+    border: 1px solid rgba(203, 213, 225, 0.55);
+    border-radius: 18px;
+    box-shadow:
+      inset 4px 4px 10px rgba(148, 163, 184, 0.32),
+      inset -4px -4px 10px rgba(255, 255, 255, 0.88);
+    color: #0f172a;
+  }
+
+  .hq-neu-well-dark {
+    background: #090e17;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 18px;
+    box-shadow:
+      inset 5px 5px 12px rgba(2, 5, 11, 0.75),
+      inset -4px -4px 10px rgba(38, 52, 78, 0.2);
+    color: #f1f5f9;
+  }
+
+  .hq-neu-input-light {
+    background: #e9eff8;
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    box-shadow:
+      inset 3px 3px 7px rgba(148, 163, 184, 0.26),
+      inset -3px -3px 7px rgba(255, 255, 255, 0.9);
+    color: #0f172a;
+  }
+
+  .hq-neu-input-dark {
+    background: #0a0f18;
+    border: 1px solid rgba(51, 65, 85, 0.65);
+    box-shadow:
+      inset 3px 3px 8px rgba(2, 5, 11, 0.75),
+      inset -2px -2px 6px rgba(34, 48, 72, 0.24);
+    color: #f1f5f9;
+  }
+
+  .hq-clay-btn {
+    background: linear-gradient(145deg, #1b49d8, #0e33a6);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow:
+      5px 6px 14px rgba(16, 57, 185, 0.34),
+      -3px -3px 10px rgba(255, 255, 255, 0.45),
+      inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.32),
+      inset -2px -3px 6px rgba(8, 25, 82, 0.38);
+    transition: transform 0.16s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+
+  .hq-clay-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow:
+      7px 9px 18px rgba(16, 57, 185, 0.42),
+      -4px -4px 12px rgba(255, 255, 255, 0.55),
+      inset 1.5px 1.5px 4px rgba(255, 255, 255, 0.38),
+      inset -2px -3px 6px rgba(8, 25, 82, 0.4);
+  }
+
+  .hq-clay-btn:active:not(:disabled) {
+    transform: translateY(0px) scale(0.985);
+    box-shadow:
+      inset 4px 4px 10px rgba(8, 25, 82, 0.52),
+      inset -2px -2px 6px rgba(56, 189, 248, 0.25);
+  }
+
+  .hq-clay-btn-dark {
+    background: linear-gradient(145deg, #1c4ee0, #1039b9);
+    color: #ffffff;
+    border: 1px solid rgba(147, 197, 253, 0.25);
+    box-shadow:
+      6px 8px 18px rgba(4, 10, 26, 0.72),
+      -3px -3px 10px rgba(56, 189, 248, 0.14),
+      inset 1.5px 1.5px 3px rgba(255, 255, 255, 0.26),
+      inset -2px -3px 6px rgba(8, 25, 82, 0.45);
+    transition: transform 0.16s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+
+  .hq-clay-pill-light {
+    background: linear-gradient(145deg, #f6f9fe, #e4ecf6);
+    border: 1px solid rgba(255, 255, 255, 0.88);
+    box-shadow:
+      4px 4px 10px rgba(148, 163, 184, 0.26),
+      -4px -4px 9px rgba(255, 255, 255, 0.9),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.9);
+    color: #1e293b;
+  }
+
+  .hq-clay-pill-dark {
+    background: linear-gradient(145deg, #1a2335, #121826);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      4px 5px 12px rgba(3, 6, 12, 0.65),
+      -3px -3px 8px rgba(34, 48, 72, 0.22),
+      inset 1px 1px 2px rgba(255, 255, 255, 0.06);
+    color: #e2e8f0;
   }
 }
 

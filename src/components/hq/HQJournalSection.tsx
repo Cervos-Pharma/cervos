@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import WebpPhotoInput from "@/components/WebpPhotoInput";
+import { hqSurfaceTokens } from "./hqSurface";
 import type { HqJournalArticleRecord } from "./types";
 
 interface HQJournalSectionProps {
@@ -18,9 +19,9 @@ interface HQJournalSectionProps {
 
 const COVER_PRESETS = [
   { label: "Counter Station", url: "/cervos-people-counter.jpg" },
-  { label: "Dispensary Shelves", url: "/cervos-people-shelves.jpg" },
-  { label: "Supply Logistics", url: "/cervos-people-logistics.jpg" },
-  { label: "Counter Hardware", url: "/cervos-counter-station.jpg" },
+  { label: "Dispensary Stockroom", url: "/cervos-people-stockroom.jpg" },
+  { label: "Supply Delivery", url: "/cervos-people-delivery.jpg" },
+  { label: "Dispensary Desk", url: "/cervos-dispensary-desk.jpg" },
 ];
 
 export default function HQJournalSection({
@@ -47,13 +48,10 @@ export default function HQJournalSection({
   const [image, setImage] = useState("/cervos-people-counter.jpg");
   const [status, setStatus] = useState<"draft" | "published">("published");
 
-  const cardCls = isDark
-    ? "bg-[#11161F] border-slate-800 text-slate-100"
-    : "bg-white border-slate-200 text-slate-900";
-  const inputCls = isDark
-    ? "bg-[#090C12] border-slate-700 text-slate-100 placeholder:text-slate-500"
-    : "bg-slate-50 border-slate-300 text-slate-900 placeholder:text-slate-400";
-  const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
+  const t = hqSurfaceTokens(isDark);
+  const cardCls = t.panelCls;
+  const inputCls = t.inputCls;
+  const mutedCls = t.mutedCls;
 
   const resetForm = () => {
     setEditingId(null);

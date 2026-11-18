@@ -6,8 +6,11 @@ import {
   checkRateLimit,
   clearFailedAttempts,
   hasInjectionSignature,
+  hashSecret,
   recordFailedAttempt,
   sanitizeText,
+  validatePinPolicy,
+  verifySecret,
 } from "@/lib/security/harness";
 import {
   deriveAdminSessionToken,
@@ -18,11 +21,20 @@ import {
   isHqMockMode,
   isHqSecretConfigured,
   isValidHQToken,
+  parseHqToken,
   verifyHqPortalGateSlug,
   verifyHQSecretInput,
 } from "@/lib/hq-auth";
+import { HQ_ROLE_METADATA, sanitizeHqRole } from "@/lib/hq-workers";
 import { noStoreJson } from "@/lib/workspace/cookies";
 import { parseJsonObject } from "@/lib/workspace/request-auth";
+import {
+  appendAuditLog,
+  flushWorkspaceDb,
+  getWorkspaceDb,
+  saveWorkspaceDb,
+  warmDbFromSupabase,
+} from "@/lib/workspace/store";
 
 const COOKIE_MAX_AGE = 60 * 60 * 8;
 
@@ -53,14 +65,41 @@ function verifyScryptHash(password: string, stored: string): boolean {
   }
 }
 
-async function verifyOpsEmailCredentials(email: string, password: string): Promise<{ ok: boolean; operatorLabel?: string }> {
+async function verifyOpsEmailCredentials(
+  email: string,
+  password: string,
+  pin?: string
+): Promise<{ ok: boolean; operatorLabel?: string; workerId?: string; role?: string; reason?: string }> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail || !password) return { ok: false };
 
   const envEmail = (process.env.HQ_ADMIN_EMAIL ?? "").trim().toLowerCase();
   const envHash = (process.env.HQ_ADMIN_HASH ?? "").trim();
   if (envEmail && envHash && envEmail === cleanEmail && verifyScryptHash(password, envHash)) {
-    return { ok: true, operatorLabel: cleanEmail };
+    return { ok: true, operatorLabel: cleanEmail, workerId: "master-env", role: "hq_master" };
+  }
+
+  // Check onboarded internal HQ workers stored inside workspace DB
+  await warmDbFromSupabase();
+  const db = getWorkspaceDb();
+  const worker = (db.hqWorkers ?? []).find((w) => w.email.toLowerCase() === cleanEmail);
+  if (worker) {
+    if (worker.status === "suspended") {
+      return { ok: false, reason: "This HQ operator account is currently suspended by Master." };
+    }
+    if (worker.status === "invited") {
+      return { ok: false, reason: "Invite pending activation. Use Claim Worker Invite tab with your onboarding code." };
+    }
+    if (!worker.passwordHash || !verifySecret(password, worker.passwordHash)) {
+      return { ok: false };
+    }
+    if (worker.pinHash && (!pin || !verifySecret(pin, worker.pinHash))) {
+      return { ok: false, reason: "Valid personal 4-6 digit security PIN required." };
+    }
+    worker.lastSeenAt = new Date().toISOString();
+    saveWorkspaceDb(db);
+    await flushWorkspaceDb();
+    return { ok: true, operatorLabel: worker.name, workerId: worker.id, role: worker.role };
   }
 
   if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -73,7 +112,12 @@ async function verifyOpsEmailCredentials(email: string, password: string): Promi
         .maybeSingle();
       if (admin && !admin.disabled && typeof admin.password_hash === "string") {
         if (verifyScryptHash(password, admin.password_hash)) {
-          return { ok: true, operatorLabel: admin.name || admin.email };
+          return {
+            ok: true,
+            operatorLabel: admin.name || admin.email,
+            workerId: String(admin.id),
+            role: sanitizeHqRole(admin.role),
+          };
         }
       }
     } catch {
@@ -106,7 +150,8 @@ export async function GET(request: NextRequest) {
     request.cookies.get(HQ_COOKIE_NAME)?.value
   );
   const mockMode = isHqMockMode();
-  const authenticated = isValidHQToken(token);
+  const parsedToken = parseHqToken(token);
+  const authenticated = Boolean(parsedToken);
   const operator =
     sanitizeText(request.cookies.get(HQ_OP_COOKIE)?.value, 80) ||
     (mockMode ? "Ops Sandbox Desk" : "Ops Clearance Unit");
@@ -117,6 +162,8 @@ export async function GET(request: NextRequest) {
     secretConfigured: isHqSecretConfigured(),
     challengeRequired: Boolean((process.env.HQ_OPERATOR_PIN ?? "").trim()),
     operator,
+    workerRole: parsedToken?.role ?? null,
+    workerId: parsedToken?.adminId ?? null,
   });
 }
 
@@ -153,14 +200,93 @@ export async function POST(request: NextRequest) {
     }
     const operatorName = sanitizeText(body.operatorName, 80) || "Ops Sandbox Desk";
     const secret = getHqSigningSecret()!;
-    const token = deriveAdminSessionToken(secret, "mock-ops", "ops_admin");
+    const token = deriveAdminSessionToken(secret, "mock-ops", "hq_master");
     const res = noStoreJson(
       wantsBearerToken
-        ? { ok: true, operator: operatorName, token, expiresInSec: COOKIE_MAX_AGE }
-        : { ok: true, operator: operatorName }
+        ? { ok: true, operator: operatorName, role: "hq_master", token, expiresInSec: COOKIE_MAX_AGE }
+        : { ok: true, operator: operatorName, role: "hq_master" }
     );
     if (!wantsBearerToken) {
       setOpsCookies(res, token, operatorName);
+    }
+    return res;
+  }
+
+  if (action === "claim_worker_invite") {
+    const limit = checkRateLimit(`ops-claim:${clientIp}`, 8, 15 * 60 * 1000, 15 * 60 * 1000);
+    if (!limit.allowed) {
+      return noStoreJson(
+        { error: `Onboarding attempts throttled. Retry in ${limit.retryAfterSec}s.` },
+        { status: 429 }
+      );
+    }
+
+    if (hasInjectionSignature(body.email) || hasInjectionSignature(body.inviteCode)) {
+      return noStoreJson({ error: "Unsupported characters in onboarding payload." }, { status: 400 });
+    }
+
+    if (!getHqSigningSecret()) {
+      return noStoreJson(
+        { error: "Server clearance secret is not configured (min 32 characters)." },
+        { status: 503 }
+      );
+    }
+
+    const email = sanitizeText(body.email, 160).toLowerCase();
+    const inviteCode = sanitizeText(body.inviteCode, 80);
+    const newPassword = typeof body.password === "string" ? body.password : "";
+    const pinCheck = validatePinPolicy(body.pin);
+
+    if (!email || !inviteCode) {
+      return noStoreJson({ error: "Work email and Master invite code are required." }, { status: 400 });
+    }
+    if (newPassword.length < 8) {
+      return noStoreJson({ error: "Choose a permanent password of at least 8 characters." }, { status: 400 });
+    }
+    if (!pinCheck.ok) {
+      return noStoreJson({ error: pinCheck.error }, { status: 400 });
+    }
+
+    await warmDbFromSupabase();
+    const db = getWorkspaceDb();
+    const worker = (db.hqWorkers ?? []).find((w) => w.email.toLowerCase() === email);
+
+    if (!worker || !worker.inviteTokenHash || !verifySecret(inviteCode, worker.inviteTokenHash)) {
+      recordFailedAttempt(`ops-claim:${clientIp}`, 8, 15 * 60 * 1000, 15 * 60 * 1000);
+      return noStoreJson({ error: "Invalid email or HQ onboarding code." }, { status: 401 });
+    }
+    if (worker.status === "suspended") {
+      return noStoreJson({ error: "Invite revoked or operator suspended by HQ Master." }, { status: 403 });
+    }
+
+    const nowIso = new Date().toISOString();
+    const newPin = sanitizeText(body.pin, 12);
+    worker.passwordHash = hashSecret(newPassword).hash;
+    worker.pinHash = hashSecret(newPin).hash;
+    worker.status = "active";
+    worker.activatedAt = nowIso;
+    worker.lastSeenAt = nowIso;
+    worker.inviteTokenHash = undefined;
+
+    appendAuditLog(db, {
+      accountId: db.accounts[0]?.id ?? "acc-hq",
+      actor: worker.name,
+      category: "SECURITY",
+      action: `HQ worker onboarded (${HQ_ROLE_METADATA[worker.role].label}): ${worker.email}`,
+    });
+    saveWorkspaceDb(db);
+    await flushWorkspaceDb();
+
+    clearFailedAttempts(`ops-claim:${clientIp}`);
+    const secret = getHqSigningSecret()!;
+    const token = deriveAdminSessionToken(secret, worker.id, worker.role);
+    const res = noStoreJson(
+      wantsBearerToken
+        ? { ok: true, operator: worker.name, role: worker.role, token, expiresInSec: COOKIE_MAX_AGE }
+        : { ok: true, operator: worker.name, role: worker.role }
+    );
+    if (!wantsBearerToken) {
+      setOpsCookies(res, token, worker.name);
     }
     return res;
   }
@@ -186,15 +312,20 @@ export async function POST(request: NextRequest) {
     }
 
     let operatorName = sanitizeText(body.operatorName, 80) || "Ops Clearance Unit";
+    let issuedAdminId = "";
+    let issuedRole = "hq_master";
     if (action === "login_credentials") {
       const email = sanitizeText(body.email, 160);
       const password = typeof body.password === "string" ? body.password : "";
-      const credCheck = await verifyOpsEmailCredentials(email, password);
+      const workerPin = sanitizeText(body.workerPin ?? body.challengePin, 12);
+      const credCheck = await verifyOpsEmailCredentials(email, password, workerPin);
       if (!credCheck.ok || !verifyChallengePin(body.challengePin)) {
         recordFailedAttempt(`ops-auth:${clientIp}`, 6, 15 * 60 * 1000, 15 * 60 * 1000);
-        return noStoreJson({ error: "Operator credentials rejected." }, { status: 401 });
+        return noStoreJson({ error: credCheck.reason || "Operator credentials rejected." }, { status: 401 });
       }
       operatorName = credCheck.operatorLabel || email;
+      issuedAdminId = credCheck.workerId || "";
+      issuedRole = credCheck.role || "hq_master";
     } else {
       const suppliedSecret =
         request.headers.get("x-ops-key")?.trim() ||
@@ -208,15 +339,17 @@ export async function POST(request: NextRequest) {
     clearFailedAttempts(`ops-auth:${clientIp}`);
     const secret = getHqSigningSecret()!;
     const adminSlug =
+      issuedAdminId ||
       operatorName
         .toLowerCase()
         .replace(/[^a-z0-9_-]/g, "")
-        .slice(0, 24) || "opsadmin";
-    const token = deriveAdminSessionToken(secret, adminSlug, "ops_admin");
+        .slice(0, 24) ||
+      "opsadmin";
+    const token = deriveAdminSessionToken(secret, adminSlug, issuedRole);
     const res = noStoreJson(
       wantsBearerToken
-        ? { ok: true, operator: operatorName, token, expiresInSec: COOKIE_MAX_AGE }
-        : { ok: true, operator: operatorName }
+        ? { ok: true, operator: operatorName, role: issuedRole, token, expiresInSec: COOKIE_MAX_AGE }
+        : { ok: true, operator: operatorName, role: issuedRole }
     );
     if (!wantsBearerToken) {
       setOpsCookies(res, token, operatorName);

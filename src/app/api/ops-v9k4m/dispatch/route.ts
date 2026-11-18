@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import type { NextRequest } from "next/server";
 import {
   extractHqTokenFromRequest,
@@ -5,7 +6,16 @@ import {
   HQ_OP_COOKIE,
   isHqMockMode,
   isValidHQToken,
+  parseHqToken,
 } from "@/lib/hq-auth";
+import {
+  canHqWorker,
+  clampHqCapabilities,
+  HQ_ROLE_METADATA,
+  sanitizeHqRole,
+  type HqWorkerCapabilities,
+  type HqWorkerRole,
+} from "@/lib/hq-workers";
 import { clientIpFrom } from "@/lib/rate-limit";
 import { createServiceClient } from "@/lib/supabase/server";
 import {
@@ -30,6 +40,7 @@ import {
 import { hasAnyInjection, parseJsonObject, sanitizeBatchImageUrl } from "@/lib/workspace/request-auth";
 import {
   appendAuditLog,
+  createHqTeamNote,
   findWorkspacePackageMatch,
   flushWorkspaceDb,
   getHqUpdates,
@@ -41,6 +52,7 @@ import {
   MIN_BRANCH_PRICE_TZS,
   newId,
   publicAccountSummary,
+  publicHqWorkerSummary,
   pushHqMessage,
   saveWorkspaceDb,
   suggestUniqueUsername,
@@ -49,6 +61,8 @@ import {
   warmDbFromSupabase,
   type AuditLogEntry,
   type HqUpdateItem,
+  type HqWorkerRecord,
+  type WorkspaceSupportTicket,
 } from "@/lib/workspace/store";
 
 async function persistDb(db: ReturnType<typeof getWorkspaceDb>) {
@@ -95,6 +109,8 @@ function checkHqRequestAuth(request: NextRequest) {
     return {
       ok: true as const,
       operator: sanitizeText(request.headers.get("x-ops-operator"), 80) || "Ops Remote Desk",
+      workerId: "master-key",
+      workerRole: "hq_master" as HqWorkerRole,
     };
   }
 
@@ -102,16 +118,80 @@ function checkHqRequestAuth(request: NextRequest) {
     request.headers,
     request.cookies.get(HQ_COOKIE_NAME)?.value
   );
-  if (!isValidHQToken(token)) {
+  const parsed = parseHqToken(token);
+  if (!parsed || !isValidHQToken(token)) {
     return { ok: false as const, status: 401, error: "Operations clearance required." };
   }
   const operator =
     sanitizeText(request.cookies.get(HQ_OP_COOKIE)?.value, 80) ||
     (isHqMockMode() ? "Ops Sandbox Desk" : "Ops Clearance Unit");
-  return { ok: true as const, operator };
+  return {
+    ok: true as const,
+    operator,
+    workerId: parsed.adminId,
+    workerRole: parsed.role,
+  };
 }
 
-async function buildFleetPayload(operator: string) {
+function resolveSessionWorker(
+  db: ReturnType<typeof getWorkspaceDb>,
+  auth: { operator: string; workerId: string; workerRole: HqWorkerRole }
+) {
+  const dbWorker = (db.hqWorkers ?? []).find((w) => w.id === auth.workerId);
+  if (dbWorker) {
+    return {
+      id: dbWorker.id,
+      name: dbWorker.name,
+      role: dbWorker.role,
+      title: dbWorker.title,
+      capabilities: clampHqCapabilities(dbWorker.role, dbWorker.capabilities),
+      isMaster: dbWorker.role === "hq_master",
+      suspended: dbWorker.status === "suspended",
+    };
+  }
+  const role = auth.workerRole;
+  const meta = HQ_ROLE_METADATA[role];
+  return {
+    id: auth.workerId,
+    name: auth.operator,
+    role,
+    title: meta.defaultTitle,
+    capabilities: clampHqCapabilities(role),
+    isMaster: role === "hq_master",
+    suspended: false,
+  };
+}
+
+const ACTION_PERMISSION_MAP: Partial<Record<string, keyof HqWorkerCapabilities>> = {
+  create_hq_worker: "canManageHqTeam",
+  update_hq_worker: "canManageHqTeam",
+  delete_hq_worker: "canManageHqTeam",
+  reply_support_ticket: "canAnswerSupport",
+  update_support_ticket: "canAnswerSupport",
+  upsert_package: "canManagePackages",
+  toggle_package_active: "canManagePackages",
+  delete_package: "canManagePackages",
+  resolve_escrow: "canManageBillingEscrow",
+  set_billing_overdue: "canManageBillingEscrow",
+  update_subscription: "canManageBillingEscrow",
+  lock_account: "canManageFleetLocks",
+  unlock_account: "canManageFleetLocks",
+  toggle_network_verify: "canManageFleetLocks",
+  branch_command: "canManageFleetLocks",
+  manage_operator: "canManageFleetLocks",
+  review_join_request: "canManageOnboarding",
+  mark_quote_contacted: "canManageOnboarding",
+  create_supplier_invite: "canManageOnboarding",
+  cancel_supplier_invite: "canManageOnboarding",
+  upsert_journal_article: "canPublishEditorial",
+  delete_journal_article: "canPublishEditorial",
+  publish_hq_update: "canPublishEditorial",
+  delete_hq_update: "canPublishEditorial",
+  send_message: "canBroadcastComms",
+  delete_hq_message: "canBroadcastComms",
+};
+
+async function buildFleetPayload(auth: { operator: string; workerId: string; workerRole: HqWorkerRole }) {
   const db = getWorkspaceDb();
   const nowMs = Date.now();
   const cutoff30dMs = nowMs - 30 * 24 * 60 * 60 * 1000;
@@ -290,6 +370,7 @@ async function buildFleetPayload(operator: string) {
       subscriptionDaysLeft: expInfo.daysLeft,
       expiryExposureTzs: orgExpiryExposureTzs,
       estimatedMonthlyFeeTzs: estMonthly,
+      paymentSettings: db.paymentSettings?.[acc.id] ?? null,
     };
   });
 
@@ -378,7 +459,7 @@ async function buildFleetPayload(operator: string) {
   if (canQuerySupabaseTables()) {
     try {
       const supabase = await createServiceClient();
-      const [quotesRes, invitesRes] = await Promise.all([
+      const [quotesRes, invitesRes, ticketsRes] = await Promise.all([
         supabase
           .from("quote_requests")
           .select("id, company_name, contact_name, email, phone, plan_name, locations, status, created_at")
@@ -389,7 +470,46 @@ async function buildFleetPayload(operator: string) {
           .select("id, email, company_name, status, created_at")
           .order("created_at", { ascending: false })
           .limit(50),
+        supabase
+          .from("support_tickets")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(80),
       ]);
+      for (const row of ticketsRes.data ?? []) {
+        const rid = String(row.id);
+        db.supportTickets ??= [];
+        if (!db.supportTickets.some((t) => t.id === rid)) {
+          const matchedOrg = row.account_id
+            ? db.accounts.find((a) => a.id === String(row.account_id))
+            : undefined;
+          db.supportTickets.push({
+            id: rid,
+            ticketRef: `SUP-${rid.slice(0, 6).toUpperCase()}`,
+            accountId: row.account_id ? String(row.account_id) : null,
+            orgName: matchedOrg?.orgName,
+            contactEmail: String(row.contact_email ?? ""),
+            subject: String(row.subject ?? ""),
+            message: String(row.message ?? ""),
+            category:
+              row.category === "billing" ||
+              row.category === "technical" ||
+              row.category === "other"
+                ? row.category
+                : "general",
+            priority: "normal",
+            status:
+              row.status === "in_progress" || row.status === "resolved"
+                ? row.status
+                : "open",
+            internalNote: row.internal_note ? String(row.internal_note) : null,
+            replies: [],
+            source: "web",
+            createdAt: String(row.created_at ?? new Date().toISOString()),
+            updatedAt: String(row.updated_at ?? row.created_at ?? new Date().toISOString()),
+          });
+        }
+      }
       quoteRequests = (quotesRes.data ?? []).map((q) => ({
         id: String(q.id),
         companyName: String(q.company_name ?? ""),
@@ -413,9 +533,24 @@ async function buildFleetPayload(operator: string) {
     }
   }
 
+  const currentWorker = resolveSessionWorker(db, auth);
+  const hqWorkers = (db.hqWorkers ?? []).map(publicHqWorkerSummary);
+  const supportTickets: WorkspaceSupportTicket[] = [...(db.supportTickets ?? [])].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+  const hqTeamNotes = [...(db.hqTeamNotes ?? [])].slice(0, 80);
+
   return {
     scope: "fleet" as const,
-    operator,
+    operator: currentWorker.name || auth.operator,
+    currentWorker: {
+      id: currentWorker.id,
+      name: currentWorker.name,
+      role: currentWorker.role,
+      title: currentWorker.title,
+      capabilities: currentWorker.capabilities,
+      isMaster: currentWorker.isMaster,
+    },
     minBranchPriceTzs: MIN_BRANCH_PRICE_TZS,
     fleetSummary: {
       totalOrgs: accounts.length,
@@ -434,6 +569,12 @@ async function buildFleetPayload(operator: string) {
       expiredBatches,
       pendingJoinRequests: joinRequests.filter((r) => r.status === "pending").length,
       unreadHqMessages: hqMessages.filter((m) => !m.acknowledged).length,
+      openSupportTickets: supportTickets.filter((t) => t.status !== "resolved").length,
+      urgentSupportTickets: supportTickets.filter(
+        (t) => t.status !== "resolved" && (t.priority === "high" || t.priority === "urgent")
+      ).length,
+      activeHqWorkers: hqWorkers.filter((w) => w.status === "active").length,
+      invitedHqWorkers: hqWorkers.filter((w) => w.status === "invited").length,
     },
     peakTelemetry: {
       monthlyRecurringRevenueTzs,
@@ -454,6 +595,9 @@ async function buildFleetPayload(operator: string) {
     joinRequests,
     hqUpdates: getHqUpdates(db),
     journalArticles: getJournalArticles(db),
+    hqWorkers,
+    supportTickets,
+    hqTeamNotes,
     notificationEnv: getNotificationEnvStatus(),
   };
 }
@@ -467,7 +611,7 @@ export async function GET(request: NextRequest) {
   await warmDbFromSupabase();
   const scope = request.nextUrl.searchParams.get("scope")?.trim();
   if (scope === "fleet") {
-    return noStoreJson(await buildFleetPayload(auth.operator));
+    return noStoreJson(await buildFleetPayload(auth));
   }
 
   const db = getWorkspaceDb();
@@ -523,7 +667,20 @@ export async function POST(request: NextRequest) {
 
   await warmDbFromSupabase();
   const db = getWorkspaceDb();
-  const actorName = sanitizeText(body.senderName, 80) || auth.operator;
+  const sessionWorker = resolveSessionWorker(db, auth);
+  if (sessionWorker.suspended) {
+    return noStoreJson({ error: "Your HQ operator clearance has been suspended by Master." }, { status: 403 });
+  }
+  const requiredPerm = ACTION_PERMISSION_MAP[action];
+  if (requiredPerm && !canHqWorker(sessionWorker.role, sessionWorker.capabilities, requiredPerm)) {
+    return noStoreJson(
+      {
+        error: `Clearance denied: ${HQ_ROLE_METADATA[sessionWorker.role].label} lacks ${requiredPerm} permission.`,
+      },
+      { status: 403 }
+    );
+  }
+  const actorName = sanitizeText(body.senderName, 80) || sessionWorker.name || auth.operator;
 
   if (action === "upsert_journal_article") {
     const titleEn = sanitizeText(body.titleEn, 180);
@@ -1288,6 +1445,315 @@ export async function POST(request: NextRequest) {
       return noStoreJson({ ok: true });
     }
     return noStoreJson({ error: "Invalid operator operation." }, { status: 400 });
+  }
+
+  if (action === "create_hq_worker") {
+    const name = sanitizeText(body.name, 80);
+    const email = sanitizeText(body.email, 160).toLowerCase();
+    const phone = sanitizeText(body.phone, 40);
+    const role = sanitizeHqRole(body.role);
+    const title = sanitizeText(body.title, 80) || HQ_ROLE_METADATA[role].defaultTitle;
+    const region = sanitizeText(body.region, 60) || "Dar es Salaam HQ";
+
+    if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return noStoreJson({ error: "Valid worker full name and work email are required." }, { status: 400 });
+    }
+    db.hqWorkers ??= [];
+    if (db.hqWorkers.some((w) => w.email.toLowerCase() === email)) {
+      return noStoreJson({ error: "An HQ operator with that email already exists." }, { status: 409 });
+    }
+
+    const rawInviteCode = `CVHQ-${randomBytes(3).toString("hex").toUpperCase()}-${randomBytes(2).toString("hex").toUpperCase()}`;
+    const caps = clampHqCapabilities(
+      role,
+      body.capabilities && typeof body.capabilities === "object"
+        ? (body.capabilities as Partial<HqWorkerCapabilities>)
+        : undefined
+    );
+    const worker: HqWorkerRecord = {
+      id: newId("hqw"),
+      name,
+      email,
+      phone: phone || undefined,
+      role,
+      title,
+      region,
+      capabilities: caps,
+      status: "invited",
+      inviteTokenHash: hashSecret(rawInviteCode).hash,
+      inviteCodeHint: `****-${rawInviteCode.slice(-4)}`,
+      invitedBy: actorName,
+      invitedAt: new Date().toISOString(),
+    };
+    db.hqWorkers.unshift(worker);
+    appendAuditLog(db, {
+      accountId: db.accounts[0]?.id ?? "acc-hq",
+      actor: actorName,
+      category: "SECURITY",
+      action: `HQ Master invited ${name} (${HQ_ROLE_METADATA[role].label}) to Operations Desk`,
+    });
+    await persistDb(db);
+    return noStoreJson({
+      ok: true,
+      worker: publicHqWorkerSummary(worker),
+      inviteCode: rawInviteCode,
+    });
+  }
+
+  if (action === "update_hq_worker") {
+    const workerId = sanitizeText(body.workerId, 60);
+    const worker = (db.hqWorkers ?? []).find((w) => w.id === workerId);
+    if (!worker) {
+      return noStoreJson({ error: "HQ worker not found." }, { status: 404 });
+    }
+    if (body.role !== undefined) {
+      worker.role = sanitizeHqRole(body.role);
+      worker.capabilities = clampHqCapabilities(
+        worker.role,
+        body.capabilities && typeof body.capabilities === "object"
+          ? (body.capabilities as Partial<HqWorkerCapabilities>)
+          : undefined
+      );
+    } else if (body.capabilities && typeof body.capabilities === "object") {
+      worker.capabilities = clampHqCapabilities(
+        worker.role,
+        body.capabilities as Partial<HqWorkerCapabilities>
+      );
+    }
+    if (typeof body.title === "string" && body.title.trim()) {
+      worker.title = sanitizeText(body.title, 80);
+    }
+    if (typeof body.region === "string" && body.region.trim()) {
+      worker.region = sanitizeText(body.region, 60);
+    }
+    if (body.status === "active" || body.status === "suspended" || body.status === "invited") {
+      worker.status = body.status;
+    }
+
+    let regeneratedCode: string | undefined;
+    if (body.regenerateInvite) {
+      regeneratedCode = `CVHQ-${randomBytes(3).toString("hex").toUpperCase()}-${randomBytes(2).toString("hex").toUpperCase()}`;
+      worker.inviteTokenHash = hashSecret(regeneratedCode).hash;
+      worker.inviteCodeHint = `****-${regeneratedCode.slice(-4)}`;
+      if (worker.status !== "suspended") {
+        worker.status = "invited";
+      }
+    }
+
+    appendAuditLog(db, {
+      accountId: db.accounts[0]?.id ?? "acc-hq",
+      actor: actorName,
+      category: "SECURITY",
+      action: `HQ Master updated operator ${worker.name} (${worker.role}, status=${worker.status})`,
+    });
+    await persistDb(db);
+    return noStoreJson({
+      ok: true,
+      worker: publicHqWorkerSummary(worker),
+      ...(regeneratedCode ? { inviteCode: regeneratedCode } : {}),
+    });
+  }
+
+  if (action === "delete_hq_worker") {
+    const workerId = sanitizeText(body.workerId, 60);
+    const list = (db.hqWorkers ??= []);
+    const target = list.find((w) => w.id === workerId);
+    if (!target) {
+      return noStoreJson({ error: "HQ worker not found." }, { status: 404 });
+    }
+    if (workerId === sessionWorker.id) {
+      return noStoreJson({ error: "Cannot delete your own active Master session." }, { status: 400 });
+    }
+    db.hqWorkers = list.filter((w) => w.id !== workerId);
+    appendAuditLog(db, {
+      accountId: db.accounts[0]?.id ?? "acc-hq",
+      actor: actorName,
+      category: "SECURITY",
+      action: `HQ Master revoked & removed worker ${target.name} (${target.email})`,
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true });
+  }
+
+  if (action === "reply_support_ticket") {
+    const ticketId = sanitizeText(body.ticketId, 80);
+    const replyBody = sanitizeText(body.replyBody, 3000);
+    if (replyBody.length < 2) {
+      return noStoreJson({ error: "Reply message cannot be empty." }, { status: 400 });
+    }
+    const ticket = (db.supportTickets ?? []).find((t) => t.id === ticketId);
+    if (!ticket) {
+      return noStoreJson({ error: "Support ticket not found." }, { status: 404 });
+    }
+    const nextStatus =
+      body.nextStatus === "open" ||
+      body.nextStatus === "in_progress" ||
+      body.nextStatus === "waiting_user" ||
+      body.nextStatus === "resolved"
+        ? body.nextStatus
+        : "waiting_user";
+    const nowIso = new Date().toISOString();
+    ticket.replies.push({
+      id: newId("supr"),
+      authorName: sessionWorker.name,
+      authorRole: "hq",
+      authorWorkerId: sessionWorker.id,
+      body: replyBody,
+      createdAt: nowIso,
+    });
+    ticket.status = nextStatus;
+    ticket.assignedWorkerId = ticket.assignedWorkerId || sessionWorker.id;
+    ticket.assignedWorkerName = ticket.assignedWorkerName || sessionWorker.name;
+    ticket.updatedAt = nowIso;
+
+    // Mirror reply straight into pharmacy's HQ Inbox if linked to an org
+    const targetAcc = ticket.accountId
+      ? db.accounts.find((a) => a.id === ticket.accountId)
+      : db.accounts.find((a) => a.email.toLowerCase() === ticket.contactEmail.toLowerCase());
+    if (targetAcc) {
+      pushHqMessage(db, {
+        accountId: targetAcc.id,
+        title: `Support Reply (${ticket.ticketRef}): ${ticket.subject}`,
+        swTitle: `Jibu la Msaada (${ticket.ticketRef}): ${ticket.subject}`,
+        body: replyBody,
+        swBody: replyBody,
+        severity: ticket.priority === "urgent" || ticket.priority === "high" ? "action" : "info",
+        ctaLabel: "Open Workspace",
+        ctaTarget: "overview",
+        senderName: `${sessionWorker.name} (Cervos Support)`,
+      });
+      if (body.sendSms && targetAcc.ownerPhone) {
+        await sendTextifySms({
+          to: targetAcc.ownerPhone,
+          message: `[Cervos Support ${ticket.ticketRef}] ${replyBody.slice(0, 140)}`,
+          sender: "Cervos",
+        });
+      }
+    }
+
+    if (canQuerySupabaseTables()) {
+      try {
+        const supabase = await createServiceClient();
+        await supabase
+          .from("support_tickets")
+          .update({
+            status: nextStatus === "resolved" ? "resolved" : "in_progress",
+            updated_at: nowIso,
+          })
+          .eq("id", ticket.id);
+      } catch {
+        // Primary state saved cleanly in workspace DB
+      }
+    }
+
+    appendAuditLog(db, {
+      accountId: targetAcc?.id ?? db.accounts[0]?.id ?? "acc-hq",
+      actor: sessionWorker.name,
+      category: "COMPLIANCE",
+      action: `HQ Support replied on ${ticket.ticketRef} (${ticket.contactEmail}) -> ${nextStatus}`,
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, ticket });
+  }
+
+  if (action === "update_support_ticket") {
+    const ticketId = sanitizeText(body.ticketId, 80);
+    const ticket = (db.supportTickets ?? []).find((t) => t.id === ticketId);
+    if (!ticket) {
+      return noStoreJson({ error: "Support ticket not found." }, { status: 404 });
+    }
+    if (
+      body.status === "open" ||
+      body.status === "in_progress" ||
+      body.status === "waiting_user" ||
+      body.status === "resolved"
+    ) {
+      ticket.status = body.status;
+    }
+    if (
+      body.priority === "low" ||
+      body.priority === "normal" ||
+      body.priority === "high" ||
+      body.priority === "urgent"
+    ) {
+      ticket.priority = body.priority;
+    }
+    if (body.internalNote !== undefined) {
+      ticket.internalNote = sanitizeText(body.internalNote, 3000) || null;
+    }
+    if (body.assignedWorkerId !== undefined) {
+      const wId = sanitizeText(body.assignedWorkerId, 60);
+      if (!wId) {
+        ticket.assignedWorkerId = null;
+        ticket.assignedWorkerName = null;
+      } else {
+        const matched = (db.hqWorkers ?? []).find((w) => w.id === wId);
+        ticket.assignedWorkerId = wId;
+        ticket.assignedWorkerName = matched?.name || sessionWorker.name;
+      }
+    }
+    ticket.updatedAt = new Date().toISOString();
+
+    if (canQuerySupabaseTables()) {
+      try {
+        const supabase = await createServiceClient();
+        await supabase
+          .from("support_tickets")
+          .update({
+            status: ticket.status === "resolved" ? "resolved" : ticket.status === "open" ? "open" : "in_progress",
+            internal_note: ticket.internalNote,
+            updated_at: ticket.updatedAt,
+          })
+          .eq("id", ticket.id);
+      } catch {
+        // Primary state persisted in workspace DB
+      }
+    }
+
+    await persistDb(db);
+    return noStoreJson({ ok: true, ticket });
+  }
+
+  if (action === "post_hq_team_note") {
+    const noteBody = sanitizeText(body.body, 1500);
+    if (noteBody.length < 3) {
+      return noStoreJson({ error: "Team note is too short." }, { status: 400 });
+    }
+    const topic =
+      body.topic === "shift_handoff" ||
+      body.topic === "escalation" ||
+      body.topic === "directive"
+        ? body.topic
+        : "general";
+    const targetWorkerId = sanitizeText(body.targetWorkerId, 60) || null;
+    const targetWorker = targetWorkerId
+      ? (db.hqWorkers ?? []).find((w) => w.id === targetWorkerId)
+      : undefined;
+    const note = createHqTeamNote(db, {
+      authorWorkerId: sessionWorker.id,
+      authorName: sessionWorker.name,
+      authorRole: sessionWorker.role,
+      topic,
+      targetWorkerId,
+      targetWorkerName: targetWorker?.name || (targetWorkerId === "master" ? "HQ Master" : null),
+      linkedTicketId: sanitizeText(body.linkedTicketId, 60) || null,
+      linkedAccountId: sanitizeText(body.linkedAccountId, 60) || null,
+      body: noteBody,
+      pinned: Boolean(body.pinned),
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, note });
+  }
+
+  if (action === "toggle_pin_team_note") {
+    const noteId = sanitizeText(body.noteId, 60);
+    const note = (db.hqTeamNotes ?? []).find((n) => n.id === noteId);
+    if (!note) {
+      return noStoreJson({ error: "Team note not found." }, { status: 404 });
+    }
+    note.pinned = !note.pinned;
+    await persistDb(db);
+    return noStoreJson({ ok: true, note });
   }
 
   return noStoreJson({ error: "Unsupported ops dispatch action." }, { status: 400 });
