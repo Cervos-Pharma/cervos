@@ -40,8 +40,8 @@ export const PRODUCT_CATALOG: Record<string, MarketingFeaturePage> = {
     secondaryCtaHref: "/downloads",
     highlightsEn: [
       {
-        title: "Local-First Checkout",
-        body: "Every sale writes straight to your counter device before syncing silently whenever connectivity returns.",
+        title: "Works Offline First",
+        body: "Every sale saves straight to your counter device before syncing quietly when internet returns.",
       },
       {
         title: "Receipt & Scanner Ready",
@@ -87,16 +87,16 @@ export const PRODUCT_CATALOG: Record<string, MarketingFeaturePage> = {
     secondaryCtaHref: "/products/counter-pos",
     highlightsEn: [
       {
-        title: "Guided Earliest-Expiry Pick",
-        body: "Checkout automatically selects the closest valid batch date so slow-moving stock rotates before waste.",
+        title: "Earliest Expiry Picked First",
+        body: "Checkout automatically selects the closest valid batch date so older stock moves out before going to waste.",
       },
       {
         title: "Hard Checkout Lockout",
         body: "Any medicine past its expiry date cannot pass the register, protecting patients and licensing records.",
       },
       {
-        title: "Multi-Branch Visibility",
-        body: "Owners review stock depth and approaching expiries across counters in real time without calling branch staff.",
+        title: "Clear View Across Branches",
+        body: "Owners review stock depth and approaching expiries across counters live without calling branch staff.",
       },
     ],
     highlightsSw: [
@@ -169,7 +169,7 @@ export const MARKET_CATALOG: Record<string, MarketingFeaturePage> = {
     section: "markets",
     eyebrowEn: "MARKETS · COMMUNITY PHARMACIES",
     eyebrowSw: "MASOKO · MADUKA YA DAWA",
-    titleEn: "Designed for independent and multi-branch dispensaries.",
+    titleEn: "Built for single shops and multi branch networks.",
     titleSw: "Imetengenezwa kwa maduka binafsi na yenye matawi.",
     summaryEn:
       "Whether serving one busy street corner or ten regional outlets, Cervos keeps counters fast, shelves safe, and reorders effortless.",
@@ -193,7 +193,7 @@ export const MARKET_CATALOG: Record<string, MarketingFeaturePage> = {
       },
       {
         title: "Clear Daily Profit & Shifts",
-        body: "End-of-day cash, M-Pesa, and operator shift totals balance cleanly without paper tally headaches.",
+        body: "Daily cash, mobile money, and operator shift totals balance cleanly without paper tally headaches.",
       },
     ],
     highlightsSw: [
@@ -232,11 +232,11 @@ export const MARKET_CATALOG: Record<string, MarketingFeaturePage> = {
     highlightsEn: [
       {
         title: "Verified Pharmacy Buyers",
-        body: "Every ordering counter is identity-verified across active Tanzanian neighborhoods.",
+        body: "Every ordering counter is verified across active neighborhoods before trading begins.",
       },
       {
         title: "Zero Invoice Chasing",
-        body: "Buyers fund orders through Kasri\u2122 ahead of dispatch, releasing payment cleanly upon delivery sign-off.",
+        body: "Buyers fund orders through Kasri\u2122 ahead of dispatch, releasing payment cleanly when boxes are confirmed delivered.",
       },
       {
         title: "Batch Recall & Traceability",

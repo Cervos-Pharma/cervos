@@ -137,10 +137,10 @@ export const ROLE_PERMISSION_RULES: Record<
       canManageTeam: false,
       canExportReports: true,
     },
-    immutableTrue: ["canViewOwnReports", "canEditInventory"],
-    immutableFalse: ["canManageTeam"],
-    ruleNote: "Pharmacist keeps personal shift report & FEFO stock guard; cannot alter team permits.",
-    swRuleNote: "Mfamasia mkuu huhifadhi ripoti binafsi na ulinzi wa stoo (FEFO); hawezi kudhibiti timu.",
+    immutableTrue: ["canViewOwnReports"],
+    immutableFalse: [],
+    ruleNote: "Personal shift performance stays visible; owner sets inventory and all other permissions freely.",
+    swRuleNote: "Utendaji binafsi unaonekana daima; mmiliki hupanga haki za stoo na vibali vingine apendavyo.",
   },
   pos_cashier: {
     defaults: {
@@ -153,10 +153,10 @@ export const ROLE_PERMISSION_RULES: Record<
       canManageTeam: false,
       canExportReports: true,
     },
-    immutableTrue: ["canSellPos", "canViewOwnReports"],
-    immutableFalse: ["canEditInventory", "canManageWholesale", "canViewFinance", "canManageTeam"],
-    ruleNote: "Counter guardrail: always sees POS & own shift report; blocked from batch overrides, B2B escrow, P&L & team permits.",
-    swRuleNote: "Sheria ya kaunta: huona POS na ripoti yake tu; hawezi kubadili stoo, B2B au fedha za shirika.",
+    immutableTrue: ["canViewOwnReports"],
+    immutableFalse: [],
+    ruleNote: "Personal shift performance stays ON; sensitive inventory & other permissions are configured by owner.",
+    swRuleNote: "Ripoti binafsi hubaki wazi; stoo na haki zingine nyeti hupangwa na mmiliki apendavyo.",
   },
   warehouse_dispatcher: {
     defaults: {
@@ -170,9 +170,9 @@ export const ROLE_PERMISSION_RULES: Record<
       canExportReports: true,
     },
     immutableTrue: ["canViewOwnReports"],
-    immutableFalse: ["canViewFinance", "canManageTeam"],
-    ruleNote: "Dispatcher keeps stock intake & personal shift report; finance P&L and team permits stay locked.",
-    swRuleNote: "Mpanga stoo huona stoo na ripoti yake; fedha na timu vimefungwa.",
+    immutableFalse: [],
+    ruleNote: "Personal shift report stays ON; owner configures inventory and operational controls as needed.",
+    swRuleNote: "Ripoti binafsi hubaki wazi; mmiliki hupanga ruhusa za stoo na kazi zingine apendavyo.",
   },
   hospital_pharmacist: {
     defaults: {
@@ -185,10 +185,10 @@ export const ROLE_PERMISSION_RULES: Record<
       canManageTeam: false,
       canExportReports: true,
     },
-    immutableTrue: ["canViewOwnReports", "canEditInventory"],
-    immutableFalse: ["canManageTeam"],
-    ruleNote: "Clinical pharmacist maintains FEFO ward stock; team governance remains owner-only.",
-    swRuleNote: "Mfamasia wa kliniki hudhibiti FEFO; vibali vya timu ni vya mmiliki pekee.",
+    immutableTrue: ["canViewOwnReports"],
+    immutableFalse: [],
+    ruleNote: "Personal shift report stays ON; owner decides access to inventory, finance, and team governance.",
+    swRuleNote: "Ripoti binafsi hubaki wazi; mmiliki huamua nani aone stoo, fedha, au timu.",
   },
   policy_researcher: {
     defaults: {
@@ -201,10 +201,10 @@ export const ROLE_PERMISSION_RULES: Record<
       canManageTeam: false,
       canExportReports: true,
     },
-    immutableTrue: ["canViewOwnReports", "canExportReports"],
-    immutableFalse: ["canSellPos", "canEditInventory", "canManageWholesale", "canManageTeam"],
-    ruleNote: "Research profile keeps analytics & export access; transactional writes stay locked.",
-    swRuleNote: "Mtafiti huona uchambuzi pekee bila kubadilisha mauzo wala stoo.",
+    immutableTrue: ["canViewOwnReports"],
+    immutableFalse: [],
+    ruleNote: "Personal activity view stays ON; owner decides inventory and all other permissions.",
+    swRuleNote: "Kumbukumbu binafsi hubaki wazi; mmiliki hupanga stoo na vibali vingine.",
   },
   investor_partner: {
     defaults: {
@@ -217,10 +217,10 @@ export const ROLE_PERMISSION_RULES: Record<
       canManageTeam: false,
       canExportReports: true,
     },
-    immutableTrue: ["canViewOwnReports", "canViewOrgReports", "canExportReports"],
-    immutableFalse: ["canSellPos", "canEditInventory", "canManageWholesale", "canManageTeam"],
-    ruleNote: "Partner keeps organization metrics & finance views; counter & batch writes remain locked.",
-    swRuleNote: "Mbia huona takwimu na fedha za shirika; hawezi kuuza wala kubadili stoo.",
+    immutableTrue: ["canViewOwnReports"],
+    immutableFalse: [],
+    ruleNote: "Personal performance view stays ON; owner controls inventory and operational permissions.",
+    swRuleNote: "Ripoti binafsi hubaki wazi; mmiliki huamua ruhusa za stoo na shughuli zingine.",
   },
 };
 

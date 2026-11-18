@@ -21,7 +21,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Cervos Pharma",
     short_name: "Cervos Pharma",
     description:
-      "Precision logistics for the modern pharmacy. Secure, offline-first, FEFO-optimised.",
+      "Everyday software built for pharmacies in Tanzania. Fast counter receipts even without internet, automatic expiry locks, and safe wholesale restocking.",
     // Launch straight into the workspace, NOT the marketing landing:
     // /app is the real app and bounces unauthenticated users to
     // /auth?mode=signin, so the installed PWA always opens on proper login.

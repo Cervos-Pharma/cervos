@@ -44,31 +44,28 @@ describe("Workspace Permissions, Access Lock, and API Security", () => {
     process.env = { ...prevEnv };
   });
 
-  it("enforces immutable capability guardrails via clampProfileCapabilities", () => {
+  it("keeps personal report unlocked while allowing owners to customize sensitive inventory & staff permissions", () => {
     const cashierCaps = clampProfileCapabilities("pos_cashier", {
       canSellPos: false,
       canViewOwnReports: false,
       canEditInventory: true,
       canManageWholesale: true,
       canViewFinance: true,
-      canManageTeam: true,
+      canManageTeam: false,
     });
-    expect(cashierCaps.canSellPos).toBe(true);
     expect(cashierCaps.canViewOwnReports).toBe(true);
-    expect(cashierCaps.canEditInventory).toBe(false);
-    expect(cashierCaps.canManageWholesale).toBe(false);
-    expect(cashierCaps.canViewFinance).toBe(false);
+    expect(cashierCaps.canSellPos).toBe(false);
+    expect(cashierCaps.canEditInventory).toBe(true);
+    expect(cashierCaps.canManageWholesale).toBe(true);
+    expect(cashierCaps.canViewFinance).toBe(true);
     expect(cashierCaps.canManageTeam).toBe(false);
 
-    const researcherCaps = clampProfileCapabilities("policy_researcher", {
-      canSellPos: true,
-      canEditInventory: true,
-      canManageTeam: true,
+    const pharmaRevoked = clampProfileCapabilities("superintendent_pharmacist", {
+      canViewOwnReports: false,
+      canEditInventory: false,
     });
-    expect(researcherCaps.canSellPos).toBe(false);
-    expect(researcherCaps.canEditInventory).toBe(false);
-    expect(researcherCaps.canManageTeam).toBe(false);
-    expect(researcherCaps.canExportReports).toBe(true);
+    expect(pharmaRevoked.canViewOwnReports).toBe(true);
+    expect(pharmaRevoked.canEditInventory).toBe(false);
 
     const adminCaps = clampProfileCapabilities("pos_cashier", { canManageTeam: false, canViewFinance: false }, true);
     expect(adminCaps.canManageTeam).toBe(true);

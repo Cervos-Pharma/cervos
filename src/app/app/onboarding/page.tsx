@@ -1229,7 +1229,7 @@ export default function WorkspaceOnboardingPage() {
                           {isSw ? "Mpango Kamili" : "Full Plan"}
                         </span>
                         <span className="text-xs font-semibold" style={{ color: brandAccent }}>
-                          {isSw ? "Kuanzia 45,000 TZS/mwezi" : "From 45,000 TZS/mo"}
+                          {isSw ? "Kuanzia 5,000 TZS/tawi (1 Admin + 1 Operator)" : "From 5,000 TZS/branch/mo (1 Admin + 1 Operator)"}
                         </span>
                       </div>
                       <h3 className="text-base font-bold">

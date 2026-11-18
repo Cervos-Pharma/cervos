@@ -18,10 +18,24 @@ interface BillingAccountSummary {
   accessLock?: { locked: boolean; source: "hq" | "billing" | null; reason: string };
 }
 
+interface BillingPackageItem {
+  id: string;
+  audience: string;
+  name: string;
+  priceMonthlyTzs: number;
+  priceAnnualTzs?: number;
+  pricePerBranchMonthlyTzs?: number;
+  includedAdminsPerBranch?: number;
+  includedOperatorsPerBranch?: number;
+  maxBranches: number | null;
+  maxOperators: number | null;
+}
+
 export default function DedicatedBillingPage() {
   const router = useRouter();
   const { isDark } = useWorkspaceTheme();
   const [account, setAccount] = useState<BillingAccountSummary | null>(null);
+  const [livePlans, setLivePlans] = useState<BillingPackageItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPlan, setSelectedPlan] = useState<string>("Community Standard");
@@ -33,7 +47,16 @@ export default function DedicatedBillingPage() {
 
   const loadBilling = async () => {
     setLoading(true);
-    const r = await fetch("/api/workspace/state", { cache: "no-store" });
+    const [r, pkgRes] = await Promise.all([
+      fetch("/api/workspace/state", { cache: "no-store" }),
+      fetch("/api/workspace/packages", { cache: "no-store" }).catch(() => null),
+    ]);
+    if (pkgRes && pkgRes.ok) {
+      const pkgData = (await pkgRes.json()) as { packages?: BillingPackageItem[] };
+      if (Array.isArray(pkgData.packages) && pkgData.packages.length > 0) {
+        setLivePlans(pkgData.packages);
+      }
+    }
     if (r.status === 401) {
       router.replace("/auth?mode=signin");
       return;
@@ -84,7 +107,21 @@ export default function DedicatedBillingPage() {
     setStep(3);
   };
 
-  const plans = COMMERCIAL_PLAN_CATALOG.filter((p) => p.audience === "pharmacy" || p.audience === "supplier");
+  const catalogSource: BillingPackageItem[] =
+    livePlans ??
+    COMMERCIAL_PLAN_CATALOG.map((p) => ({
+      id: p.id,
+      audience: p.audience,
+      name: p.name,
+      priceMonthlyTzs: p.priceMonthlyTzs,
+      priceAnnualTzs: p.priceAnnualTzs,
+      pricePerBranchMonthlyTzs: p.priceMonthlyTzs,
+      includedAdminsPerBranch: 1,
+      includedOperatorsPerBranch: 1,
+      maxBranches: p.maxBranches,
+      maxOperators: p.maxOperators,
+    }));
+  const plans = catalogSource.filter((p) => p.audience === "pharmacy" || p.audience === "supplier");
   const currentPlanObj = plans.find((p) => p.name === selectedPlan) ?? plans[0];
 
   if (loading || !account) {
@@ -183,7 +220,9 @@ export default function DedicatedBillingPage() {
                       </span>
                     </div>
                     <div className={`text-[11px] ${mutedCls}`}>
-                      Up to {p.maxBranches} branch(es) &middot; {p.maxOperators} staff operators
+                      {p.maxBranches ? `Up to ${p.maxBranches} branch(es)` : "Unlimited branches"} &middot;{" "}
+                      {p.includedAdminsPerBranch ?? 1} Admin + {p.includedOperatorsPerBranch ?? 1} Operator/branch included
+                      {p.pricePerBranchMonthlyTzs ? ` (${formatTzs(p.pricePerBranchMonthlyTzs)}/branch min)` : ""}
                     </div>
                   </button>
                 );

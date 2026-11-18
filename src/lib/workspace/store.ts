@@ -333,11 +333,32 @@ export interface WorkspaceShiftLog {
   durationMinutes?: number;
 }
 
+export const MIN_BRANCH_PRICE_TZS = 5000;
+
+export interface WorkspacePackageSpec {
+  id: string;
+  audience: "pharmacy" | "hospital" | "supplier";
+  name: string;
+  priceMonthlyTzs: number;
+  priceAnnualTzs: number;
+  pricePerBranchMonthlyTzs: number;
+  includedAdminsPerBranch: number;
+  includedOperatorsPerBranch: number;
+  extraOperatorMonthlyTzs: number;
+  maxBranches: number | null;
+  maxOperators: number | null;
+  maxSuppliers: number | null;
+  maxConnectedPharmacies: number | null;
+  features: string[];
+  active: boolean;
+}
+
 export interface WorkspaceDbSnapshot {
   accounts: WorkspaceAccount[];
   centres: WorkspaceCentre[];
   profiles: WorkspaceProfile[];
   passkeys: PasskeyCredentialRecord[];
+  packages?: WorkspacePackageSpec[];
   auditLogs?: AuditLogEntry[];
   batches?: WorkspaceStockBatch[];
   sales?: WorkspaceSaleRecord[];
@@ -1797,4 +1818,192 @@ export function publicProfileSummary(prof: WorkspaceProfile) {
     capabilities: clampProfileCapabilities(prof.role, prof.capabilities, prof.isMasterAdmin),
     profilePrefs: prof.profilePrefs,
   };
+}
+
+export const DEFAULT_WORKSPACE_PACKAGES: WorkspacePackageSpec[] = [
+  {
+    id: "payg",
+    audience: "pharmacy",
+    name: "PAYG / ADDO Micro",
+    priceMonthlyTzs: 10000,
+    priceAnnualTzs: 100000,
+    pricePerBranchMonthlyTzs: 10000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 5000,
+    maxBranches: 1,
+    maxOperators: 2,
+    maxSuppliers: 2,
+    maxConnectedPharmacies: null,
+    features: ["1 Admin + 1 Operator / Branch", "Offline POS + FEFO Expiry Lock", "Bilingual EN/SW Labels"],
+    active: true,
+  },
+  {
+    id: "community_standard",
+    audience: "pharmacy",
+    name: "Community Standard",
+    priceMonthlyTzs: 45000,
+    priceAnnualTzs: 450000,
+    pricePerBranchMonthlyTzs: 45000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 6000,
+    maxBranches: 1,
+    maxOperators: 6,
+    maxSuppliers: 10,
+    maxConnectedPharmacies: null,
+    features: ["1 Admin + 1 Operator / Branch Included", "Blind Shift Close", "Wholesale via Kasri"],
+    active: true,
+  },
+  {
+    id: "chain_growth",
+    audience: "pharmacy",
+    name: "Chain Growth",
+    priceMonthlyTzs: 140000,
+    priceAnnualTzs: 1400000,
+    pricePerBranchMonthlyTzs: 18000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 3000,
+    maxBranches: 10,
+    maxOperators: 50,
+    maxSuppliers: 30,
+    maxConnectedPharmacies: null,
+    features: ["1 Admin + 1 Operator / Branch", "Inter-Branch Stock Transfers", "Central Owner Analytics"],
+    active: true,
+  },
+  {
+    id: "hospital_enterprise",
+    audience: "hospital",
+    name: "Hospital & Institutional",
+    priceMonthlyTzs: 320000,
+    priceAnnualTzs: 3200000,
+    pricePerBranchMonthlyTzs: 35000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 5000,
+    maxBranches: null,
+    maxOperators: null,
+    maxSuppliers: null,
+    maxConnectedPharmacies: null,
+    features: ["1 Admin + 1 Operator / Facility", "Stockout Radar", "Inter-Facility Surplus Transfer"],
+    active: true,
+  },
+  {
+    id: "supplier_starter",
+    audience: "supplier",
+    name: "Verified Catalog Starter",
+    priceMonthlyTzs: 60000,
+    priceAnnualTzs: 600000,
+    pricePerBranchMonthlyTzs: 60000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 6000,
+    maxBranches: 1,
+    maxOperators: 3,
+    maxSuppliers: null,
+    maxConnectedPharmacies: 15,
+    features: ["1 Admin + 1 Operator / Depot", "Verified Catalog", "Kasri Escrow Settlement"],
+    active: true,
+  },
+  {
+    id: "wholesale_growth",
+    audience: "supplier",
+    name: "Wholesale Growth",
+    priceMonthlyTzs: 180000,
+    priceAnnualTzs: 1800000,
+    pricePerBranchMonthlyTzs: 28000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 4000,
+    maxBranches: 5,
+    maxOperators: 15,
+    maxSuppliers: null,
+    maxConnectedPharmacies: 150,
+    features: ["1 Admin + 1 Operator / Depot", "RFQ Tender Bidding", "Multi-Warehouse Inventory"],
+    active: true,
+  },
+  {
+    id: "enterprise_importer",
+    audience: "supplier",
+    name: "Enterprise Importer",
+    priceMonthlyTzs: 450000,
+    priceAnnualTzs: 4500000,
+    pricePerBranchMonthlyTzs: 30000,
+    includedAdminsPerBranch: 1,
+    includedOperatorsPerBranch: 1,
+    extraOperatorMonthlyTzs: 4000,
+    maxBranches: null,
+    maxOperators: null,
+    maxSuppliers: null,
+    maxConnectedPharmacies: null,
+    features: ["Regional Stockout Heatmaps", "Recall Broadcast Hooks", "Chain Contract Pricing"],
+    active: true,
+  },
+];
+
+export function getWorkspacePackages(db: WorkspaceDbSnapshot): WorkspacePackageSpec[] {
+  if (!Array.isArray(db.packages) || db.packages.length === 0) {
+    return DEFAULT_WORKSPACE_PACKAGES.map((p) => ({ ...p, features: [...p.features] }));
+  }
+  return db.packages.map((p) => ({
+    ...p,
+    pricePerBranchMonthlyTzs: Math.max(
+      MIN_BRANCH_PRICE_TZS,
+      Number.isFinite(p.pricePerBranchMonthlyTzs) ? Math.round(p.pricePerBranchMonthlyTzs) : p.priceMonthlyTzs
+    ),
+    priceMonthlyTzs: Math.max(MIN_BRANCH_PRICE_TZS, Math.round(p.priceMonthlyTzs || MIN_BRANCH_PRICE_TZS)),
+    includedAdminsPerBranch: Math.max(1, Math.round(p.includedAdminsPerBranch || 1)),
+    includedOperatorsPerBranch: Math.max(1, Math.round(p.includedOperatorsPerBranch || 1)),
+  }));
+}
+
+export function upsertWorkspacePackage(
+  db: WorkspaceDbSnapshot,
+  input: Partial<WorkspacePackageSpec> & { id: string; name: string }
+): WorkspacePackageSpec {
+  const list = getWorkspacePackages(db);
+  const pricePerBranchMonthlyTzs = Math.max(
+    MIN_BRANCH_PRICE_TZS,
+    Math.round(Number(input.pricePerBranchMonthlyTzs ?? input.priceMonthlyTzs ?? MIN_BRANCH_PRICE_TZS))
+  );
+  const priceMonthlyTzs = Math.max(
+    MIN_BRANCH_PRICE_TZS,
+    Math.round(Number(input.priceMonthlyTzs ?? pricePerBranchMonthlyTzs))
+  );
+  const priceAnnualTzs = Math.max(
+    priceMonthlyTzs * 10,
+    Math.round(Number(input.priceAnnualTzs ?? priceMonthlyTzs * 10))
+  );
+  const next: WorkspacePackageSpec = {
+    id: input.id.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_"),
+    audience:
+      input.audience === "hospital" || input.audience === "supplier" ? input.audience : "pharmacy",
+    name: input.name.trim().slice(0, 80),
+    priceMonthlyTzs,
+    priceAnnualTzs,
+    pricePerBranchMonthlyTzs,
+    includedAdminsPerBranch: Math.max(1, Math.round(Number(input.includedAdminsPerBranch ?? 1))),
+    includedOperatorsPerBranch: Math.max(1, Math.round(Number(input.includedOperatorsPerBranch ?? 1))),
+    extraOperatorMonthlyTzs: Math.max(0, Math.round(Number(input.extraOperatorMonthlyTzs ?? 5000))),
+    maxBranches: input.maxBranches === null ? null : Math.max(1, Math.round(Number(input.maxBranches ?? 1))),
+    maxOperators: input.maxOperators === null ? null : Math.max(2, Math.round(Number(input.maxOperators ?? 2))),
+    maxSuppliers: input.maxSuppliers === null ? null : Math.max(1, Math.round(Number(input.maxSuppliers ?? 5))),
+    maxConnectedPharmacies:
+      input.maxConnectedPharmacies === null
+        ? null
+        : Math.max(1, Math.round(Number(input.maxConnectedPharmacies ?? 15))),
+    features: Array.isArray(input.features)
+      ? input.features.map((f) => String(f).trim()).filter(Boolean).slice(0, 8)
+      : ["1 Admin + 1 Operator / Branch"],
+    active: input.active !== false,
+  };
+  const idx = list.findIndex((p) => p.id === next.id);
+  if (idx >= 0) {
+    list[idx] = next;
+  } else {
+    list.push(next);
+  }
+  db.packages = list;
+  return next;
 }

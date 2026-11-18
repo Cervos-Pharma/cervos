@@ -15,11 +15,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL("https://cervos.online"),
   title: {
-    default: "Cervos Pharma — Pharmacy Operations & Supply Chain",
-    template: "%s — Cervos Pharma",
+    default: "Cervos Pharma Software for Pharmacies and Wholesale Supply",
+    template: "%s · Cervos Pharma",
   },
   description:
-    "Precision logistics, bilingual accounting, and offline-first dispensary operations for modern African pharmacy networks.",
+    "Everyday software built for pharmacies in Tanzania. Keep serving customers when internet drops, stop expired medicines at checkout, close shifts cleanly, and restock from trusted distributors.",
   keywords: [
     "pharmacy pos",
     "fefo inventory",
@@ -44,8 +44,9 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "Cervos Pharma — Pharmacy Operations & Supply Chain",
-    description: "Precision logistics, bilingual accounting, and offline-first dispensary operations.",
+    title: "Cervos Pharma Software for Pharmacies and Wholesale Supply",
+    description:
+      "Everyday software built for pharmacies in Tanzania. Keep serving customers when internet drops, stop expired medicines at checkout, and restock from trusted wholesalers.",
     url: "https://cervos.online",
     siteName: "Cervos Pharma",
     locale: "en_US",
@@ -55,8 +56,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Cervos Pharma",
-    description: "Precision logistics, bilingual accounting, and offline-first dispensary operations.",
+    title: "Cervos Pharma Software for Pharmacies and Wholesale Supply",
+    description:
+      "Everyday software built for pharmacies in Tanzania. Keep serving even when internet drops, protect shelves from expired stock, and restock directly.",
     images: ["/logo.png"],
   },
 };

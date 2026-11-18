@@ -1,7 +1,15 @@
 import type { MetadataRoute } from "next";
 
+function resolveCanonicalOrigin(): string {
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
+  if (configured && !/\.vercel\.app$/i.test(configured) && /^https?:\/\//i.test(configured)) {
+    return configured;
+  }
+  return "https://cervos.online";
+}
+
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://cervos.online";
+  const baseUrl = resolveCanonicalOrigin();
 
   return {
     rules: [

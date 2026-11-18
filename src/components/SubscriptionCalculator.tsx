@@ -1,12 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import FlipText from "@/components/FlipText";
 
 interface Props {
   lang: string;
   isSw: boolean;
+}
+
+interface LivePkg {
+  id: string;
+  name: string;
+  priceMonthlyTzs: number;
+  priceAnnualTzs: number;
+  pricePerBranchMonthlyTzs: number;
+  includedAdminsPerBranch: number;
+  includedOperatorsPerBranch: number;
+  extraOperatorMonthlyTzs: number;
 }
 
 type Segment = "individual" | "enterprise";
@@ -27,6 +38,21 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
   const [entTrack, setEntTrack] = useState<EnterpriseTrack>("chain");
   const [entLocations, setEntLocations] = useState(4);
   const [entSeats, setEntSeats] = useState(18);
+  const [livePackages, setLivePackages] = useState<Record<string, LivePkg>>({});
+
+  useEffect(() => {
+    fetch("/api/workspace/packages", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { packages?: LivePkg[] } | null) => {
+        if (!Array.isArray(d?.packages)) return;
+        const map: Record<string, LivePkg> = {};
+        for (const p of d.packages) map[p.id] = p;
+        setLivePackages(map);
+      })
+      .catch(() => {
+        // Fallback to built-in rates
+      });
+  }, []);
 
   const isAnnual = billing === "annual";
 
@@ -45,17 +71,38 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
     return Math.min(max, Math.max(min, parsed));
   };
 
+  const pkg = (id: string, fallback: { base: number; perBranch: number; extraOp: number; annual: number; admins?: number; ops?: number }) => {
+    const found = livePackages[id];
+    const perBranch = Math.max(5000, found?.pricePerBranchMonthlyTzs ?? fallback.perBranch);
+    const base = Math.max(5000, found?.priceMonthlyTzs ?? fallback.base);
+    const extraOp = Math.max(0, found?.extraOperatorMonthlyTzs ?? fallback.extraOp);
+    const annual = found?.priceAnnualTzs && found.priceAnnualTzs > 0 ? found.priceAnnualTzs : base * 10;
+    const admins = Math.max(1, found?.includedAdminsPerBranch ?? fallback.admins ?? 1);
+    const ops = Math.max(1, found?.includedOperatorsPerBranch ?? fallback.ops ?? 1);
+    return { base, perBranch, extraOp, annual, admins, ops, name: found?.name };
+  };
+
+  const paygPkg = pkg("payg", { base: 10000, perBranch: 10000, extraOp: 5000, annual: 100000 });
+  const stdPkg = pkg("community_standard", { base: 45000, perBranch: 45000, extraOp: 6000, annual: 450000 });
+  const supStarterPkg = pkg("supplier_starter", { base: 60000, perBranch: 60000, extraOp: 6000, annual: 600000 });
+  const chainPkg = pkg("chain_growth", { base: 140000, perBranch: 18000, extraOp: 3000, annual: 1400000 });
+  const hospPkg = pkg("hospital_enterprise", { base: 320000, perBranch: 35000, extraOp: 5000, annual: 3200000 });
+  const whPkg = pkg("wholesale_growth", { base: 180000, perBranch: 28000, extraOp: 4000, annual: 1800000 });
+  const impPkg = pkg("enterprise_importer", { base: 450000, perBranch: 30000, extraOp: 4000, annual: 4500000 });
+
   const calc = (() => {
     if (segment === "individual") {
       if (indTrack === "addo") {
         return {
-          planName: isSw ? "Duka Dogo" : "Starter Shop",
-          summary: isSw ? "Kaunta 1 · hadi wahudumu 2" : "1 counter · up to 2 staff members",
-          baseRate: 10000,
+          planName: paygPkg.name ?? (isSw ? "Duka Dogo" : "Starter Shop"),
+          summary: isSw
+            ? `Tawi 1 · Msimamizi ${paygPkg.admins} + Mhudumu ${paygPkg.ops}`
+            : `1 branch · ${paygPkg.admins} Admin + ${paygPkg.ops} Operator included`,
+          baseRate: paygPkg.perBranch,
           overage: 0,
-          overageLabel: isSw ? "Wahudumu wa ziada" : "Extra staff",
-          monthlyPrice: 10000,
-          annualPrice: 100000,
+          overageLabel: isSw ? "Wahudumu wa ziada" : "Extra operators",
+          monthlyPrice: paygPkg.perBranch,
+          annualPrice: paygPkg.perBranch * 10,
           roleParam: "pharmacy",
           includedItems: [
             isSw ? "Mauzo hata mtandao ukikatika" : "Sell even when internet drops",
@@ -65,13 +112,15 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
       }
       if (indTrack === "supplier_starter") {
         return {
-          planName: isSw ? "Msambazaji Mpya" : "Wholesale Starter",
-          summary: isSw ? "Ghala 1 · hadi maduka 15" : "1 warehouse · up to 15 buyer shops",
-          baseRate: 60000,
+          planName: supStarterPkg.name ?? (isSw ? "Msambazaji Mpya" : "Wholesale Starter"),
+          summary: isSw
+            ? `Ghala 1 · Msimamizi ${supStarterPkg.admins} + Mhudumu ${supStarterPkg.ops}`
+            : `1 depot · ${supStarterPkg.admins} Admin + ${supStarterPkg.ops} Operator included`,
+          baseRate: supStarterPkg.perBranch,
           overage: 0,
           overageLabel: isSw ? "Maduka ya ziada" : "Extra buyer shops",
-          monthlyPrice: 60000,
-          annualPrice: 600000,
+          monthlyPrice: supStarterPkg.perBranch,
+          annualPrice: supStarterPkg.perBranch * 10,
           roleParam: "supplier",
           includedItems: [
             isSw ? "Orodha ya bei kwa maduka ya mkataba" : "Direct order list for buyer shops",
@@ -79,15 +128,16 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
           ],
         };
       }
-      const extraSeatCount = Math.max(0, indSeats - 6);
-      const extraSeatFee = extraSeatCount * 6000;
-      const monthly = 45000 + extraSeatFee;
+      const includedStaff = stdPkg.admins + stdPkg.ops;
+      const extraSeatCount = Math.max(0, indSeats - includedStaff);
+      const extraSeatFee = extraSeatCount * stdPkg.extraOp;
+      const monthly = stdPkg.perBranch + extraSeatFee;
       return {
-        planName: isSw ? "Duka Kamili" : "Full Pharmacy",
+        planName: stdPkg.name ?? (isSw ? "Duka Kamili" : "Full Pharmacy"),
         summary: isSw
-          ? `Wahudumu ${indSeats} (6 wa kwanza bure)`
-          : `${indSeats} staff logins (first 6 included)`,
-        baseRate: 45000,
+          ? `Tawi 1 · Msimamizi ${stdPkg.admins} + Wahudumu ${Math.max(1, indSeats - stdPkg.admins)}`
+          : `1 branch · ${indSeats} logins (${stdPkg.admins} Admin + ${stdPkg.ops} Operator included)`,
+        baseRate: stdPkg.perBranch,
         overage: extraSeatFee,
         overageLabel: `${extraSeatCount}x ${isSw ? "wahudumu wa ziada" : "extra staff"}`,
         monthlyPrice: monthly,
@@ -101,17 +151,20 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
     }
 
     if (entTrack === "hospital") {
-      const extraLocCount = Math.max(0, entLocations - 3);
-      const extraLocFee = extraLocCount * 35000;
-      const monthly = 320000 + extraLocFee;
+      const perBranchTotal = Math.max(5000, hospPkg.perBranch) * entLocations;
+      const includedSeats = entLocations * (hospPkg.admins + hospPkg.ops);
+      const extraSeatCount = Math.max(0, entSeats - includedSeats);
+      const extraFee = extraSeatCount * hospPkg.extraOp;
+      const monthly = Math.max(hospPkg.base, perBranchTotal + extraFee);
+      const baseRate = Math.min(monthly, perBranchTotal);
       return {
-        planName: isSw ? "Hospitali & Zahanati" : "Hospital & Clinic",
+        planName: hospPkg.name ?? (isSw ? "Hospitali & Zahanati" : "Hospital & Clinic"),
         summary: isSw
-          ? `Vituo ${entLocations} · ufuatiliaji wa wodi`
-          : `${entLocations} facilities · full ward tracking`,
-        baseRate: 320000,
-        overage: extraLocFee,
-        overageLabel: `${extraLocCount}x ${isSw ? "vituo vya ziada" : "extra facilities"}`,
+          ? `Vituo ${entLocations} (${hospPkg.admins} Admin + ${hospPkg.ops} Operator/tawi)`
+          : `${entLocations} facilities (${hospPkg.admins} Admin + ${hospPkg.ops} Operator/branch)`,
+        baseRate,
+        overage: monthly - baseRate,
+        overageLabel: `${extraSeatCount}x ${isSw ? "wahudumu wa ziada" : "extra operators"}`,
         monthlyPrice: monthly,
         annualPrice: monthly * 10,
         roleParam: "dispensary",
@@ -122,17 +175,20 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
       };
     }
     if (entTrack === "wholesale") {
-      const extraWarehouseCount = Math.max(0, entLocations - 5);
-      const extraWarehousesFee = extraWarehouseCount * 28000;
-      const monthly = 180000 + extraWarehousesFee;
+      const perBranchTotal = Math.max(5000, whPkg.perBranch) * entLocations;
+      const includedSeats = entLocations * (whPkg.admins + whPkg.ops);
+      const extraSeatCount = Math.max(0, entSeats - includedSeats);
+      const extraFee = extraSeatCount * whPkg.extraOp;
+      const monthly = Math.max(whPkg.base, perBranchTotal + extraFee);
+      const baseRate = Math.min(monthly, perBranchTotal);
       return {
-        planName: isSw ? "Ghala la Jumla" : "Wholesale Depot",
+        planName: whPkg.name ?? (isSw ? "Ghala la Jumla" : "Wholesale Depot"),
         summary: isSw
-          ? `Maghala ${entLocations} · hadi maduka 150`
-          : `${entLocations} warehouses · up to 150 buyer shops`,
-        baseRate: 180000,
-        overage: extraWarehousesFee,
-        overageLabel: `${extraWarehouseCount}x ${isSw ? "maghala ya ziada" : "extra warehouses"}`,
+          ? `Maghala ${entLocations} (${whPkg.admins} Admin + ${whPkg.ops} Operator/ghala)`
+          : `${entLocations} depots (${whPkg.admins} Admin + ${whPkg.ops} Operator/depot)`,
+        baseRate,
+        overage: monthly - baseRate,
+        overageLabel: `${extraSeatCount}x ${isSw ? "wahudumu wa ziada" : "extra operators"}`,
         monthlyPrice: monthly,
         annualPrice: monthly * 10,
         roleParam: "supplier",
@@ -143,17 +199,20 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
       };
     }
     if (entTrack === "importer") {
-      const extraHubCount = Math.max(0, entLocations - 5);
-      const extraHubFee = extraHubCount * 30000;
-      const monthly = 450000 + extraHubFee;
+      const perBranchTotal = Math.max(5000, impPkg.perBranch) * entLocations;
+      const includedSeats = entLocations * (impPkg.admins + impPkg.ops);
+      const extraSeatCount = Math.max(0, entSeats - includedSeats);
+      const extraFee = extraSeatCount * impPkg.extraOp;
+      const monthly = Math.max(impPkg.base, perBranchTotal + extraFee);
+      const baseRate = Math.min(monthly, perBranchTotal);
       return {
-        planName: isSw ? "Waagizaji Wakuu" : "National Importer",
+        planName: impPkg.name ?? (isSw ? "Waagizaji Wakuu" : "National Importer"),
         summary: isSw
-          ? `Kanda ${entLocations} · takwimu za mahitaji`
-          : `${entLocations} regions · live demand tracking`,
-        baseRate: 450000,
-        overage: extraHubFee,
-        overageLabel: `${extraHubCount}x ${isSw ? "kanda za ziada" : "extra regions"}`,
+          ? `Kanda ${entLocations} (${impPkg.admins} Admin + ${impPkg.ops} Operator/tawi)`
+          : `${entLocations} regions (${impPkg.admins} Admin + ${impPkg.ops} Operator/branch)`,
+        baseRate,
+        overage: monthly - baseRate,
+        overageLabel: `${extraSeatCount}x ${isSw ? "wahudumu wa ziada" : "extra operators"}`,
         monthlyPrice: monthly,
         annualPrice: monthly * 10,
         roleParam: "supplier",
@@ -164,18 +223,19 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
       };
     }
 
-    const extraBranches = Math.max(0, entLocations - 10) * 18000;
-    const extraOperators = Math.max(0, entSeats - 50) * 3000;
-    const extraTotal = extraBranches + extraOperators;
-    const monthly = 140000 + extraTotal;
+    const perBranchTotal = Math.max(5000, chainPkg.perBranch) * entLocations;
+    const includedSeats = entLocations * (chainPkg.admins + chainPkg.ops);
+    const extraSeatCount = Math.max(0, entSeats - includedSeats);
+    const extraOperatorsFee = extraSeatCount * chainPkg.extraOp;
+    const monthly = Math.max(5000 * entLocations, perBranchTotal + extraOperatorsFee);
     return {
-      planName: isSw ? "Mtandao wa Maduka" : "Pharmacy Chain",
+      planName: chainPkg.name ?? (isSw ? "Mtandao wa Maduka" : "Pharmacy Chain"),
       summary: isSw
-        ? `Matawi ${entLocations} · wahudumu ${entSeats}`
-        : `${entLocations} branches · ${entSeats} staff logins`,
-      baseRate: 140000,
-      overage: extraTotal,
-      overageLabel: isSw ? "Matawi na wahudumu wa ziada" : "Extra branches & staff",
+        ? `Matawi ${entLocations} · ${chainPkg.admins} Admin + ${chainPkg.ops} Operator/tawi`
+        : `${entLocations} branches · ${chainPkg.admins} Admin + ${chainPkg.ops} Operator/branch`,
+      baseRate: perBranchTotal,
+      overage: extraOperatorsFee,
+      overageLabel: `${extraSeatCount}x ${isSw ? "wahudumu wa ziada" : "extra operators"}`,
       monthlyPrice: monthly,
       annualPrice: monthly * 10,
       roleParam: "pharmacy",
@@ -209,8 +269,8 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
             </h2>
             <p className="text-sm sm:text-base text-zinc-500 mt-2">
               {isSw
-                ? "Lipa kulingana na idadi halisi ya matawi na wahudumu dukani bila ada za kufichika."
-                : "Pay only for the counters and branches you actually run. No hidden setup fees."}
+                ? "Bei kwa kila tawi (Msimamizi 1 + Mhudumu 1 wamejumuishwa, kuanzia TZS 5,000 kwa tawi). Hakuna ada za kufichika."
+                : "Priced per branch with 1 Admin and 1 Operator included (from TZS 5,000 minimum per branch). No hidden setup fees."}
             </p>
           </div>
 
@@ -286,9 +346,9 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {[
-                      { id: "addo" as const, title: isSw ? "Duka Dogo" : "Starter Shop", sub: "10,000 TZS/mo" },
-                      { id: "pharmacy" as const, title: isSw ? "Duka Kamili" : "Full Pharmacy", sub: "45,000 TZS/mo" },
-                      { id: "supplier_starter" as const, title: isSw ? "Msambazaji Mpya" : "Wholesale Starter", sub: "60,000 TZS/mo" },
+                      { id: "addo" as const, title: paygPkg.name ?? (isSw ? "Duka Dogo" : "Starter Shop"), sub: `${paygPkg.perBranch.toLocaleString("en-US")} TZS/branch/mo` },
+                      { id: "pharmacy" as const, title: stdPkg.name ?? (isSw ? "Duka Kamili" : "Full Pharmacy"), sub: `${stdPkg.perBranch.toLocaleString("en-US")} TZS/branch/mo` },
+                      { id: "supplier_starter" as const, title: supStarterPkg.name ?? (isSw ? "Msambazaji Mpya" : "Wholesale Starter"), sub: `${supStarterPkg.perBranch.toLocaleString("en-US")} TZS/depot/mo` },
                     ].map((opt) => (
                       <button
                         key={opt.id}
@@ -346,9 +406,9 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
                       className="w-full h-1 bg-zinc-200 rounded-lg accent-zinc-900 cursor-pointer"
                     />
                     <div className="flex justify-between font-mono text-[11px] text-zinc-400">
-                      <span>1 staff</span>
-                      <span>6 included free</span>
-                      <span>20 staff</span>
+                      <span>1 login</span>
+                      <span>1 Admin + 1 Operator included</span>
+                      <span>20 logins</span>
                     </div>
                   </div>
                 )}
@@ -361,10 +421,10 @@ export default function SubscriptionCalculator({ lang, isSw }: Props) {
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
-                      { id: "chain" as const, title: isSw ? "Mtandao wa Maduka" : "Pharmacy Chain", sub: "From 140,000 TZS/mo" },
-                      { id: "hospital" as const, title: isSw ? "Hospitali & Zahanati" : "Hospital & Clinic", sub: "From 320,000 TZS/mo" },
-                      { id: "wholesale" as const, title: isSw ? "Ghala la Jumla" : "Wholesale Depot", sub: "From 180,000 TZS/mo" },
-                      { id: "importer" as const, title: isSw ? "Waagizaji Wakuu" : "National Importer", sub: "From 450,000 TZS/mo" },
+                      { id: "chain" as const, title: chainPkg.name ?? (isSw ? "Mtandao wa Maduka" : "Pharmacy Chain"), sub: `${chainPkg.perBranch.toLocaleString("en-US")} TZS/branch/mo` },
+                      { id: "hospital" as const, title: hospPkg.name ?? (isSw ? "Hospitali & Zahanati" : "Hospital & Clinic"), sub: `${hospPkg.perBranch.toLocaleString("en-US")} TZS/branch/mo` },
+                      { id: "wholesale" as const, title: whPkg.name ?? (isSw ? "Ghala la Jumla" : "Wholesale Depot"), sub: `${whPkg.perBranch.toLocaleString("en-US")} TZS/depot/mo` },
+                      { id: "importer" as const, title: impPkg.name ?? (isSw ? "Waagizaji Wakuu" : "National Importer"), sub: `${impPkg.perBranch.toLocaleString("en-US")} TZS/region/mo` },
                     ].map((opt) => (
                       <button
                         key={opt.id}

@@ -1,0 +1,29 @@
+name: Keep-Alive Health Check
+
+# Pings the production health endpoint (which also queries Supabase `accounts`
+# and `workspace_db`) on a recurring schedule so Vercel serverless functions and
+# Supabase stay warm and outages surface immediately.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production health & database connectivity
+        run: |
+          set -e
+          echo "Checking https://cervos-pharma.vercel.app/api/health"
+          resp=$(curl -sS -w "\n%{http_code}" https://cervos-pharma.vercel.app/api/health)
+          code=$(echo "$resp" | tail -n1)
+          body=$(echo "$resp" | sed '$d')
+          echo "HTTP $code: $body"
+          if [ "$code" != "200" ]; then
+            echo "Health check failed with HTTP $code"
+            exit 1
+          fi
+          echo "$body" | grep -q '"ok":true' || { echo "Health reported degraded"; exit 1; }
+          echo "Checking custom domain https://cervos.online/api/health (non-blocking info)"
+          curl -sS -m 10 https://cervos.online/api/health || true

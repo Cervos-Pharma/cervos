@@ -47,24 +47,34 @@ export async function GET(request: NextRequest) {
   }
 
   let supabaseReadable = mockMode ? true : false;
+  let workspaceSnapshotOk = mockMode ? true : false;
   if (!mockMode && supabaseConfigured) {
     try {
       const supabase = await createServiceClient();
       const timeoutPromise = new Promise<{ error: Error }>((resolve) =>
         setTimeout(() => resolve({ error: new Error("timeout") }), 2500)
       );
-      const queryPromise = supabase
-        .from("accounts")
-        .select("id", { count: "exact", head: true })
-        .limit(1);
-      const result = await Promise.race([queryPromise, timeoutPromise]);
-      supabaseReadable = !result.error;
+      const [acctRes, wsRes] = await Promise.all([
+        Promise.race([
+          supabase.from("accounts").select("id", { count: "exact", head: true }).limit(1),
+          timeoutPromise,
+        ]),
+        Promise.race([
+          supabase.from("workspace_db").select("shard, updated_at").eq("shard", "main").maybeSingle(),
+          timeoutPromise,
+        ]),
+      ]);
+      supabaseReadable = !acctRes.error;
+      workspaceSnapshotOk = !wsRes.error;
     } catch {
       supabaseReadable = false;
+      workspaceSnapshotOk = false;
     }
   }
 
-  const dbReadable = mockMode ? workspaceDbReadable : workspaceDbReadable && supabaseReadable;
+  const dbReadable = mockMode
+    ? workspaceDbReadable
+    : workspaceDbReadable && supabaseReadable && workspaceSnapshotOk;
   const requiredEnvReady = mockMode
     ? true
     : supabaseConfigured && hqSecretConfigured && appUrlConfigured && sessionSecretConfigured;

@@ -2,7 +2,17 @@ import type { MetadataRoute } from "next";
 import { PRODUCT_CATALOG, MARKET_CATALOG } from "@/lib/marketing-catalog";
 import { DISPATCH_ESSAYS } from "@/lib/dispatch-catalog";
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://cervos.online";
+function resolveCanonicalSitemapOrigin(): string {
+  const configured = (process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
+  // Never emit preview *.vercel.app URLs inside sitemap.xml; Google Search Console
+  // rejects sitemaps whose <loc> host differs from the property domain (cervos.online).
+  if (configured && !/\.vercel\.app$/i.test(configured) && /^https?:\/\//i.test(configured)) {
+    return configured;
+  }
+  return "https://cervos.online";
+}
+
+const BASE_URL = resolveCanonicalSitemapOrigin();
 
 type ChangeFrequency = "daily" | "weekly" | "monthly" | "yearly";
 
