@@ -177,7 +177,7 @@ export interface WorkspaceSaleRecord {
   customerPhone?: string;
   totalTzs: number;
   itemCount: number;
-  paymentMethod: "cash" | "mpesa" | "tigo" | "halopesa" | "card";
+  paymentMethod: "cash" | "mpesa" | "tigo" | "airtel" | "halopesa" | "card" | "bank";
   prescriptionRef?: string;
   lines?: WorkspaceSaleLine[];
   createdAt: string;
@@ -353,12 +353,27 @@ export interface WorkspacePackageSpec {
   active: boolean;
 }
 
+export interface PendingSubscriptionPayment {
+  reference: string;
+  accountId: string;
+  planName: string;
+  billingCycle: "monthly" | "annual";
+  channel: string;
+  msisdn: string;
+  amountTzs: number;
+  transactionId?: string;
+  status: "pending" | "completed" | "failed";
+  createdAt: string;
+  completedAt?: string;
+}
+
 export interface WorkspaceDbSnapshot {
   accounts: WorkspaceAccount[];
   centres: WorkspaceCentre[];
   profiles: WorkspaceProfile[];
   passkeys: PasskeyCredentialRecord[];
   packages?: WorkspacePackageSpec[];
+  pendingSubscriptions?: PendingSubscriptionPayment[];
   auditLogs?: AuditLogEntry[];
   batches?: WorkspaceStockBatch[];
   sales?: WorkspaceSaleRecord[];

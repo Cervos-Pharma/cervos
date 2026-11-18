@@ -41,6 +41,9 @@ interface WorkspaceShellProps {
   navItems: WorkspaceNavItem[];
   notifications?: WorkspaceNotificationItem[];
   onMarkNotificationsRead?: () => void;
+  syncing?: boolean;
+  lastSyncedAt?: string | null;
+  onSyncNow?: () => void;
   showBranchChat?: boolean;
   onLockProfile: () => void;
   onSignOut: () => void;
@@ -155,6 +158,9 @@ export default function WorkspaceShell({
   navItems,
   notifications = [],
   onMarkNotificationsRead,
+  syncing = false,
+  lastSyncedAt = null,
+  onSyncNow,
   showBranchChat = true,
   onLockProfile,
   onSignOut,
@@ -392,6 +398,19 @@ export default function WorkspaceShell({
               >
                 {isSw ? "Pakua Programu" : "Get Offline App"}
               </Link>
+              {onSyncNow && (
+                <button
+                  type="button"
+                  disabled={syncing}
+                  onClick={() => {
+                    onSyncNow();
+                    setSidebarOpen(false);
+                  }}
+                  className={`w-full py-2 px-3.5 rounded-full border text-xs font-semibold cursor-pointer disabled:opacity-50 ${railPillCls}`}
+                >
+                  {syncing ? (isSw ? "Inasawazisha..." : "Syncing...") : (isSw ? "Sawazisha Sasa (Auto-Sync)" : "Sync Now (Auto-Sync On)")}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onLockProfile}
@@ -628,6 +647,19 @@ export default function WorkspaceShell({
             </svg>
             <span>{isSw ? "Mwongozo" : "Guide"}</span>
           </button>
+
+          {onSyncNow && (
+            <button
+              type="button"
+              disabled={syncing}
+              onClick={onSyncNow}
+              title={lastSyncedAt ? `Last synced ${lastSyncedAt.slice(11, 19)}` : "Auto-sync active"}
+              className={`hidden lg:flex h-9 px-3 rounded-full border items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-60 ${railPillCls}`}
+            >
+              <span className={`w-2 h-2 rounded-full ${syncing ? "bg-amber-400 animate-pulse" : "bg-emerald-500"}`} />
+              <span>{syncing ? (isSw ? "Sync..." : "Syncing...") : (isSw ? "Sawazisha" : "Sync Now")}</span>
+            </button>
+          )}
 
           {/* Far Right: User Avatar & Settings/Org/SignOut Popover */}
           <div className="relative">

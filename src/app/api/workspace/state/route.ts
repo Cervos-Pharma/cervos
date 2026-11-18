@@ -4,6 +4,8 @@ import {
   parseGs1Barcode,
   reconcileCashShift,
 } from "@cervos/core";
+import { normalizeMsisdn } from "@cervos/textify";
+import { initiateCollection, queryTransaction } from "@/lib/payme";
 import {
   hashSecret,
   normalizeSecurityAnswer,
@@ -38,8 +40,10 @@ import {
   flushWorkspaceDb,
   getHqUpdates,
   getWorkspaceDb,
+  getWorkspacePackages,
   isAccountAccessLocked,
   isUsernameTaken,
+  MIN_BRANCH_PRICE_TZS,
   newId,
   publicAccountSummary,
   publicJoinRequestSummary,
@@ -267,6 +271,7 @@ export async function POST(request: NextRequest) {
     "mark_notifications_read",
     "ack_hq_message",
     "activate_subscription",
+    "check_subscription_payment",
     "update_lang",
   ]);
   if (accessLock.locked && !allowedWhileLocked.has(action)) {
@@ -398,7 +403,7 @@ export async function POST(request: NextRequest) {
     const total = Math.max(0, Number(body.amountTzs) || 0);
     const itemCount = Math.max(1, Number(body.itemCount) || 1);
     const methodRaw = sanitizeText(body.paymentMethod, 20) as WorkspaceSaleRecord["paymentMethod"];
-    const paymentMethod = ["cash", "mpesa", "tigo", "halopesa", "card"].includes(methodRaw)
+    const paymentMethod = ["cash", "mpesa", "tigo", "airtel", "halopesa", "card", "bank"].includes(methodRaw)
       ? methodRaw
       : "mpesa";
     ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
@@ -441,7 +446,7 @@ export async function POST(request: NextRequest) {
       return noStoreJson({ error: "Add at least one medicine to the basket." }, { status: 400 });
     }
     const methodRaw = sanitizeText(body.paymentMethod, 20) as WorkspaceSaleRecord["paymentMethod"];
-    const paymentMethod = ["cash", "mpesa", "tigo", "halopesa", "card"].includes(methodRaw)
+    const paymentMethod = ["cash", "mpesa", "tigo", "airtel", "halopesa", "card", "bank"].includes(methodRaw)
       ? methodRaw
       : "mpesa";
     const prescriptionRef = sanitizeText(body.prescriptionRef, 60);
@@ -1245,18 +1250,109 @@ export async function POST(request: NextRequest) {
 
   if (action === "activate_subscription") {
     const planName = sanitizeText(body.planName, 80) || account.subscriptionPlan;
-    const channel = sanitizeText(body.paymentChannel, 30) || "M-Pesa Paybill";
+    const channel = sanitizeText(body.paymentChannel, 40) || "M-Pesa (Vodacom)";
+    const billingCycle: "monthly" | "annual" = body.billingCycle === "annual" ? "annual" : "monthly";
     const payerRef = sanitizeText(body.payerPhoneOrRef, 60);
+
     if (body.simulateBounce === true || (typeof body.payerPhoneOrRef === "string" && payerRef.length < 4)) {
       return noStoreJson(
         {
-          error: "Payment did not clear (insufficient funds or invalid phone/account ref). Edit payer details and retry.",
+          error: "Payment did not clear (invalid phone number or account reference). Edit payer details and retry.",
           bounced: true,
         },
         { status: 402 }
       );
     }
-    const payReceipt = `SUB-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+
+    const pkgs = getWorkspacePackages(db);
+    const matchedPkg =
+      pkgs.find((p) => p.name.toLowerCase() === planName.toLowerCase() || p.id === planName) ?? pkgs[1] ?? pkgs[0];
+    const orgBranchesCount = Math.max(1, db.centres.filter((c) => c.accountId === account.id).length);
+    const unitMonthly = Math.max(
+      MIN_BRANCH_PRICE_TZS,
+      matchedPkg ? Math.max(matchedPkg.priceMonthlyTzs, matchedPkg.pricePerBranchMonthlyTzs * orgBranchesCount) : 45000
+    );
+    const amountTzs =
+      billingCycle === "annual"
+        ? Math.max(unitMonthly * 10, matchedPkg?.priceAnnualTzs || unitMonthly * 10)
+        : unitMonthly;
+
+    const isMobileMoney = /mpesa|m-pesa|tigo|mixx|airtel|halo|mobile|ussd/i.test(channel);
+    const msisdn = isMobileMoney ? normalizeMsisdn(payerRef) : "";
+    if (isMobileMoney && !/^255[67]\d{8}$/.test(msisdn)) {
+      return noStoreJson(
+        {
+          error: "Enter a valid Tanzanian mobile money number (e.g. 0712 345 678 or +255712345678).",
+          bounced: true,
+        },
+        { status: 400 }
+      );
+    }
+
+    const payReceipt = `SUB-${Date.now().toString(36).toUpperCase().slice(-6)}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
+    const isTestOrMock =
+      process.env.NODE_ENV === "test" ||
+      process.env.NEXT_PUBLIC_MOCK_MODE === "true" ||
+      process.env.CERVOS_MOCK_AUTH === "true";
+
+    if (isMobileMoney && !isTestOrMock) {
+      const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://cervos.online").replace(/\/$/, "");
+      const { data: paymeData, error: paymeError } = await initiateCollection({
+        amount: amountTzs,
+        msisdn,
+        reference: payReceipt,
+        callback_url: `${appUrl}/api/webhooks/payme`,
+      });
+
+      if (paymeError) {
+        return noStoreJson(
+          {
+            error: `USSD payment prompt failed: ${paymeError}`,
+            bounced: true,
+          },
+          { status: 402 }
+        );
+      }
+
+      const completedNow = paymeData?.payment_status === "COMPLETED";
+      const pendingList = (db.pendingSubscriptions ??= []);
+      pendingList.unshift({
+        reference: payReceipt,
+        accountId: account.id,
+        planName,
+        billingCycle,
+        channel,
+        msisdn,
+        amountTzs,
+        transactionId: paymeData?.transaction_id,
+        status: completedNow ? "completed" : "pending",
+        createdAt: new Date().toISOString(),
+        ...(completedNow ? { completedAt: new Date().toISOString() } : {}),
+      });
+
+      if (!completedNow) {
+        appendAuditLog(db, {
+          accountId: account.id,
+          actor: unlockedProfile.displayName,
+          category: "BILLING",
+          action: `Initiated ${channel} USSD checkout (${payReceipt}, +${msisdn}, ${amountTzs.toLocaleString("en-US")} TZS) awaiting PIN approval`,
+        });
+        saveWorkspaceDb(db);
+        await flushWorkspaceDb();
+        return noStoreJson({
+          ok: true,
+          pending: true,
+          reference: payReceipt,
+          transactionId: paymeData?.transaction_id || null,
+          amountTzs,
+          msisdn,
+          message:
+            paymeData?.provider_response?.message ||
+            `USSD payment prompt sent to +${msisdn}. Enter your mobile money PIN on your phone to confirm.`,
+        });
+      }
+    }
+
     account.subscriptionActive = true;
     account.billingOverdue = false;
     account.subscriptionPlan = planName;
@@ -1264,14 +1360,81 @@ export async function POST(request: NextRequest) {
       accountId: account.id,
       actor: unlockedProfile.displayName,
       category: "BILLING",
-      action: `Activated plan ${planName} via ${channel}${payerRef ? ` (${payerRef})` : ""} - Receipt ${payReceipt}`,
+      action: `Activated plan ${planName} (${billingCycle}) via ${channel}${payerRef ? ` (${payerRef})` : ""} - Receipt ${payReceipt}`,
     });
     saveWorkspaceDb(db);
     await flushWorkspaceDb();
     return noStoreJson({
       ok: true,
+      pending: false,
       receiptNumber: payReceipt,
+      amountTzs,
       account: publicAccountSummary(account),
+    });
+  }
+
+  if (action === "check_subscription_payment") {
+    const reference = sanitizeText(body.reference, 80);
+    if (!reference) {
+      return noStoreJson({ error: "Payment reference is required." }, { status: 400 });
+    }
+    const pendingList = (db.pendingSubscriptions ??= []);
+    const pending = pendingList.find((p) => p.reference === reference && p.accountId === account.id);
+    if (!pending) {
+      return noStoreJson({ error: "Pending payment record not found." }, { status: 404 });
+    }
+    if (pending.status === "completed") {
+      return noStoreJson({
+        ok: true,
+        status: "completed",
+        receiptNumber: pending.reference,
+        account: publicAccountSummary(account),
+      });
+    }
+
+    const { data: qData, error: qError } = await queryTransaction(reference);
+    if (qError) {
+      return noStoreJson({ ok: true, status: "pending", providerMessage: qError });
+    }
+    const payStatus = (qData?.payment_status || "").toUpperCase();
+    if (payStatus === "COMPLETED") {
+      pending.status = "completed";
+      pending.completedAt = new Date().toISOString();
+      account.subscriptionActive = true;
+      account.billingOverdue = false;
+      account.subscriptionPlan = pending.planName;
+      appendAuditLog(db, {
+        accountId: account.id,
+        actor: unlockedProfile.displayName,
+        category: "BILLING",
+        action: `Confirmed ${pending.channel} USSD payment ${pending.reference} (${pending.amountTzs.toLocaleString("en-US")} TZS) -> ${pending.planName} activated`,
+      });
+      saveWorkspaceDb(db);
+      await flushWorkspaceDb();
+      return noStoreJson({
+        ok: true,
+        status: "completed",
+        receiptNumber: pending.reference,
+        account: publicAccountSummary(account),
+      });
+    }
+    if (payStatus === "FAILED") {
+      pending.status = "failed";
+      saveWorkspaceDb(db);
+      await flushWorkspaceDb();
+      return noStoreJson(
+        {
+          ok: false,
+          status: "failed",
+          error: qData?.provider_message || "Mobile money prompt expired, declined, or insufficient balance.",
+        },
+        { status: 402 }
+      );
+    }
+    return noStoreJson({
+      ok: true,
+      status: "pending",
+      providerMessage: qData?.provider_message || "Waiting for PIN approval on your phone...",
     });
   }
 

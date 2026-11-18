@@ -1,4 +1,5 @@
 import { createHash, timingSafeEqual } from "crypto";
+import { normalizeMsisdn, sendSms as sendTextifyClientSms } from "@cervos/textify";
 
 export interface NotificationEnvStatus {
   hqEndpointConfigured: boolean;
@@ -61,45 +62,49 @@ export async function sendTextifySms(params: {
   to: string;
   message: string;
   sender?: string;
-}): Promise<{ delivered: boolean; channel: "textify" | "simulated"; sender: string; statusCode?: number }> {
+}): Promise<{ delivered: boolean; channel: "textify" | "simulated"; sender: string; statusCode?: number; error?: string }> {
   const apiKey = (process.env.TEXTIFY_API_KEY || "").trim();
   const sender = (params.sender || process.env.TEXTIFY_SENDER_NAME || "Nama").trim() || "Nama";
-  const recipient = params.to.replace(/[\s()-]/g, "").trim();
+  const msisdn = normalizeMsisdn(params.to);
   const isMock = process.env.NEXT_PUBLIC_MOCK_MODE === "true" || process.env.CERVOS_MOCK_AUTH === "true";
 
-  if (!apiKey || apiKey.length < 16 || !recipient || isMock) {
+  if (!apiKey || apiKey.length < 16 || !msisdn || isMock) {
     return { delivered: true, channel: "simulated", sender };
   }
 
-  const endpoint = (
-    process.env.TEXTIFY_API_URL || "https://api.textify.africa/v1/sms/send"
-  ).trim();
+  const baseUrl = (process.env.TEXTIFY_API_URL || "https://portal.textify.africa/api/v1")
+    .trim()
+    .replace(/\/messages\/?$/i, "")
+    .replace(/\/+$/, "");
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "X-API-Key": apiKey,
+    const timer = setTimeout(() => controller.abort(), 7000);
+    const envelope = await sendTextifyClientSms(
+      { apiKey, baseUrl },
+      {
+        messages: [{ receiver: msisdn, content: params.message.slice(0, 480) }],
+        senderName: sender,
+        channel: "sms",
+        idempotencyKey: `cv_${Date.now().toString(36)}_${msisdn.slice(-4)}`,
       },
-      body: JSON.stringify({
-        sender,
-        sender_id: sender,
-        from: sender,
-        to: recipient,
-        recipient,
-        message: params.message.slice(0, 480),
-        text: params.message.slice(0, 480),
-      }),
-      signal: controller.signal,
-    });
+      (u, init) => fetch(u, { ...init, signal: controller.signal })
+    );
     clearTimeout(timer);
-    return { delivered: res.ok, channel: "textify", sender, statusCode: res.status };
-  } catch {
-    return { delivered: false, channel: "textify", sender };
+    return {
+      delivered: envelope.success,
+      channel: "textify",
+      sender,
+      statusCode: envelope.status_code,
+      error: envelope.error || (!envelope.success ? envelope.message : undefined),
+    };
+  } catch (err) {
+    return {
+      delivered: false,
+      channel: "textify",
+      sender,
+      error: err instanceof Error ? err.message : "Textify network error",
+    };
   }
 }
 

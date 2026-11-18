@@ -73,7 +73,7 @@ export interface DashboardSale {
   customerPhone?: string;
   totalTzs: number;
   itemCount: number;
-  paymentMethod: "cash" | "mpesa" | "tigo" | "halopesa" | "card";
+  paymentMethod: "cash" | "mpesa" | "tigo" | "airtel" | "halopesa" | "card" | "bank";
   prescriptionRef?: string;
   lines?: Array<{
     productId: string;
@@ -349,7 +349,7 @@ export default function PharmacyDashboard({
   const [scannerOpen, setScannerOpen] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "cash" | "tigo" | "halopesa" | "card">("mpesa");
+  const [paymentMethod, setPaymentMethod] = useState<"mpesa" | "cash" | "tigo" | "airtel" | "halopesa" | "card" | "bank">("mpesa");
   const [prescriptionRef, setPrescriptionRef] = useState("");
   const [posMsg, setPosMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [posBusy, setPosBusy] = useState(false);
@@ -2565,17 +2565,27 @@ export default function PharmacyDashboard({
                   <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${mutedCls}`}>
                     Payment Channel
                   </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(["mpesa", "cash", "tigo"] as const).map((pm) => (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                    {(
+                      [
+                        { id: "mpesa", label: "M-Pesa" },
+                        { id: "tigo", label: "Mixx/Tigo" },
+                        { id: "airtel", label: "Airtel" },
+                        { id: "halopesa", label: "Halopesa" },
+                        { id: "cash", label: "Cash" },
+                        { id: "card", label: "Card" },
+                        { id: "bank", label: "Bank" },
+                      ] as const
+                    ).map((pm) => (
                       <button
-                        key={pm}
+                        key={pm.id}
                         type="button"
-                        onClick={() => setPaymentMethod(pm)}
-                        className={`py-2 rounded-xl border text-[11px] font-semibold uppercase cursor-pointer ${paymentMethod === pm ? "text-white border-transparent" : chipCls
+                        onClick={() => setPaymentMethod(pm.id)}
+                        className={`py-2 rounded-xl border text-[11px] font-semibold cursor-pointer ${paymentMethod === pm.id ? "text-white border-transparent" : chipCls
                           }`}
-                        style={paymentMethod === pm ? { backgroundColor: accent } : undefined}
+                        style={paymentMethod === pm.id ? { backgroundColor: accent } : undefined}
                       >
-                        {pm}
+                        {pm.label}
                       </button>
                     ))}
                   </div>
@@ -2809,17 +2819,27 @@ export default function PharmacyDashboard({
                         <div className="font-bold uppercase text-[10px] tracking-wider opacity-75">
                           {isSw ? "Chagua Njia ya Malipo" : "Select Payment Means"}
                         </div>
-                        <div className="grid grid-cols-2 gap-1.5">
-                          {(["mpesa", "cash", "tigo", "halopesa", "card"] as const).map((pm) => (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {(
+                            [
+                              { id: "mpesa", label: "M-Pesa" },
+                              { id: "tigo", label: "Mixx / Tigo" },
+                              { id: "airtel", label: "Airtel Money" },
+                              { id: "halopesa", label: "Halopesa" },
+                              { id: "cash", label: "Cash" },
+                              { id: "card", label: "Card" },
+                              { id: "bank", label: "Bank Transfer" },
+                            ] as const
+                          ).map((pm) => (
                             <button
-                              key={pm}
+                              key={pm.id}
                               type="button"
-                              onClick={() => setPaymentMethod(pm)}
-                              className={`py-2.5 rounded-xl border text-[11px] font-bold uppercase cursor-pointer min-h-[40px] ${paymentMethod === pm ? "text-white border-transparent" : cardCls
+                              onClick={() => setPaymentMethod(pm.id)}
+                              className={`py-2.5 px-2 rounded-xl border text-[11px] font-bold cursor-pointer min-h-[40px] ${paymentMethod === pm.id ? "text-white border-transparent" : cardCls
                                 }`}
-                              style={paymentMethod === pm ? { backgroundColor: accent } : undefined}
+                              style={paymentMethod === pm.id ? { backgroundColor: accent } : undefined}
                             >
-                              {pm}
+                              {pm.label}
                             </button>
                           ))}
                         </div>

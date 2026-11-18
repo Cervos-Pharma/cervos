@@ -31,6 +31,14 @@ interface BillingPackageItem {
   maxOperators: number | null;
 }
 
+type BillingChannel =
+  | "M-Pesa (Vodacom)"
+  | "Mixx by Yas (Tigo)"
+  | "Airtel Money"
+  | "Halopesa"
+  | "CRDB / NMB Bank"
+  | "Visa / Mastercard";
+
 export default function DedicatedBillingPage() {
   const router = useRouter();
   const { isDark } = useWorkspaceTheme();
@@ -39,10 +47,18 @@ export default function DedicatedBillingPage() {
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPlan, setSelectedPlan] = useState<string>("Community Standard");
-  const [channel, setChannel] = useState<"M-Pesa Paybill" | "Tigo Lipa" | "CRDB / NMB Bank" | "Card / Visa">("M-Pesa Paybill");
-  const [payerRef, setPayerRef] = useState("+255 712 000 000");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [channel, setChannel] = useState<BillingChannel>("M-Pesa (Vodacom)");
+  const [payerRef, setPayerRef] = useState("");
   const [busy, setBusy] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [bouncedMsg, setBouncedMsg] = useState<string | null>(null);
+  const [pendingUssd, setPendingUssd] = useState<{
+    reference: string;
+    msisdn: string;
+    amountTzs: number;
+    message: string;
+  } | null>(null);
   const [receiptCode, setReceiptCode] = useState<string | null>(null);
 
   const loadBilling = async () => {
@@ -80,7 +96,39 @@ export default function DedicatedBillingPage() {
   const chipCls = isDark ? "bg-[#171D28] border-slate-800 text-slate-200" : "bg-[#F8FAFC] border-[#EAECF0] text-[#111317]";
   const mutedCls = isDark ? "text-slate-400" : "text-[#64748B]";
 
-  const submitPayment = async (simulateBounce = false) => {
+  const checkPendingPayment = async (refCode: string) => {
+    setCheckingStatus(true);
+    try {
+      const res = await fetch("/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check_subscription_payment", reference: refCode }),
+      });
+      const out = await res.json();
+      if (out.status === "completed") {
+        setPendingUssd(null);
+        setReceiptCode(out.receiptNumber || refCode);
+        if (out.account) setAccount(out.account);
+        setStep(3);
+      } else if (out.status === "failed" || res.status === 402) {
+        setPendingUssd(null);
+        setBouncedMsg(out.error || "Mobile money payment failed or was declined.");
+      }
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingUssd) return;
+    const timer = setInterval(() => {
+      void checkPendingPayment(pendingUssd.reference);
+    }, 3500);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUssd?.reference]);
+
+  const submitPayment = async () => {
     if (!account) return;
     setBusy(true);
     setBouncedMsg(null);
@@ -90,16 +138,25 @@ export default function DedicatedBillingPage() {
       body: JSON.stringify({
         action: "activate_subscription",
         planName: selectedPlan,
+        billingCycle,
         paymentChannel: channel,
         payerPhoneOrRef: payerRef,
-        simulateBounce,
       }),
     });
     const out = await res.json();
     setBusy(false);
     if (!res.ok) {
-      setBouncedMsg(out.error || "Payment could not be confirmed.");
+      setBouncedMsg(out.error || "Payment could not be initiated.");
       setStep(2);
+      return;
+    }
+    if (out.pending && out.reference) {
+      setPendingUssd({
+        reference: out.reference,
+        msisdn: out.msisdn || payerRef,
+        amountTzs: out.amountTzs || currentPlanObj?.priceMonthlyTzs || 45000,
+        message: out.message || "Enter your PIN on your phone to complete payment.",
+      });
       return;
     }
     setReceiptCode(out.receiptNumber || "SUB-OK");
@@ -241,83 +298,148 @@ export default function DedicatedBillingPage() {
           </div>
         )}
 
-        {/* STEP 2: PAY / EDIT INFO IF BOUNCED */}
+        {/* STEP 2: PAY / EDIT INFO & REAL USSD PUSH CONFIRMATION */}
         {step === 2 && (
           <div className={`rounded-[24px] border p-4 sm:p-6 space-y-4 ${cardCls}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-semibold">{selectedPlan}</h2>
                 <p className={`text-xs ${mutedCls}`}>
-                  {formatTzs(currentPlanObj?.priceMonthlyTzs ?? 45000)} / month
+                  {formatTzs(
+                    billingCycle === "annual"
+                      ? (currentPlanObj?.priceAnnualTzs || (currentPlanObj?.priceMonthlyTzs ?? 45000) * 10)
+                      : (currentPlanObj?.priceMonthlyTzs ?? 45000)
+                  )}{" "}
+                  / {billingCycle === "annual" ? (isSw ? "mwaka" : "year") : (isSw ? "mwezi" : "month")}
                 </p>
               </div>
-              <button type="button" onClick={() => setStep(1)} className="min-h-[44px] px-3 py-2 inline-flex items-center text-xs font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
-                {isSw ? "Badili Mpango" : "Change Plan"}
-              </button>
+              <div className="flex items-center gap-2">
+                <div className={`inline-flex rounded-full border p-0.5 text-[11px] font-semibold ${chipCls}`}>
+                  {(["monthly", "annual"] as const).map((cyc) => (
+                    <button
+                      key={cyc}
+                      type="button"
+                      onClick={() => setBillingCycle(cyc)}
+                      className={`px-3 py-1 rounded-full cursor-pointer ${
+                        billingCycle === cyc ? "text-white" : mutedCls
+                      }`}
+                      style={billingCycle === cyc ? { backgroundColor: accent } : undefined}
+                    >
+                      {cyc === "monthly" ? (isSw ? "Mwezi" : "Monthly") : (isSw ? "Mwaka" : "Annual (-2mo)")}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => { setPendingUssd(null); setStep(1); }} className="min-h-[44px] px-2 py-2 inline-flex items-center text-xs font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
+                  {isSw ? "Badili Mpango" : "Change Plan"}
+                </button>
+              </div>
             </div>
 
             {bouncedMsg && (
               <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/35 text-xs text-rose-500 space-y-1">
-                <div className="font-bold">{isSw ? "Malipo Yamekwama - Hariri Taarifa" : "Payment Bounced - Edit Details & Retry"}</div>
+                <div className="font-bold">{isSw ? "Malipo Yamekwama - Hariri Taarifa" : "Payment Did Not Clear - Edit & Retry"}</div>
                 <div>{bouncedMsg}</div>
               </div>
             )}
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${mutedCls}`}>
-                  {isSw ? "Njia ya Malipo" : "Payment Channel"}
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {(["M-Pesa Paybill", "Tigo Lipa", "CRDB / NMB Bank", "Card / Visa"] as const).map((ch) => (
-                    <button
-                      key={ch}
-                      type="button"
-                      onClick={() => setChannel(ch)}
-                      className={`min-h-[44px] py-2.5 px-3 rounded-xl border text-xs font-semibold inline-flex items-center justify-center text-center cursor-pointer ${
-                        channel === ch ? "text-white border-transparent" : chipCls
-                      }`}
-                      style={channel === ch ? { backgroundColor: accent } : undefined}
-                    >
-                      {ch}
-                    </button>
-                  ))}
+            {pendingUssd ? (
+              <div className="p-5 rounded-2xl border border-blue-500/35 bg-blue-500/10 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#1039B9] dark:text-sky-300">
+                    {isSw ? "Subiri Uthibitisho wa Simu (USSD)" : "Waiting for Phone USSD PIN Approval"}
+                  </span>
+                  <span className="text-[11px] font-mono animate-pulse">
+                    {checkingStatus ? "Checking..." : "Polling Payme..."}
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed">
+                  {pendingUssd.message} ({formatTzs(pendingUssd.amountTzs)} to <strong>+{pendingUssd.msisdn}</strong> &middot; Ref <strong className="font-mono">{pendingUssd.reference}</strong>)
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={checkingStatus}
+                    onClick={() => void checkPendingPayment(pendingUssd.reference)}
+                    className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer disabled:opacity-60"
+                    style={{ backgroundColor: accent }}
+                  >
+                    {checkingStatus ? "Verifying..." : isSw ? "Nimeshalipa - Hakiki Sasa" : "I Approved on Phone - Verify Now"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingUssd(null)}
+                    className={`px-4 py-2 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
+                  >
+                    {isSw ? "Hariri Namba / Ghairi" : "Edit Number / Retry"}
+                  </button>
                 </div>
               </div>
+            ) : (
+              <>
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${mutedCls}`}>
+                      {isSw ? "Chagua Mtandao au Njia ya Malipo" : "Choose Mobile Money Network or Bank / Card"}
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {(
+                        [
+                          "M-Pesa (Vodacom)",
+                          "Mixx by Yas (Tigo)",
+                          "Airtel Money",
+                          "Halopesa",
+                          "CRDB / NMB Bank",
+                          "Visa / Mastercard",
+                        ] as const
+                      ).map((ch) => (
+                        <button
+                          key={ch}
+                          type="button"
+                          onClick={() => setChannel(ch)}
+                          className={`min-h-[44px] py-2.5 px-3 rounded-xl border text-xs font-semibold inline-flex items-center justify-center text-center cursor-pointer ${
+                            channel === ch ? "text-white border-transparent" : chipCls
+                          }`}
+                          style={channel === ch ? { backgroundColor: accent } : undefined}
+                        >
+                          {ch}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              <div>
-                <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
-                  {isSw ? "Namba ya Simu / Kumbukumbu ya Mlipaji" : "Payer Mobile Number / Account Reference"}
-                </label>
-                <input
-                  type="text"
-                  value={payerRef}
-                  onChange={(e) => setPayerRef(e.target.value)}
-                  placeholder="+255 712 345 678 or Acc #"
-                  className={`w-full min-h-[44px] px-4 py-3 rounded-xl border text-sm focus:outline-none ${chipCls}`}
-                />
-              </div>
-            </div>
+                  <div>
+                    <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
+                      {channel.includes("Bank") || channel.includes("Visa")
+                        ? (isSw ? "Kumbukumbu ya Benki / Kadi" : "Bank Transaction / Card Reference")
+                        : (isSw ? "Namba ya Simu ya Kupokea USSD (Mf. 0712 345 678)" : "Mobile Money Phone Number (e.g. 0712 345 678 or +255712345678)")}
+                    </label>
+                    <input
+                      type="text"
+                      value={payerRef}
+                      onChange={(e) => setPayerRef(e.target.value)}
+                      placeholder={channel.includes("Bank") || channel.includes("Visa") ? "CRDB/NMB or Card Ref" : "+255 712 345 678"}
+                      className={`w-full min-h-[44px] px-4 py-3 rounded-xl border text-sm focus:outline-none ${chipCls}`}
+                    />
+                  </div>
+                </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void submitPayment(true)}
-                className={`w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
-              >
-                {isSw ? "Jaribu Malipo Yaliyokwama" : "Test Bounced Payment"}
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void submitPayment(false)}
-                className="w-full sm:w-auto min-h-[44px] px-6 py-3 rounded-full text-white text-xs font-semibold cursor-pointer disabled:opacity-60"
-                style={{ backgroundColor: accent }}
-              >
-                {busy ? (isSw ? "Inakamilisha..." : "Processing...") : isSw ? "Kamilisha Malipo ->" : "Pay & Activate Now ->"}
-              </button>
-            </div>
+                <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    disabled={busy || payerRef.trim().length < 4}
+                    onClick={() => void submitPayment()}
+                    className="w-full sm:w-auto min-h-[44px] px-6 py-3 rounded-full text-white text-xs font-semibold cursor-pointer disabled:opacity-50"
+                    style={{ backgroundColor: accent }}
+                  >
+                    {busy
+                      ? (isSw ? "Inatuma USSD..." : "Sending Payment Prompt...")
+                      : channel.includes("Bank") || channel.includes("Visa")
+                        ? (isSw ? "Thibitisha Malipo ->" : "Submit Payment ->")
+                        : (isSw ? "Tuma Ujumbe wa USSD Simuni ->" : "Send USSD Prompt to Phone ->")}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

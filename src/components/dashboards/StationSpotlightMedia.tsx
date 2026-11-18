@@ -205,6 +205,13 @@ export default function StationSpotlightMedia({
                   width={tileSize}
                   height={tileSize}
                   loading="lazy"
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    if (!el.dataset.osmFallback) {
+                      el.dataset.osmFallback = "1";
+                      el.src = `https://tile.openstreetmap.org/${zoom}/${tileX + dx}/${tileY + dy}.png`;
+                    }
+                  }}
                   className="w-[256px] h-[256px] block opacity-95"
                 />
               ))

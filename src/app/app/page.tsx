@@ -135,30 +135,38 @@ export default function WorkspaceHomePage() {
   const [cartTotal, setCartTotal] = useState(14500);
   const [cartItems, setCartItems] = useState(1);
   const [receiptMsg, setReceiptMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const fetchState = async () => {
-    const r = await fetch("/api/workspace/state", { cache: "no-store" });
-    if (r.status === 401) {
-      setSessionLockedOut(true);
-      setData(null);
-      router.replace("/auth?mode=signin");
-      return;
+    setSyncing(true);
+    try {
+      const r = await fetch("/api/workspace/state", { cache: "no-store" });
+      if (r.status === 401) {
+        setSessionLockedOut(true);
+        setData(null);
+        router.replace("/auth?mode=signin");
+        return;
+      }
+      const res = (await r.json()) as AppWorkspaceData & { loungeOnly?: boolean };
+      if (res.loungeOnly) {
+        router.replace("/app/lounge");
+        return;
+      }
+      if (!res.account?.onboardingDone) {
+        router.replace("/app/onboarding");
+        return;
+      }
+      if (!res.activeProfile) {
+        router.replace("/app/gate?stage=profile");
+        return;
+      }
+      setI18nLang(res.account.lang);
+      setData(res);
+      setLastSyncedAt(new Date().toISOString());
+    } finally {
+      setSyncing(false);
     }
-    const res = (await r.json()) as AppWorkspaceData & { loungeOnly?: boolean };
-    if (res.loungeOnly) {
-      router.replace("/app/lounge");
-      return;
-    }
-    if (!res.account?.onboardingDone) {
-      router.replace("/app/onboarding");
-      return;
-    }
-    if (!res.activeProfile) {
-      router.replace("/app/gate?stage=profile");
-      return;
-    }
-    setI18nLang(res.account.lang);
-    setData(res);
   };
 
   useEffect(() => {
@@ -200,7 +208,22 @@ export default function WorkspaceHomePage() {
     } catch {
       // Ignore storage block
     }
+    const syncInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void fetchState();
+      }
+    }, 25000);
+    const onOnline = () => void fetchState();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void fetchState();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener(WORKSPACE_REFRESH_EVENT, onRefresh);
       window.removeEventListener("pageshow", onPageShow);
     };
@@ -708,6 +731,12 @@ export default function WorkspaceHomePage() {
       navItems={navItems}
       notifications={data.notifications ?? []}
       onMarkNotificationsRead={handleMarkNotificationsRead}
+      syncing={syncing}
+      lastSyncedAt={lastSyncedAt}
+      onSyncNow={() => {
+        void fetchState();
+        window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT));
+      }}
       onLockProfile={lockProfile}
       onSignOut={signOutOrg}
     >
