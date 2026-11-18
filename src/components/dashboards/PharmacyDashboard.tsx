@@ -1416,9 +1416,9 @@ export default function PharmacyDashboard({
       !q
         ? profiles
         : profiles.filter((p) => {
-            const br = centres.find((c) => c.id === p.centreId);
-            return matchesSearch(q, p.displayName, p.username, p.role, br?.name, br?.region);
-          }),
+          const br = centres.find((c) => c.id === p.centreId);
+          return matchesSearch(q, p.displayName, p.username, p.role, br?.name, br?.region);
+        }),
     [profiles, centres, q]
   );
 
@@ -1840,7 +1840,7 @@ export default function PharmacyDashboard({
               >
                 + {isSw ? "Kaunta ya FEFO" : "Open Counter POS"}
               </button>
-              {canManageAdmin && orgScope === "all" ? (
+              {canManageAdmin && orgScope === "all" && (
                 <button
                   type="button"
                   onClick={() => setTab("billing")}
@@ -1848,15 +1848,6 @@ export default function PharmacyDashboard({
                   style={{ backgroundColor: accent }}
                 >
                   {isSw ? "Fedha & Kulinganisha" : "Finance & Compare"}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setTab("operations")}
-                  className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer shadow-xs transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: accent }}
-                >
-                  + {isSw ? "Kaunta ya FEFO" : "Open Counter POS"}
                 </button>
               )}
             </>
@@ -1983,236 +1974,236 @@ export default function PharmacyDashboard({
                     className="fixed inset-0 z-[125] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
                     onClick={() => setFocusedBatch(null)}
                   >
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className={`w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 rounded-[26px] border space-y-4 ring-2 shadow-2xl animate-stage-pop ${cardCls}`}
-                    style={{ borderColor: accent }}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex items-center gap-3.5">
-                        {focusedBatch.imageUrl ? (
-                          <img
-                            src={focusedBatch.imageUrl}
-                            alt={focusedBatch.brandName}
-                            className="w-14 h-14 rounded-2xl object-cover border border-slate-200/40"
-                          />
-                        ) : (
-                          <div
-                            className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0"
-                            style={{ backgroundColor: accent }}
-                          >
-                            {focusedBatch.brandName.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                            {isSw ? "KADI YA MAELEZO YA DAWA" : "PRODUCT & BATCH FOCUS CARD"}
-                          </div>
-                          <h3 className="text-base font-bold">{focusedBatch.brandName} ({focusedBatch.genericName})</h3>
-                          <div className={`text-[11px] ${mutedCls}`}>
-                            {focusedBatch.category} &middot; Batch <span className="font-mono">{focusedBatch.batchNumber}</span> &middot;{" "}
-                            {focusedBatch.requiresPrescription ? "Rx Prescription Required" : "OTC Unrestricted"}
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className={`w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 rounded-[26px] border space-y-4 ring-2 shadow-2xl animate-stage-pop ${cardCls}`}
+                      style={{ borderColor: accent }}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-center gap-3.5">
+                          {focusedBatch.imageUrl ? (
+                            <img
+                              src={focusedBatch.imageUrl}
+                              alt={focusedBatch.brandName}
+                              className="w-14 h-14 rounded-2xl object-cover border border-slate-200/40"
+                            />
+                          ) : (
+                            <div
+                              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg shrink-0"
+                              style={{ backgroundColor: accent }}
+                            >
+                              {focusedBatch.brandName.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                              {isSw ? "KADI YA MAELEZO YA DAWA" : "PRODUCT & BATCH FOCUS CARD"}
+                            </div>
+                            <h3 className="text-base font-bold">{focusedBatch.brandName} ({focusedBatch.genericName})</h3>
+                            <div className={`text-[11px] ${mutedCls}`}>
+                              {focusedBatch.category} &middot; Batch <span className="font-mono">{focusedBatch.batchNumber}</span> &middot;{" "}
+                              {focusedBatch.requiresPrescription ? "Rx Prescription Required" : "OTC Unrestricted"}
+                            </div>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setFocusedBatch(null)}
+                          className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
+                        >
+                          Close &times;
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setFocusedBatch(null)}
-                        className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
-                      >
-                        Close &times;
-                      </button>
-                    </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                      <div className={`p-3 rounded-xl border ${cardCls}`}>
-                        <div className={`text-[10px] ${mutedCls}`}>Cost / Unit</div>
-                        <div className="font-bold mt-0.5">TZS {focusedBatch.costPriceTzs.toLocaleString("en-US")}</div>
-                      </div>
-                      <div className={`p-3 rounded-xl border ${cardCls}`}>
-                        <div className={`text-[10px] ${mutedCls}`}>Sale / Unit</div>
-                        <div className="font-bold text-emerald-500 mt-0.5">
-                          TZS {focusedBatch.salePriceTzs.toLocaleString("en-US")} ({marginPct}%)
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                        <div className={`p-3 rounded-xl border ${cardCls}`}>
+                          <div className={`text-[10px] ${mutedCls}`}>Cost / Unit</div>
+                          <div className="font-bold mt-0.5">TZS {focusedBatch.costPriceTzs.toLocaleString("en-US")}</div>
+                        </div>
+                        <div className={`p-3 rounded-xl border ${cardCls}`}>
+                          <div className={`text-[10px] ${mutedCls}`}>Sale / Unit</div>
+                          <div className="font-bold text-emerald-500 mt-0.5">
+                            TZS {focusedBatch.salePriceTzs.toLocaleString("en-US")} ({marginPct}%)
+                          </div>
+                        </div>
+                        <div className={`p-3 rounded-xl border ${cardCls}`}>
+                          <div className={`text-[10px] ${mutedCls}`}>Alert Threshold</div>
+                          <div className="font-bold mt-0.5">
+                            {focusedBatch.quantity} / {focusedBatch.lowStockThreshold ?? 25} min
+                          </div>
+                        </div>
+                        <div className={`p-3 rounded-xl border ${cardCls}`}>
+                          <div className={`text-[10px] ${mutedCls}`}>Date Entry / Exp</div>
+                          <div className="font-bold font-mono text-[11px] mt-0.5">
+                            {focusedBatch.dateEntered || "-"} &rarr; {focusedBatch.expiryDate}
+                          </div>
                         </div>
                       </div>
-                      <div className={`p-3 rounded-xl border ${cardCls}`}>
-                        <div className={`text-[10px] ${mutedCls}`}>Alert Threshold</div>
-                        <div className="font-bold mt-0.5">
-                          {focusedBatch.quantity} / {focusedBatch.lowStockThreshold ?? 25} min
-                        </div>
-                      </div>
-                      <div className={`p-3 rounded-xl border ${cardCls}`}>
-                        <div className={`text-[10px] ${mutedCls}`}>Date Entry / Exp</div>
-                        <div className="font-bold font-mono text-[11px] mt-0.5">
-                          {focusedBatch.dateEntered || "-"} &rarr; {focusedBatch.expiryDate}
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                      <div className={`p-3.5 rounded-xl border space-y-2 ${cardCls}`}>
-                        <div className={`text-[10px] font-bold uppercase ${mutedCls}`}>
-                          {isSw ? "Mwelekeo wa Mauzo" : "Dispense Trend"}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div className={`p-3.5 rounded-xl border space-y-2 ${cardCls}`}>
+                          <div className={`text-[10px] font-bold uppercase ${mutedCls}`}>
+                            {isSw ? "Mwelekeo wa Mauzo" : "Dispense Trend"}
+                          </div>
+                          <div className="flex items-end gap-2 h-16">
+                            {trendBars.map((tb, i) => (
+                              <div key={`${tb.date}-${i}`} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                                <div
+                                  className="w-full rounded-t"
+                                  style={{ height: `${Math.max(18, Math.round((tb.qty / maxBar) * 100))}%`, backgroundColor: accent }}
+                                  title={`${tb.date}: ${tb.qty} packs`}
+                                />
+                                <span className="text-[9px] opacity-70">{tb.date}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex items-end gap-2 h-16">
-                          {trendBars.map((tb, i) => (
-                            <div key={`${tb.date}-${i}`} className="flex-1 flex flex-col items-center justify-end h-full gap-1">
-                              <div
-                                className="w-full rounded-t"
-                                style={{ height: `${Math.max(18, Math.round((tb.qty / maxBar) * 100))}%`, backgroundColor: accent }}
-                                title={`${tb.date}: ${tb.qty} packs`}
-                              />
-                              <span className="text-[9px] opacity-70">{tb.date}</span>
+
+                        <div className={`p-3.5 rounded-xl border space-y-1.5 ${cardCls}`}>
+                          <div className={`text-[10px] font-bold uppercase ${mutedCls}`}>
+                            {isSw ? `Makundi Yote (${sameProductBatches.length})` : `All Linked Batches (${sameProductBatches.length})`}
+                          </div>
+                          {sameProductBatches.map((sb) => (
+                            <div key={sb.id} className="flex justify-between text-[11px]">
+                              <span className="font-mono">{sb.batchNumber} (Exp {sb.expiryDate})</span>
+                              <strong>{sb.quantity} packs</strong>
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <div className={`p-3.5 rounded-xl border space-y-1.5 ${cardCls}`}>
-                        <div className={`text-[10px] font-bold uppercase ${mutedCls}`}>
-                          {isSw ? `Makundi Yote (${sameProductBatches.length})` : `All Linked Batches (${sameProductBatches.length})`}
-                        </div>
-                        {sameProductBatches.map((sb) => (
-                          <div key={sb.id} className="flex justify-between text-[11px]">
-                            <span className="font-mono">{sb.batchNumber} (Exp {sb.expiryDate})</span>
-                            <strong>{sb.quantity} packs</strong>
+                      {caps.canEditInventory && (
+                        <form onSubmit={handleSaveBatchEdit} className={`p-4 rounded-xl border space-y-3 ${cardCls}`}>
+                          <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: accent }}>
+                            {isSw ? "Hariri Taarifa za Bidhaa & Kundi" : "Edit Product & Batch Fields"}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {caps.canEditInventory && (
-                      <form onSubmit={handleSaveBatchEdit} className={`p-4 rounded-xl border space-y-3 ${cardCls}`}>
-                        <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: accent }}>
-                          {isSw ? "Hariri Taarifa za Bidhaa & Kundi" : "Edit Product & Batch Fields"}
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Brand Name</label>
-                            <input type="text" value={editBatchBrand} onChange={(e) => setEditBatchBrand(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Generic Name</label>
-                            <input type="text" value={editBatchGeneric} onChange={(e) => setEditBatchGeneric(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Type / Category</label>
-                            {editCustomCatMode ? (
-                              <div className="flex gap-1.5">
-                                <input
-                                  type="text"
-                                  value={editBatchCategory}
-                                  onChange={(e) => setEditBatchCategory(e.target.value)}
-                                  placeholder="Type custom category"
-                                  autoFocus
-                                  className={`flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border ${inputCls}`}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditCustomCatMode(false);
-                                    if (!editBatchCategory.trim()) {
-                                      setEditBatchCategory(drugCategoryOptions[0] || "Essential");
-                                    }
-                                  }}
-                                  className={`px-2 py-1.5 rounded-lg border text-[10px] font-semibold cursor-pointer ${chipCls}`}
-                                >
-                                  List
-                                </button>
-                              </div>
-                            ) : (
-                              <select
-                                value={
-                                  drugCategoryOptions.some(
-                                    (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
-                                  )
-                                    ? drugCategoryOptions.find(
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Brand Name</label>
+                              <input type="text" value={editBatchBrand} onChange={(e) => setEditBatchBrand(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Generic Name</label>
+                              <input type="text" value={editBatchGeneric} onChange={(e) => setEditBatchGeneric(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Type / Category</label>
+                              {editCustomCatMode ? (
+                                <div className="flex gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={editBatchCategory}
+                                    onChange={(e) => setEditBatchCategory(e.target.value)}
+                                    placeholder="Type custom category"
+                                    autoFocus
+                                    className={`flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border ${inputCls}`}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditCustomCatMode(false);
+                                      if (!editBatchCategory.trim()) {
+                                        setEditBatchCategory(drugCategoryOptions[0] || "Essential");
+                                      }
+                                    }}
+                                    className={`px-2 py-1.5 rounded-lg border text-[10px] font-semibold cursor-pointer ${chipCls}`}
+                                  >
+                                    List
+                                  </button>
+                                </div>
+                              ) : (
+                                <select
+                                  value={
+                                    drugCategoryOptions.some(
+                                      (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
+                                    )
+                                      ? drugCategoryOptions.find(
                                         (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
                                       )
-                                    : "__current__"
-                                }
-                                onChange={(e) => {
-                                  if (e.target.value === "__custom__") {
-                                    setEditCustomCatMode(true);
-                                    setEditBatchCategory("");
-                                  } else {
-                                    setEditBatchCategory(e.target.value);
+                                      : "__current__"
                                   }
-                                }}
-                                className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`}
-                              >
-                                {editBatchCategory.trim() &&
-                                  !drugCategoryOptions.some(
-                                    (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
-                                  ) && <option value="__current__">{editBatchCategory}</option>}
-                                {drugCategoryOptions.map((c) => (
-                                  <option key={c} value={c}>
-                                    {c}
-                                  </option>
-                                ))}
-                                <option value="__custom__">+ Custom category...</option>
-                              </select>
-                            )}
+                                  onChange={(e) => {
+                                    if (e.target.value === "__custom__") {
+                                      setEditCustomCatMode(true);
+                                      setEditBatchCategory("");
+                                    } else {
+                                      setEditBatchCategory(e.target.value);
+                                    }
+                                  }}
+                                  className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`}
+                                >
+                                  {editBatchCategory.trim() &&
+                                    !drugCategoryOptions.some(
+                                      (c) => c.toLowerCase() === editBatchCategory.trim().toLowerCase()
+                                    ) && <option value="__current__">{editBatchCategory}</option>}
+                                  {drugCategoryOptions.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
+                                  <option value="__custom__">+ Custom category...</option>
+                                </select>
+                              )}
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Batch Number</label>
+                              <input type="text" value={editBatchNumber} onChange={(e) => setEditBatchNumber(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border font-mono ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Quantity</label>
+                              <input type="number" value={editBatchQty} onChange={(e) => setEditBatchQty(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Cost / Unit</label>
+                              <input type="number" value={editBatchCost} onChange={(e) => setEditBatchCost(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Sale / Unit</label>
+                              <input type="number" value={editBatchPrice} onChange={(e) => setEditBatchPrice(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Low-Stock Threshold</label>
+                              <input type="number" value={editBatchThreshold} onChange={(e) => setEditBatchThreshold(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Date Entry</label>
+                              <input type="date" value={editBatchDateEntered} onChange={(e) => setEditBatchDateEntered(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Expiry Date</label>
+                              <input type="date" value={editBatchExpiry} onChange={(e) => setEditBatchExpiry(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <WebpPhotoInput
+                                value={editBatchImageUrl}
+                                onChange={setEditBatchImageUrl}
+                                label="Product Photo (480p WebP)"
+                                isDark={isDark}
+                                accent={accent}
+                                compact
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Batch Number</label>
-                            <input type="text" value={editBatchNumber} onChange={(e) => setEditBatchNumber(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border font-mono ${inputCls}`} />
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
+                              <input type="checkbox" checked={editBatchRx} onChange={(e) => setEditBatchRx(e.target.checked)} />
+                              <span>Prescription Required (Rx)</span>
+                            </label>
+                            <button
+                              type="submit"
+                              disabled={invBusy}
+                              className="px-4 py-2 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                              style={{ backgroundColor: accent }}
+                            >
+                              {invBusyKey === "edit_batch" && (
+                                <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                              )}
+                              <span>{invBusyKey === "edit_batch" ? "Saving..." : "Save Product Updates"}</span>
+                            </button>
                           </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Quantity</label>
-                            <input type="number" value={editBatchQty} onChange={(e) => setEditBatchQty(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Cost / Unit</label>
-                            <input type="number" value={editBatchCost} onChange={(e) => setEditBatchCost(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Sale / Unit</label>
-                            <input type="number" value={editBatchPrice} onChange={(e) => setEditBatchPrice(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Low-Stock Threshold</label>
-                            <input type="number" value={editBatchThreshold} onChange={(e) => setEditBatchThreshold(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Date Entry</label>
-                            <input type="date" value={editBatchDateEntered} onChange={(e) => setEditBatchDateEntered(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div>
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Expiry Date</label>
-                            <input type="date" value={editBatchExpiry} onChange={(e) => setEditBatchExpiry(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <WebpPhotoInput
-                              value={editBatchImageUrl}
-                              onChange={setEditBatchImageUrl}
-                              label="Product Photo (480p WebP)"
-                              isDark={isDark}
-                              accent={accent}
-                              compact
-                            />
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                          <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
-                            <input type="checkbox" checked={editBatchRx} onChange={(e) => setEditBatchRx(e.target.checked)} />
-                            <span>Prescription Required (Rx)</span>
-                          </label>
-                          <button
-                            type="submit"
-                            disabled={invBusy}
-                            className="px-4 py-2 rounded-full text-white text-xs font-semibold inline-flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                            style={{ backgroundColor: accent }}
-                          >
-                            {invBusyKey === "edit_batch" && (
-                              <span className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                            )}
-                            <span>{invBusyKey === "edit_batch" ? "Saving..." : "Save Product Updates"}</span>
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
+                        </form>
+                      )}
+                    </div>
                   </div>,
                   document.body
                 );
@@ -2415,8 +2406,8 @@ export default function PharmacyDashboard({
                               (c) => c.toLowerCase() === newCategory.trim().toLowerCase()
                             )
                               ? drugCategoryOptions.find(
-                                  (c) => c.toLowerCase() === newCategory.trim().toLowerCase()
-                                )
+                                (c) => c.toLowerCase() === newCategory.trim().toLowerCase()
+                              )
                               : "__current__"
                           }
                           onChange={(e) => {
@@ -2813,9 +2804,8 @@ export default function PharmacyDashboard({
                       type="button"
                       disabled={shiftBusy}
                       onClick={() => handleShiftClock(activeShift ? "out" : "in")}
-                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${
-                        activeShift ? "bg-amber-500/15 text-amber-600" : "bg-emerald-500/15 text-emerald-600"
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-60 ${activeShift ? "bg-amber-500/15 text-amber-600" : "bg-emerald-500/15 text-emerald-600"
+                        }`}
                     >
                       {shiftBusy && (
                         <span className="w-3 h-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
@@ -3395,8 +3385,8 @@ export default function PharmacyDashboard({
                           <div className="font-bold flex items-center justify-between gap-2">
                             <span>
                               {hwConfig.printerTransport === "web_serial" ||
-                              hwConfig.printerTransport === "web_usb" ||
-                              hwConfig.printerTransport === "bluetooth"
+                                hwConfig.printerTransport === "web_usb" ||
+                                hwConfig.printerTransport === "bluetooth"
                                 ? `${hwConfig.printerName} (${hwConfig.paperWidthMm}mm)`
                                 : `OS System Print Dialog (${hwConfig.paperWidthMm}mm)`}
                             </span>
@@ -3509,62 +3499,62 @@ export default function PharmacyDashboard({
                 className="fixed inset-0 z-[125] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
                 onClick={() => setFocusedReceipt(null)}
               >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-xl max-h-[88vh] overflow-y-auto p-6 rounded-[26px] border space-y-3 ring-2 shadow-2xl animate-stage-pop ${cardCls}`}
-                style={{ borderColor: accent }}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                      {isSw ? "RISITI HALISI (HAIWEZI KUFUTWA)" : "OFFICIAL IMMUTABLE RECEIPT FOCUS CARD"}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={`w-full max-w-xl max-h-[88vh] overflow-y-auto p-6 rounded-[26px] border space-y-3 ring-2 shadow-2xl animate-stage-pop ${cardCls}`}
+                  style={{ borderColor: accent }}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
+                        {isSw ? "RISITI HALISI (HAIWEZI KUFUTWA)" : "OFFICIAL IMMUTABLE RECEIPT FOCUS CARD"}
+                      </div>
+                      <h3 className="text-base font-bold">
+                        {focusedReceipt.receiptNumber || `RCP-${focusedReceipt.id.slice(-6).toUpperCase()}`} &middot;{" "}
+                        {focusedReceipt.customerName || (isSw ? "Mteja wa Kaunta" : "Walk-in Patient")}
+                      </h3>
+                      <div className={`text-[11px] ${mutedCls}`}>
+                        {focusedReceipt.createdAt.slice(0, 16).replace("T", " ")} &middot; Cashier: {focusedReceipt.actorName} &middot;{" "}
+                        {focusedReceipt.paymentMethod.toUpperCase()}
+                        {focusedReceipt.prescriptionRef ? ` · Rx ${focusedReceipt.prescriptionRef}` : ""}
+                      </div>
                     </div>
-                    <h3 className="text-base font-bold">
-                      {focusedReceipt.receiptNumber || `RCP-${focusedReceipt.id.slice(-6).toUpperCase()}`} &middot;{" "}
-                      {focusedReceipt.customerName || (isSw ? "Mteja wa Kaunta" : "Walk-in Patient")}
-                    </h3>
-                    <div className={`text-[11px] ${mutedCls}`}>
-                      {focusedReceipt.createdAt.slice(0, 16).replace("T", " ")} &middot; Cashier: {focusedReceipt.actorName} &middot;{" "}
-                      {focusedReceipt.paymentMethod.toUpperCase()}
-                      {focusedReceipt.prescriptionRef ? ` · Rx ${focusedReceipt.prescriptionRef}` : ""}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => printSaleReceipt(focusedReceipt)}
+                        className="px-4 py-1.5 rounded-full text-white text-xs font-semibold cursor-pointer"
+                        style={{ backgroundColor: accent }}
+                      >
+                        {isSw ? "Chapisha Risiti" : "Reprint Thermal / PDF"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFocusedReceipt(null)}
+                        className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${cardCls}`}
+                      >
+                        Close &times;
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => printSaleReceipt(focusedReceipt)}
-                      className="px-4 py-1.5 rounded-full text-white text-xs font-semibold cursor-pointer"
-                      style={{ backgroundColor: accent }}
-                    >
-                      {isSw ? "Chapisha Risiti" : "Reprint Thermal / PDF"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFocusedReceipt(null)}
-                      className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${cardCls}`}
-                    >
-                      Close &times;
-                    </button>
+                  <div className="space-y-1.5 text-xs">
+                    {(focusedReceipt.lines ?? []).map((ln, idx) => (
+                      <div key={`${ln.productId}-${idx}`} className={`p-2.5 rounded-xl border flex justify-between ${chipCls}`}>
+                        <span>
+                          <strong>{ln.brandName}</strong> &times; {ln.qty}{" "}
+                          <span className={`font-mono text-[10px] ${mutedCls}`}>(Batch {ln.batchNumber || "FEFO"})</span>
+                        </span>
+                        <span className="font-bold tabular-nums">
+                          TZS {(ln.qty * ln.unitPriceTzs).toLocaleString("en-US")}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between pt-2 text-sm font-bold">
+                      <span>Total Paid ({focusedReceipt.itemCount} packs)</span>
+                      <span style={{ color: accent }}>TZS {focusedReceipt.totalTzs.toLocaleString("en-US")}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-1.5 text-xs">
-                  {(focusedReceipt.lines ?? []).map((ln, idx) => (
-                    <div key={`${ln.productId}-${idx}`} className={`p-2.5 rounded-xl border flex justify-between ${chipCls}`}>
-                      <span>
-                        <strong>{ln.brandName}</strong> &times; {ln.qty}{" "}
-                        <span className={`font-mono text-[10px] ${mutedCls}`}>(Batch {ln.batchNumber || "FEFO"})</span>
-                      </span>
-                      <span className="font-bold tabular-nums">
-                        TZS {(ln.qty * ln.unitPriceTzs).toLocaleString("en-US")}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between pt-2 text-sm font-bold">
-                    <span>Total Paid ({focusedReceipt.itemCount} packs)</span>
-                    <span style={{ color: accent }}>TZS {focusedReceipt.totalTzs.toLocaleString("en-US")}</span>
-                  </div>
-                </div>
-              </div>
               </div>,
               document.body
             )}
@@ -4326,150 +4316,150 @@ export default function PharmacyDashboard({
                       className="fixed inset-0 z-[125] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
                       onClick={() => setSelectedTrailItem(null)}
                     >
-                    <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-lg max-h-[88vh] overflow-y-auto p-6 rounded-[26px] border space-y-3 ring-2 shadow-2xl animate-stage-pop text-xs ${cardCls}`} style={{ borderColor: accent }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
-                            {selectedTrailItem.kind === "join"
-                              ? isSw ? "OMBI LA KUJIUNGA" : "STAFF REQUEST"
-                              : selectedTrailItem.kind === "hq"
-                                ? "HQ NOTICE"
-                                : selectedTrailItem.kind === "escrow"
-                                  ? "ORDER HELD"
-                                  : selectedTrailItem.log.category}
+                      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-lg max-h-[88vh] overflow-y-auto p-6 rounded-[26px] border space-y-3 ring-2 shadow-2xl animate-stage-pop text-xs ${cardCls}`} style={{ borderColor: accent }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
+                              {selectedTrailItem.kind === "join"
+                                ? isSw ? "OMBI LA KUJIUNGA" : "STAFF REQUEST"
+                                : selectedTrailItem.kind === "hq"
+                                  ? "HQ NOTICE"
+                                  : selectedTrailItem.kind === "escrow"
+                                    ? "ORDER HELD"
+                                    : selectedTrailItem.log.category}
+                            </div>
+                            <div className="font-bold text-sm mt-0.5">
+                              {selectedTrailItem.kind === "join"
+                                ? `${selectedTrailItem.req.requesterFullName} (@${selectedTrailItem.req.requesterUsername})`
+                                : selectedTrailItem.kind === "hq"
+                                  ? isSw ? selectedTrailItem.msg.swTitle : selectedTrailItem.msg.title
+                                  : selectedTrailItem.kind === "escrow"
+                                    ? `${selectedTrailItem.order.orderReference} · ${selectedTrailItem.order.supplierName}`
+                                    : selectedTrailItem.log.action}
+                            </div>
                           </div>
-                          <div className="font-bold text-sm mt-0.5">
-                            {selectedTrailItem.kind === "join"
-                              ? `${selectedTrailItem.req.requesterFullName} (@${selectedTrailItem.req.requesterUsername})`
-                              : selectedTrailItem.kind === "hq"
-                                ? isSw ? selectedTrailItem.msg.swTitle : selectedTrailItem.msg.title
-                                : selectedTrailItem.kind === "escrow"
-                                  ? `${selectedTrailItem.order.orderReference} · ${selectedTrailItem.order.supplierName}`
-                                  : selectedTrailItem.log.action}
-                          </div>
+                          <button type="button" onClick={() => setSelectedTrailItem(null)} className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer ${cardCls}`}>
+                            &times;
+                          </button>
                         </div>
-                        <button type="button" onClick={() => setSelectedTrailItem(null)} className={`px-2.5 py-0.5 rounded-full border text-[10px] font-bold cursor-pointer ${cardCls}`}>
-                          &times;
-                        </button>
-                      </div>
 
-                      {selectedTrailItem.kind === "join" && (
-                        <div className="space-y-2.5">
-                          <div className={`text-[11px] ${mutedCls}`}>
-                            {selectedTrailItem.req.requesterRegion}
-                            {selectedTrailItem.req.requestedRoleLabel ? ` · ${selectedTrailItem.req.requestedRoleLabel}` : ""}
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <select value={allocCentreId} onChange={(e) => setAllocCentreId(e.target.value)} className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}>
-                              {centres.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <select
-                              value={allocRole}
-                              onChange={(e) => {
-                                const nextRole = e.target.value as WorkspaceProfileRole;
-                                setAllocRole(nextRole);
-                                setAllocCaps(clampProfileCapabilities(nextRole));
-                              }}
-                              className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}
-                            >
-                              <option value="superintendent_pharmacist">Pharmacist</option>
-                              <option value="pos_cashier">Cashier</option>
-                              <option value="warehouse_dispatcher">Dispatcher</option>
-                              <option value="pharmacy_owner">Branch Admin</option>
-                            </select>
-                            <input type="text" maxLength={6} value={allocPin} onChange={(e) => setAllocPin(e.target.value.replace(/\D/g, ""))} placeholder="PIN" className={`px-2.5 py-2 rounded-xl border font-mono text-xs ${inputCls}`} />
-                          </div>
-                          {(() => {
-                            const rKey = (allocRole as WorkspaceProfileRole) in ROLE_PERMISSION_RULES ? (allocRole as WorkspaceProfileRole) : "pos_cashier";
-                            const rule = ROLE_PERMISSION_RULES[rKey];
-                            return (
-                              <div className="flex flex-wrap gap-1.5">
-                                {PERMISSION_METADATA.map((pm) => {
-                                  const lOn = rule.immutableTrue.includes(pm.key);
-                                  const lOff = rule.immutableFalse.includes(pm.key);
-                                  const val = lOn ? true : lOff ? false : Boolean(allocCaps[pm.key]);
-                                  return (
-                                    <label key={pm.key} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] cursor-pointer ${cardCls}`}>
-                                      <input
-                                        type="checkbox"
-                                        checked={val}
-                                        disabled={lOn || lOff}
-                                        onChange={(e) => setAllocCaps((prev) => ({ ...prev, [pm.key]: e.target.checked }))}
-                                      />
-                                      <span>{isSw ? pm.swLabel : pm.label}</span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
-                          <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => handleReviewJoinRequest(selectedTrailItem.req.id, "decline")} className="px-3.5 py-2 rounded-full border border-rose-500/40 text-rose-500 text-xs font-semibold cursor-pointer min-h-[40px]">
-                              Decline
-                            </button>
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                await handleReviewJoinRequest(selectedTrailItem.req.id, "approve");
-                                setSelectedTrailItem(null);
-                              }}
-                              className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer min-h-[40px]"
-                              style={{ backgroundColor: accent }}
-                            >
-                              Approve &rarr;
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedTrailItem.kind === "hq" && (
-                        <div className="space-y-2.5">
-                          <p className={`text-xs leading-relaxed ${mutedCls}`}>
-                            {isSw ? selectedTrailItem.msg.swBody : selectedTrailItem.msg.body}
-                          </p>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {selectedTrailItem.msg.ctaTarget && selectedTrailItem.msg.ctaTarget !== "download" && (
+                        {selectedTrailItem.kind === "join" && (
+                          <div className="space-y-2.5">
+                            <div className={`text-[11px] ${mutedCls}`}>
+                              {selectedTrailItem.req.requesterRegion}
+                              {selectedTrailItem.req.requestedRoleLabel ? ` · ${selectedTrailItem.req.requestedRoleLabel}` : ""}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <select value={allocCentreId} onChange={(e) => setAllocCentreId(e.target.value)} className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}>
+                                {centres.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                              <select
+                                value={allocRole}
+                                onChange={(e) => {
+                                  const nextRole = e.target.value as WorkspaceProfileRole;
+                                  setAllocRole(nextRole);
+                                  setAllocCaps(clampProfileCapabilities(nextRole));
+                                }}
+                                className={`px-2.5 py-2 rounded-xl border text-xs ${inputCls}`}
+                              >
+                                <option value="superintendent_pharmacist">Pharmacist</option>
+                                <option value="pos_cashier">Cashier</option>
+                                <option value="warehouse_dispatcher">Dispatcher</option>
+                                <option value="pharmacy_owner">Branch Admin</option>
+                              </select>
+                              <input type="text" maxLength={6} value={allocPin} onChange={(e) => setAllocPin(e.target.value.replace(/\D/g, ""))} placeholder="PIN" className={`px-2.5 py-2 rounded-xl border font-mono text-xs ${inputCls}`} />
+                            </div>
+                            {(() => {
+                              const rKey = (allocRole as WorkspaceProfileRole) in ROLE_PERMISSION_RULES ? (allocRole as WorkspaceProfileRole) : "pos_cashier";
+                              const rule = ROLE_PERMISSION_RULES[rKey];
+                              return (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {PERMISSION_METADATA.map((pm) => {
+                                    const lOn = rule.immutableTrue.includes(pm.key);
+                                    const lOff = rule.immutableFalse.includes(pm.key);
+                                    const val = lOn ? true : lOff ? false : Boolean(allocCaps[pm.key]);
+                                    return (
+                                      <label key={pm.key} className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[10px] cursor-pointer ${cardCls}`}>
+                                        <input
+                                          type="checkbox"
+                                          checked={val}
+                                          disabled={lOn || lOff}
+                                          onChange={(e) => setAllocCaps((prev) => ({ ...prev, [pm.key]: e.target.checked }))}
+                                        />
+                                        <span>{isSw ? pm.swLabel : pm.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => handleReviewJoinRequest(selectedTrailItem.req.id, "decline")} className="px-3.5 py-2 rounded-full border border-rose-500/40 text-rose-500 text-xs font-semibold cursor-pointer min-h-[40px]">
+                                Decline
+                              </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const t = selectedTrailItem.msg.ctaTarget;
+                                onClick={async () => {
+                                  await handleReviewJoinRequest(selectedTrailItem.req.id, "approve");
                                   setSelectedTrailItem(null);
-                                  if (t === "reports") openReport("brief");
-                                  else if (t === "billing" || t === "network" || t === "team") setTab(t);
                                 }}
-                                className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
+                                className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer min-h-[40px]"
                                 style={{ backgroundColor: accent }}
                               >
-                                {selectedTrailItem.msg.ctaLabel} &rarr;
+                                Approve &rarr;
                               </button>
-                            )}
-                            <button type="button" onClick={() => handleAckHqMessage(selectedTrailItem.msg.id)} className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${cardCls}`}>
-                              {isSw ? "Sawa" : "Done"}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedTrailItem.kind === "hq" && (
+                          <div className="space-y-2.5">
+                            <p className={`text-xs leading-relaxed ${mutedCls}`}>
+                              {isSw ? selectedTrailItem.msg.swBody : selectedTrailItem.msg.body}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {selectedTrailItem.msg.ctaTarget && selectedTrailItem.msg.ctaTarget !== "download" && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const t = selectedTrailItem.msg.ctaTarget;
+                                    setSelectedTrailItem(null);
+                                    if (t === "reports") openReport("brief");
+                                    else if (t === "billing" || t === "network" || t === "team") setTab(t);
+                                  }}
+                                  className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
+                                  style={{ backgroundColor: accent }}
+                                >
+                                  {selectedTrailItem.msg.ctaLabel} &rarr;
+                                </button>
+                              )}
+                              <button type="button" onClick={() => handleAckHqMessage(selectedTrailItem.msg.id)} className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${cardCls}`}>
+                                {isSw ? "Sawa" : "Done"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedTrailItem.kind === "escrow" && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={mutedCls}>
+                              {selectedTrailItem.order.productName} &middot; {formatTzs(selectedTrailItem.order.totalTzs)}
+                            </span>
+                            <button type="button" onClick={() => setTab("network")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
+                              Open Orders &rarr;
                             </button>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {selectedTrailItem.kind === "escrow" && (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={mutedCls}>
-                            {selectedTrailItem.order.productName} &middot; {formatTzs(selectedTrailItem.order.totalTzs)}
-                          </span>
-                          <button type="button" onClick={() => setTab("network")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
-                            Open Orders &rarr;
-                          </button>
-                        </div>
-                      )}
-
-                      {selectedTrailItem.kind === "audit" && (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={mutedCls}>{selectedTrailItem.log.actor} &middot; {selectedTrailItem.log.createdAt.slice(0, 16).replace("T", " ")}</span>
-                          <button type="button" onClick={() => openReport("brief")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
-                            View Report &rarr;
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                        {selectedTrailItem.kind === "audit" && (
+                          <div className="flex items-center justify-between gap-2">
+                            <span className={mutedCls}>{selectedTrailItem.log.actor} &middot; {selectedTrailItem.log.createdAt.slice(0, 16).replace("T", " ")}</span>
+                            <button type="button" onClick={() => openReport("brief")} className="px-3.5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer" style={{ backgroundColor: accent }}>
+                              View Report &rarr;
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>,
                     document.body
                   )}

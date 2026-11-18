@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { IconLock, IconShield } from "@/components/LandingIcons";
+import { IconLock } from "@/components/LandingIcons";
 import { CERVOS_HQ_ASSETS, hqSurfaceTokens } from "./hqSurface";
 
 interface HQLoginGateProps {
@@ -84,7 +84,7 @@ export default function HQLoginGate({
       }
       router.refresh();
     } catch {
-      setErrorMsg("Network fault during operator clearance.");
+      setErrorMsg("Network fault during operator sign-in.");
     } finally {
       setBusy(false);
     }
@@ -109,12 +109,12 @@ export default function HQLoginGate({
       });
       const out = (await res.json()) as { ok?: boolean; error?: string };
       if (!res.ok || !out.ok) {
-        setErrorMsg(out.error || "Worker onboarding failed.");
+        setErrorMsg(out.error || "Invite activation failed.");
         return;
       }
       router.refresh();
     } catch {
-      setErrorMsg("Network fault completing HQ worker onboarding.");
+      setErrorMsg("Network fault completing operator activation.");
     } finally {
       setBusy(false);
     }
@@ -143,7 +143,7 @@ export default function HQLoginGate({
       }
       router.refresh();
     } catch {
-      setErrorMsg("Network fault during clearance handshake.");
+      setErrorMsg("Network fault verifying clearance key.");
     } finally {
       setBusy(false);
     }
@@ -165,7 +165,7 @@ export default function HQLoginGate({
       if (res.ok) {
         router.refresh();
       } else {
-        setErrorMsg("Sandbox clearance could not be initialized.");
+        setErrorMsg("Sandbox session could not be initialized.");
       }
     } finally {
       setBusy(false);
@@ -173,383 +173,318 @@ export default function HQLoginGate({
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center px-4 py-8 ${t.canvasCls}`}>
-      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Left Wing: Sovereign Cervos Brand & Command Showcase */}
-        <div className={`lg:col-span-5 p-6 sm:p-7 flex flex-col justify-between gap-6 ${t.panelCls}`}>
-          <div className="space-y-5">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl p-1.5 flex items-center justify-center ${t.pillCls}`}>
-                  <img
-                    src={
-                      isDark
-                        ? CERVOS_HQ_ASSETS.companyLogoCircularDark
-                        : CERVOS_HQ_ASSETS.companyLogoCircular
-                    }
-                    alt="Cervos Pharma Emblem"
-                    className="w-full h-full object-contain rounded-xl"
-                  />
-                </div>
-                <div>
-                  <img
-                    src={CERVOS_HQ_ASSETS.companyLogoTransparent}
-                    alt="Cervos Pharma"
-                    className={`h-5 w-auto object-contain ${isDark ? "brightness-0 invert" : ""}`}
-                  />
-                  <div className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${t.mutedCls}`}>
-                    Sovereign Operations Terminal
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-semibold cursor-pointer ${t.pillCls}`}
-              >
-                {isDark ? "Light" : "Dark"}
-              </button>
+    <div className={`min-h-screen flex items-center justify-center px-4 py-10 ${t.canvasCls}`}>
+      <div className={`w-full max-w-[460px] p-6 sm:p-8 space-y-6 ${t.panelCls}`}>
+        {/* Grounded Internal Brand Header */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl p-1.5 flex items-center justify-center ${t.pillCls}`}>
+              <img
+                src={
+                  isDark
+                    ? CERVOS_HQ_ASSETS.companyLogoCircularDark
+                    : CERVOS_HQ_ASSETS.companyLogoCircular
+                }
+                alt="Cervos HQ"
+                className="w-full h-full object-contain rounded-lg"
+              />
             </div>
-
-            {/* Tactile Visual Asset Showcase Frame */}
-            <div className={`p-2.5 ${t.wellCls}`}>
-              <div className="relative rounded-2xl overflow-hidden aspect-[16/10]">
-                <img
-                  src={CERVOS_HQ_ASSETS.hardwareDesktop}
-                  alt="Cervos Command Terminal Desktop View"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent flex items-end p-4">
-                  <div className="text-white space-y-1">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md text-[10px] font-bold uppercase tracking-wider">
-                      <IconShield className="w-3 h-3 text-sky-300" />
-                      Multi-Operator HQ Clearance
-                    </div>
-                    <p className="text-xs text-slate-200 leading-snug">
-                      Live East Africa fleet telemetry, Kasri escrow governance, Support Desk, and Dispatch editorial in one isolated gate.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mt-2.5">
-                {[
-                  { src: CERVOS_HQ_ASSETS.peopleCounter, label: "Dispensary" },
-                  { src: CERVOS_HQ_ASSETS.peopleStockroom, label: "FEFO Audits" },
-                  { src: CERVOS_HQ_ASSETS.fleetVan, label: "Corridors" },
-                ].map((thumb) => (
-                  <div key={thumb.label} className="relative rounded-xl overflow-hidden aspect-[4/3]">
-                    <img
-                      src={thumb.src}
-                      alt={thumb.label}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-slate-950/70 px-2 py-1 text-[10px] font-semibold text-white">
-                      {thumb.label}
-                    </div>
-                  </div>
-                ))}
+            <div>
+              <img
+                src={CERVOS_HQ_ASSETS.companyLogoTransparent}
+                alt="Cervos"
+                className={`h-4 w-auto object-contain ${isDark ? "brightness-0 invert" : ""}`}
+              />
+              <div className={`text-[10px] font-mono uppercase tracking-wider mt-0.5 ${t.mutedCls}`}>
+                HQ Gate &middot; Isolated Session
               </div>
             </div>
           </div>
 
-          <div className={`p-4 space-y-2 ${t.wellCls}`}>
-            <div className="flex items-center justify-between text-[11px] font-semibold">
-              <span>Role-Scoped Sessions</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 font-mono text-[10px]">
-                GATE VERIFIED
-              </span>
-            </div>
-            <p className={`text-[11px] leading-relaxed ${t.mutedCls}`}>
-              Invited HQ workers activate via single-use Master code, set a personal passphrase &amp; security PIN, and enter their role-scoped desk directly.
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold cursor-pointer ${t.pillCls}`}
+          >
+            {isDark ? "Light" : "Dark"}
+          </button>
         </div>
 
-        {/* Right Wing: Claymorphic Clearance Dock */}
-        <div className={`lg:col-span-7 p-6 sm:p-8 flex flex-col justify-center space-y-5 ${t.panelCls}`}>
-          <div className="space-y-1.5">
-            <h1
-              className="text-2xl sm:text-3xl font-semibold tracking-tight"
-              style={{ fontFamily: "Outfit, Inter, sans-serif" }}
-            >
-              HQ Operations Clearance
-            </h1>
-            <p className={`text-xs leading-relaxed ${t.mutedCls}`}>
-              Choose your clearance lane. Strict HMAC session isolation with zero overlap into tenant pharmacy cookies.
-            </p>
+        <div className="space-y-1">
+          <h1
+            className="text-2xl font-semibold tracking-tight"
+            style={{ fontFamily: "Outfit, Inter, sans-serif" }}
+          >
+            Operations Access
+          </h1>
+          <p className={`text-xs leading-relaxed ${t.mutedCls}`}>
+            Internal command sign-in for HQ specialists and Master clearance.
+          </p>
+        </div>
+
+        {!secretConfigured && !mockMode && (
+          <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+            Notice: <span className="font-mono font-semibold">HQ_SECRET</span> is missing or under 32 characters.
           </div>
+        )}
 
-          {!secretConfigured && !mockMode && (
-            <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-300">
-              Server notice: <span className="font-mono font-semibold">HQ_SECRET</span> is missing or below 32 characters.
-            </div>
-          )}
-
-          {errorMsg && (
-            <div className="rounded-2xl border border-red-500/35 bg-red-500/10 px-4 py-3 text-xs font-medium text-red-600 dark:text-red-300">
-              {errorMsg}
-            </div>
-          )}
-
-          {/* Soft Neumorphic Well Segmented Lane Switcher */}
-          <div className={`grid grid-cols-3 gap-1.5 p-1.5 text-xs font-semibold ${t.wellCls}`}>
-            {[
-              { id: "credentials", label: "Worker Sign In" },
-              { id: "claim", label: "Claim Invite" },
-              { id: "secret", label: "Master Key" },
-            ].map((lane) => {
-              const active = authTab === lane.id;
-              return (
-                <button
-                  key={lane.id}
-                  type="button"
-                  onClick={() => {
-                    setAuthTab(lane.id as "credentials" | "claim" | "secret");
-                    setErrorMsg(null);
-                  }}
-                  className={`py-2.5 px-2 rounded-xl transition-all cursor-pointer ${
-                    active ? t.primaryBtnCls : `${t.mutedCls} hover:text-current`
-                  }`}
-                >
-                  {lane.label}
-                </button>
-              );
-            })}
+        {errorMsg && (
+          <div className="rounded-2xl border border-rose-500/35 bg-rose-500/10 px-4 py-2.5 text-xs font-medium text-rose-600 dark:text-rose-300">
+            {errorMsg}
           </div>
+        )}
 
-          {authTab === "credentials" && (
-            <form onSubmit={handleCredentialsAuth} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  HQ Work Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="amina.ops@cervos.online"
-                  required
-                  autoFocus
-                  className={`w-full h-11 px-4 rounded-2xl text-sm ${t.inputCls}`}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Personal Passphrase
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter operator password"
-                    required
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Personal Security PIN
-                  </label>
-                  <input
-                    type="password"
-                    value={workerPin}
-                    onChange={(e) => setWorkerPin(e.target.value)}
-                    placeholder="4-6 digit PIN"
-                    maxLength={6}
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
-                  />
-                </div>
-              </div>
-
-              {challengeRequired && (
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Hardware Gate Verification Code
-                  </label>
-                  <input
-                    type="password"
-                    value={challengePin}
-                    onChange={(e) => setChallengePin(e.target.value)}
-                    placeholder="Enter secondary operator code"
-                    required
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
-                  />
-                </div>
-              )}
-
+        {/* Neumorphic Lane Switcher */}
+        <div className={`grid grid-cols-3 gap-1.5 p-1.5 text-xs font-semibold ${t.wellCls}`}>
+          {[
+            { id: "credentials", label: "Operator" },
+            { id: "claim", label: "Activate Invite" },
+            { id: "secret", label: "Master Key" },
+          ].map((lane) => {
+            const active = authTab === lane.id;
+            return (
               <button
-                type="submit"
-                disabled={busy}
-                className={`w-full h-12 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer ${t.primaryBtnCls}`}
+                key={lane.id}
+                type="button"
+                onClick={() => {
+                  setAuthTab(lane.id as "credentials" | "claim" | "secret");
+                  setErrorMsg(null);
+                }}
+                className={`py-2 px-2 rounded-xl transition-all cursor-pointer ${
+                  active ? t.primaryBtnCls : `${t.mutedCls} hover:text-current`
+                }`}
               >
-                {busy ? (
-                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                ) : (
-                  <IconLock className="w-4 h-4" />
-                )}
-                <span>{busy ? "Verifying Worker Clearance..." : "Enter HQ Desk"}</span>
+                {lane.label}
               </button>
-            </form>
-          )}
+            );
+          })}
+        </div>
 
-          {authTab === "claim" && (
-            <form onSubmit={handleClaimInvite} className="space-y-4">
-              <div className={`p-3.5 text-xs ${t.wellCls}`}>
-                Invited by HQ Master? Enter your work email and one-time <span className="font-mono font-semibold">CVHQ-...</span> onboarding code to create your personal password &amp; PIN.
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Invited Work Email
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="worker@cervos.online"
-                    required
-                    className={`w-full h-11 px-4 rounded-2xl text-sm ${t.inputCls}`}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Master Invite Code
-                  </label>
-                  <input
-                    type="text"
-                    value={inviteCode}
-                    onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                    placeholder="CVHQ-XXXXXX-XXXX"
-                    required
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono uppercase ${t.inputCls}`}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Set Permanent Password (8+ chars)
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Choose strong password"
-                    required
-                    minLength={8}
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Set 4-6 Digit Security PIN
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPin}
-                    onChange={(e) => setConfirmPin(e.target.value)}
-                    placeholder="e.g. 4829"
-                    required
-                    minLength={4}
-                    maxLength={6}
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
-                  />
-                </div>
-              </div>
-              <button
-                type="submit"
-                disabled={busy}
-                className={`w-full h-12 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer ${t.primaryBtnCls}`}
-              >
-                {busy && (
-                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                )}
-                <span>{busy ? "Activating HQ Worker..." : "Activate Worker & Enter HQ"}</span>
-              </button>
-            </form>
-          )}
+        {authTab === "credentials" && (
+          <form onSubmit={handleCredentialsAuth} className="space-y-3.5">
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Operator Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="operator@cervos.online"
+                required
+                autoFocus
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm ${t.inputCls}`}
+              />
+            </div>
 
-          {authTab === "secret" && (
-            <form onSubmit={handleSecretAuth} className="space-y-4">
-              <div className="space-y-1.5">
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                required
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Personal PIN (Invited Staff)
+              </label>
+              <input
+                type="password"
+                value={workerPin}
+                onChange={(e) => setWorkerPin(e.target.value)}
+                placeholder="4-6 digit PIN if assigned"
+                maxLength={6}
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
+              />
+            </div>
+
+            {challengeRequired && (
+              <div className="space-y-1">
                 <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  Master Callsign
-                </label>
-                <input
-                  type="text"
-                  value={operatorName}
-                  onChange={(e) => setOperatorName(e.target.value)}
-                  placeholder="HQ Master Desk"
-                  maxLength={80}
-                  className={`w-full h-11 px-4 rounded-2xl text-sm ${t.inputCls}`}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                  Master Clearance Key (HQ_SECRET)
+                  Gate Pin
                 </label>
                 <input
                   type="password"
-                  value={secret}
-                  onChange={(e) => setSecret(e.target.value)}
-                  placeholder="Enter root clearance key (32+ chars)"
-                  required={!mockMode}
-                  autoFocus
-                  className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
+                  value={challengePin}
+                  onChange={(e) => setChallengePin(e.target.value)}
+                  placeholder="Secondary verification code"
+                  required
+                  className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
                 />
               </div>
+            )}
 
-              {challengeRequired && (
-                <div className="space-y-1.5">
-                  <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
-                    Secondary Verification Code
-                  </label>
-                  <input
-                    type="password"
-                    value={challengePin}
-                    onChange={(e) => setChallengePin(e.target.value)}
-                    placeholder="Enter operator verification code"
-                    required
-                    className={`w-full h-11 px-4 rounded-2xl text-sm font-mono ${t.inputCls}`}
-                  />
-                </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className={`w-full h-11 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer ${t.primaryBtnCls}`}
+            >
+              {busy ? (
+                <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <IconLock className="w-4 h-4" />
               )}
+              <span>{busy ? "Signing In..." : "Sign In"}</span>
+            </button>
+          </form>
+        )}
 
-              <button
-                type="submit"
-                disabled={busy}
-                className={`w-full h-12 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer ${t.primaryBtnCls}`}
-              >
-                {busy ? (
-                  <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                ) : (
-                  <IconLock className="w-4 h-4" />
-                )}
-                <span>{busy ? "Verifying Master Key..." : "Authenticate as HQ Master"}</span>
-              </button>
-            </form>
-          )}
-
-          {mockMode && (
-            <div className="pt-3 border-t border-slate-500/15">
-              <button
-                type="button"
-                onClick={handleDemoEnter}
-                disabled={busy}
-                className="w-full h-11 rounded-2xl border border-emerald-500/40 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 text-xs font-semibold hover:bg-emerald-500/20 inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
-              >
-                {busy && (
-                  <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
-                )}
-                <span>Initialize HQ Master Sandbox (Mock Active)</span>
-              </button>
+        {authTab === "claim" && (
+          <form onSubmit={handleClaimInvite} className="space-y-3.5">
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Work Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="worker@cervos.online"
+                required
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm ${t.inputCls}`}
+              />
             </div>
-          )}
-        </div>
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Invite Code
+              </label>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                placeholder="CVHQ-XXXXXX-XXXX"
+                required
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono uppercase ${t.inputCls}`}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="8+ chars"
+                  required
+                  minLength={8}
+                  className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                  Set PIN
+                </label>
+                <input
+                  type="password"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value)}
+                  placeholder="4-6 digits"
+                  required
+                  minLength={4}
+                  maxLength={6}
+                  className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={busy}
+              className={`w-full h-11 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer ${t.primaryBtnCls}`}
+            >
+              {busy && (
+                <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              )}
+              <span>{busy ? "Activating..." : "Activate Account"}</span>
+            </button>
+          </form>
+        )}
+
+        {authTab === "secret" && (
+          <form onSubmit={handleSecretAuth} className="space-y-3.5">
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Operator Label
+              </label>
+              <input
+                type="text"
+                value={operatorName}
+                onChange={(e) => setOperatorName(e.target.value)}
+                placeholder="HQ Master Desk"
+                maxLength={80}
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm ${t.inputCls}`}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                Master Key (HQ_SECRET)
+              </label>
+              <input
+                type="password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                placeholder="Enter 32+ character key"
+                required={!mockMode}
+                autoFocus
+                className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
+              />
+            </div>
+
+            {challengeRequired && (
+              <div className="space-y-1">
+                <label className={`block text-[10px] font-bold uppercase tracking-wider ${t.mutedCls}`}>
+                  Gate Pin
+                </label>
+                <input
+                  type="password"
+                  value={challengePin}
+                  onChange={(e) => setChallengePin(e.target.value)}
+                  placeholder="Secondary verification code"
+                  required
+                  className={`w-full h-11 px-3.5 rounded-2xl text-sm font-mono ${t.inputCls}`}
+                />
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className={`w-full h-11 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer ${t.primaryBtnCls}`}
+            >
+              {busy ? (
+                <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+              ) : (
+                <IconLock className="w-4 h-4" />
+              )}
+              <span>{busy ? "Verifying..." : "Verify Master Key"}</span>
+            </button>
+          </form>
+        )}
+
+        {mockMode && (
+          <div className="pt-2 border-t border-slate-500/15">
+            <button
+              type="button"
+              onClick={handleDemoEnter}
+              disabled={busy}
+              className="w-full h-10 rounded-2xl border border-emerald-500/40 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 text-xs font-semibold hover:bg-emerald-500/20 inline-flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {busy && (
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              )}
+              <span>Enter Sandbox (Mock Active)</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
