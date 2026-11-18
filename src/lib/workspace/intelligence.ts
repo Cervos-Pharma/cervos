@@ -676,7 +676,7 @@ export function generateInsights(input: {
       id: "escrow",
       severity: "warning",
       title: `${fmt(input.heldEscrowTzs)} is held in Kasri escrow`,
-      detail: "Scan the GS1 code when goods arrive so the supplier is paid and the lot joins FEFO stock.",
+      detail: "Scan the barcode when goods arrive so the supplier is paid and the lot joins branch stock.",
       target: "network",
     });
   }

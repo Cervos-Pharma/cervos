@@ -30,8 +30,8 @@ export const PERMISSION_METADATA: Array<{
     key: "canSellPos",
     label: "Counter POS & Receipts",
     swLabel: "Kaunta ya POS & Risiti",
-    desc: "Issue patient receipts with FEFO enforcement",
-    swDesc: "Uza dawa na kutoa risiti kwa mpangilio wa FEFO",
+    desc: "Issue patient receipts with automatic expiry selection",
+    swDesc: "Uza dawa na kutoa risiti kwa kufuata muda wa matumizi",
   },
   {
     key: "canViewOwnReports",

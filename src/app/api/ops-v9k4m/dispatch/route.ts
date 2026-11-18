@@ -1222,7 +1222,7 @@ export async function POST(request: NextRequest) {
         accountId: targetAccount.id,
         title: "Subscription Payment Overdue - Access Paused",
         swTitle: "Malipo ya Usajili Yamechelewa - Mfumo Umefungwa",
-        body: "Renew your active plan to resume Counter POS, FEFO stock edits, and wholesale orders.",
+        body: "Renew your active plan to resume Counter POS, inventory edits, and wholesale orders.",
         swBody: "Kamilisha malipo ya mpango wako ili kufungua Kaunta ya POS, stoo na oda za bohari.",
         severity: "critical",
         ctaLabel: "Pay & Unlock",

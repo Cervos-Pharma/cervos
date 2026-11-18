@@ -354,7 +354,7 @@ export default function ReportsIntelligenceView({
     if (effectiveView === "stock") {
       return sw
         ? `Thamani ya stoo iliyopo ni ${fmt(valuation.atRetail)}. Kuna takriban ${fmt(lotRisk.projectedWriteOffTzs)} hatarini kupotea iwapo dawa za siku 30 hazitauzwa mapema.`
-        : `Active stock sits at ${fmt(valuation.atRetail)} retail value. Velocity modeling flags ${fmt(lotRisk.projectedWriteOffTzs)} at 30-day expiry risk unless rotated via FEFO or transferred.`;
+        : `Active stock sits at ${fmt(valuation.atRetail)} retail value. Forecast flags ${fmt(lotRisk.projectedWriteOffTzs)} at 30-day expiry risk unless moved to the front shelf or transferred.`;
     }
     return sw
       ? `Katika siku ${windowDays} zilizopita, ${orgName} (${activeCentreName}) imeuza ${fmt(pnl.revenue)} kwa faida ghafi ya ${pnl.grossMarginPct}% (faida halisi ${fmt(pnl.netProfit)}). Afya ya biashara ni ${health.total}/100 (${healthGradeLabel(health.grade)}).`
@@ -513,7 +513,7 @@ export default function ReportsIntelligenceView({
           : effectiveView === "stock"
             ? [
                 {
-                  title: sw ? "Makundi Yaliyo Hatarini Kuisha Muda" : "FEFO Expiry Write-Off Exposure by Batch",
+                  title: sw ? "Makundi Yaliyo Hatarini Kuisha Muda" : "Batch Expiry Exposure",
                   headers: sw
                     ? ["Dawa (Batch)", "Kuisha", "Siku", "Zipo", "Zitauzwa", "Zitakazoharibika", "Hasara (TZS)"]
                     : ["Medicine (Batch)", "Expiry", "Days Left", "In Stock", "Likely Sold", "At Risk", "Est. Loss"],
@@ -559,7 +559,7 @@ export default function ReportsIntelligenceView({
     const metrics =
       effectiveView === "my_perf"
         ? [
-            { label: sw ? "Mauzo Yangu" : "My Sales", value: fmt(myStats.totalRev), hint: `${myStats.txCount} tx` },
+            { label: sw ? "Mauzo Yangu" : "My Sales", value: fmt(myStats.totalRev), hint: `${myStats.txCount} ${sw ? "risiti" : "sales"}` },
             { label: sw ? "Pakiti Nilizouza" : "Units Sold", value: String(myStats.totalUnits) },
             { label: sw ? "Wastani wa Risiti" : "Avg Basket", value: fmt(myStats.avgBasket) },
             { label: sw ? "Cheti (Rx)" : "Rx Share", value: `${myStats.rxPct}%` },
@@ -593,8 +593,8 @@ export default function ReportsIntelligenceView({
       branchName: branchTitle,
       title: sw ? currentTabObj.swLabel : currentTabObj.label,
       subtitle: sw
-        ? `Ripoti ya siku ${windowDays} · Akili ya Ndani ya Kifaa`
-        : `${windowDays}-Day Clean Operational Statement · On-Device Edge ML`,
+        ? `Ripoti ya siku ${windowDays} · Muhtasari wa Kituo`
+        : `${windowDays}-Day Clean Operational Statement`,
       generatedLabel: new Date().toISOString().slice(0, 16).replace("T", " "),
       lang: chosenLang,
       narrative: withNarrative ? buildNaturalLanguageNarrative(chosenLang) : undefined,
@@ -876,8 +876,8 @@ export default function ReportsIntelligenceView({
                 </div>
                 <div className={`text-[10px] mt-0.5 ${mutedCls}`}>
                   {isSw
-                    ? "Huongeza ufafanuzi wa Edge ML na nembo ya kampuni yako."
-                    : "Embeds your company logo, plain narrative & ML takeaways."}
+                    ? "Huongeza muhtasari wa maneno rahisi na nembo ya kampuni yako."
+                    : "Embeds your company logo, plain-language summary & key takeaways."}
                 </div>
               </div>
             </label>
@@ -1055,8 +1055,8 @@ export default function ReportsIntelligenceView({
               </div>
               <p className={mutedCls}>
                 {isSw
-                  ? "Kwa kasi ya sasa ya mauzo, pakiti zilizo hatarini zinapaswa kuwekwa mbele kwenye rafu (FEFO), kuuzwa kwa punguzo, au kuhamishiwa tawi lenye mahitaji makubwa."
-                  : "Based on current daily sales velocity, unsold units before expiry should be moved to front-counter FEFO display, discounted, or transferred to another branch."}
+                  ? "Kwa kasi ya sasa ya mauzo, pakiti zilizo hatarini zinapaswa kuwekwa mbele kwenye rafu, kuuzwa kwa punguzo, au kuhamishiwa tawi lenye mahitaji makubwa."
+                  : "Based on current daily sales pace, unsold units before expiry should be moved to front-counter display, discounted, or transferred to another branch."}
               </p>
               <button
                 type="button"
@@ -1364,10 +1364,10 @@ export default function ReportsIntelligenceView({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
-                    {isSw ? "AKILI YA KIFAA (EDGE ML)" : "ON-DEVICE EDGE ML"}
+                    {isSw ? "MWENENDO WA MAUZO" : "TREND & ANOMALIES"}
                   </div>
                   <h2 className="text-sm font-semibold mt-0.5">
-                    {isSw ? "Mwelekeo wa Mauzo & Siku Zisizo za Kawaida" : "Live Trend Slope & Anomaly Check"}
+                    {isSw ? "Mwelekeo wa Mauzo & Siku Zisizo za Kawaida" : "Sales Pace & Unusual Days"}
                   </h2>
                 </div>
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-bold">
@@ -1385,8 +1385,8 @@ export default function ReportsIntelligenceView({
                 </div>
                 <div className={`text-[11px] ${mutedCls}`}>
                   {isSw
-                    ? `Kipimo cha kuaminika (R2): ${Math.round(trendOls.rSquared * 100)}%`
-                    : `Linear trend confidence (R2): ${Math.round(trendOls.rSquared * 100)}% over ${windowDays}d`}
+                    ? `Uthabiti wa mwenendo: ${Math.round(trendOls.rSquared * 100)}%`
+                    : `Trend consistency: ${Math.round(trendOls.rSquared * 100)}% over ${windowDays} days`}
                 </div>
               </div>
 
@@ -1408,19 +1408,19 @@ export default function ReportsIntelligenceView({
                           {fmt(an.revenue)} vs {fmt(an.baselineTzs)} {isSw ? "kawaida" : "typical"}
                         </div>
                       </div>
-                      <span className="font-mono text-[10px] font-bold">Z={an.zScore}</span>
+                      <span className="font-mono text-[10px] font-bold">{Math.abs(an.zScore).toFixed(1)}x</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Market Basket Co-Dispense Pairs (Apriori-style on-device) */}
+            {/* Market Basket Co-Dispense Pairs */}
             <div className={`lg:col-span-7 rounded-[24px] border p-6 space-y-3 ${cardCls}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
-                    {isSw ? "UCHAMBUZI WA KIKAPU CHA MTEJA" : "ON-DEVICE BASKET PAIRING"}
+                    {isSw ? "UCHAMBUZI WA KIKAPU CHA MTEJA" : "BASKET PAIRING"}
                   </div>
                   <h2 className="text-sm font-semibold mt-0.5">
                     {isSw ? "Dawa Zinazonunuliwa Pamoja Mara Nyingi" : "Medicines Frequently Sold Together"}
@@ -1446,7 +1446,7 @@ export default function ReportsIntelligenceView({
                         <span className="text-emerald-500 font-semibold">
                           {pair.confidencePct}% {isSw ? "pamoja" : "together"} ({pair.pairCount}x)
                         </span>
-                        <span className={`font-mono ${mutedCls}`}>{pair.lift}x lift</span>
+                        <span className={`font-mono ${mutedCls}`}>{pair.pairCount} receipts</span>
                       </div>
                     </div>
                   ))}
@@ -1455,16 +1455,15 @@ export default function ReportsIntelligenceView({
             </div>
           </div>
 
-          {/* Edge-ML Suite: Dynamic Safety Stock (Z-Score), ABC-XYZ Volatility & Rush Staffing */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             <div className={`lg:col-span-5 rounded-[24px] border p-5 space-y-3 ${cardCls}`}>
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                    {isSw ? "ML · AKIBA YA USALAMA (95%)" : "EDGE ML · 95% SAFETY STOCK & REORDER"}
+                    {isSw ? "AKIBA YA USALAMA" : "SAFETY STOCK & REORDER"}
                   </div>
                   <h3 className="text-sm font-semibold mt-0.5">
-                    {isSw ? "Kiwango cha Chini & Pendekezo la Agizo" : "Optimal Reorder Points (Sigma Adjusted)"}
+                    {isSw ? "Kiwango cha Chini & Pendekezo la Agizo" : "Recommended Reorder Thresholds"}
                   </h3>
                 </div>
               </div>
@@ -1479,7 +1478,7 @@ export default function ReportsIntelligenceView({
                       <div className="min-w-0">
                         <div className="font-semibold truncate">{item.brandName}</div>
                         <div className={`text-[10px] ${mutedCls}`}>
-                          {item.dailyMeanUnits}/d avg · Safety: {item.safetyStockUnits}u · ROP: {item.reorderPointUnits}u
+                          {item.dailyMeanUnits}/day &middot; Min buffer: {item.safetyStockUnits} &middot; Reorder at: {item.reorderPointUnits}
                         </div>
                       </div>
                       <span
@@ -1506,15 +1505,15 @@ export default function ReportsIntelligenceView({
             <div className={`lg:col-span-4 rounded-[24px] border p-5 space-y-3 ${cardCls}`}>
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                  {isSw ? "ML · MGAWANYO WA ABC-XYZ" : "EDGE ML · ABC-XYZ DEMAND VOLATILITY"}
+                  {isSw ? "UTHABITI WA MAUZO" : "DEMAND CONSISTENCY"}
                 </div>
                 <h3 className="text-sm font-semibold mt-0.5">
-                  {isSw ? "Uthabiti wa Mahitaji ya Bidhaa" : "Revenue Weight vs Demand Stability"}
+                  {isSw ? "Uthabiti wa Mahitaji ya Bidhaa" : "Revenue Weight vs Stability"}
                 </h3>
               </div>
               {abcXyzList.length === 0 ? (
                 <div className={`p-3 rounded-xl border text-xs ${chipCls} ${mutedCls}`}>
-                  {isSw ? "Hakuna data ya mgawanyo bado." : "Waiting on branch receipt lines for volatility scoring."}
+                  {isSw ? "Hakuna data ya mgawanyo bado." : "Waiting on branch receipt lines for stability scoring."}
                 </div>
               ) : (
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -1525,7 +1524,7 @@ export default function ReportsIntelligenceView({
                         <div className={`text-[10px] truncate ${mutedCls}`}>{cell.strategyHint}</div>
                       </div>
                       <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-bold bg-[#1039B9]/12 text-[#1039B9] dark:text-sky-300 shrink-0">
-                        {cell.segment} · CV {cell.cv}
+                        {cell.segment}
                       </span>
                     </div>
                   ))}
@@ -1536,7 +1535,7 @@ export default function ReportsIntelligenceView({
             <div className={`lg:col-span-3 rounded-[24px] border p-5 space-y-3 ${cardCls}`}>
               <div>
                 <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
-                  {isSw ? "ML · RATIBA YA KAUNTA" : "EDGE ML · STAFFING WINDOWS"}
+                  {isSw ? "RATIBA YA KAUNTA" : "COUNTER STAFFING"}
                 </div>
                 <h3 className="text-sm font-semibold mt-0.5">
                   {isSw ? "Saa za Msongamano" : "Recommended Counter Coverage"}
@@ -1552,7 +1551,7 @@ export default function ReportsIntelligenceView({
                     <div key={win.hourLabel} className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${chipCls}`}>
                       <div>
                         <div className="font-mono font-bold">{win.hourLabel}</div>
-                        <div className={`text-[10px] ${mutedCls}`}>{win.avgReceiptsPerDay} tx/day</div>
+                        <div className={`text-[10px] ${mutedCls}`}>{win.avgReceiptsPerDay} sales/day</div>
                       </div>
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -1607,7 +1606,7 @@ export default function ReportsIntelligenceView({
             <button type="button" onClick={() => onSelectView("products")} className={`rounded-[24px] border p-5 text-left cursor-pointer ${cardCls}`}>
               <div className={`text-[11px] ${mutedCls}`}>{isSw ? "Dawa Zinazokaribia Kuisha" : "Restock Needed Soon"}</div>
               <div className="text-2xl font-normal tabular-nums mt-1" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                {urgencyList.filter((u) => u.tier === "urgent" || u.tier === "soon").length} SKUs
+                {urgencyList.filter((u) => u.tier === "urgent" || u.tier === "soon").length} {isSw ? "bidhaa" : "items"}
               </div>
               <div className="text-11px font-semibold mt-1" style={{ color: accent }}>
                 {isSw ? "Tazama Kiasi cha Kuagiza" : "See Order Plan"} &rarr;
@@ -1780,7 +1779,7 @@ export default function ReportsIntelligenceView({
             <div className={`lg:col-span-4 rounded-[24px] border p-6 space-y-3 ${cardCls}`}>
               <div>
                 <h2 className="text-sm font-semibold">
-                  {isSw ? "Utabiri wa Siku 7 Zijazo (Holt ML)" : "Next 7 Days Forecast (Edge ML)"}
+                  {isSw ? "Utabiri wa Siku 7 Zijazo" : "Next 7 Days Sales Forecast"}
                 </h2>
                 <p className={`text-[11px] ${mutedCls}`}>
                   {isSw ? "Weka mshale kuona kiwango cha juu na chini" : "Hover a day to inspect predicted range"}
@@ -2135,7 +2134,7 @@ export default function ReportsIntelligenceView({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="text-sm font-semibold">
-                  {isSw ? "Makadirio ya Mauzo ya FEFO vs Hasara ya Kuisha Muda" : "Batch Expiry Exposure (Click a Batch)"}
+                  {isSw ? "Makadirio ya Mauzo vs Hasara ya Kuisha Muda" : "Batch Expiry Exposure (Click a Batch)"}
                 </h2>
                 <p className={`text-[11px] ${mutedCls}`}>
                   {isSw

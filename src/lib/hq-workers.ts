@@ -57,8 +57,8 @@ export const HQ_ROLE_METADATA: Record<HqWorkerRole, HqWorkerRoleMeta> = {
     role: "compliance_auditor",
     label: "Compliance Auditor",
     shortTag: "COMPLIANCE",
-    defaultTitle: "TMDA & FEFO Compliance Inspector",
-    summary: "Monitors FEFO expiry exposure, enforces regulatory locks, logs audit notes, and publishes compliance alerts.",
+    defaultTitle: "TMDA & Expiry Compliance Inspector",
+    summary: "Monitors expiry exposure, enforces regulatory locks, logs audit notes, and publishes compliance alerts.",
   },
   editorial_growth: {
     role: "editorial_growth",

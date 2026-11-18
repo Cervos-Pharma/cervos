@@ -511,7 +511,7 @@ export default function HQTeamSection({
               Shift Handoff &amp; Internal Directives
             </h3>
             <p className={`text-xs mt-0.5 ${t.mutedCls}`}>
-              Coordinate escalations, FEFO recall watchlists, and end-of-shift context across all online HQ operators.
+              Coordinate escalations, batch recall watchlists, and end-of-shift context across all online HQ operators.
             </p>
           </div>
 

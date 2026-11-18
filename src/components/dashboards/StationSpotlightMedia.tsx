@@ -292,7 +292,7 @@ export default function StationSpotlightMedia({
                 isDark ? "bg-slate-950/75 border-slate-700/80 text-white" : "bg-white/88 border-white text-[#111317]"
               }`}
             >
-              <div className="text-[9px] uppercase tracking-wider opacity-70">FEFO Lots</div>
+              <div className="text-[9px] uppercase tracking-wider opacity-70">{isSw ? "Makundi Hai" : "Active Lots"}</div>
               <div className="text-xs font-bold tabular-nums mt-0.5">
                 {validLotsCount} ({nearExpiryCount} &le;30d)
               </div>

@@ -27,7 +27,6 @@ import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
 import WebpPhotoInput from "@/components/WebpPhotoInput";
 import WorkspaceTour from "@/components/WorkspaceTour";
-import HardwareAndAudioStudio from "@/components/dashboards/HardwareAndAudioStudio";
 import { loadHardwareConfig, type HardwareConfigState } from "@/lib/hardware/devices";
 import { playAppSound } from "@/lib/sounds";
 
@@ -368,7 +367,6 @@ export default function PharmacyDashboard({
   const [tourOpen, setTourOpen] = useState(false);
   const [shiftPromptDismissed, setShiftPromptDismissed] = useState(false);
   const [autoClockOutNotice, setAutoClockOutNotice] = useState<string | null>(null);
-  const hardwareSectionRef = useRef<HTMLDivElement>(null);
   const autoClockCheckedRef = useRef(false);
 
   useEffect(() => {
@@ -762,7 +760,7 @@ export default function PharmacyDashboard({
       ],
       tables: [
         {
-          title: isSw ? "Orodha ya Dawa & FEFO Lots" : "Dispensed Items & FEFO Batches",
+          title: isSw ? "Orodha ya Dawa Zilizouzwa" : "Dispensed Items & Batches",
           headers: isSw ? ["Dawa", "Batch", "Idadi", "Bei/Moja", "Jumla"] : ["Medicine", "Batch", "Qty", "Unit Price", "Subtotal"],
           rows:
             linesList.length > 0
@@ -961,7 +959,7 @@ export default function PharmacyDashboard({
       setTimeout(() => setPrintingAnim(false), 2600);
       setPosMsg({
         ok: true,
-        text: `FEFO Dispensed (TZS ${(out.totalTzs || 0).toLocaleString("en-US")}): ${(out.allocated || []).join(", ")}`,
+        text: `Sold (TZS ${(out.totalTzs || 0).toLocaleString("en-US")}): ${(out.allocated || []).join(", ")}`,
       });
       await onRefreshState();
     } finally {
@@ -1036,11 +1034,11 @@ export default function PharmacyDashboard({
     });
     const out = (await res.json()) as { ok?: boolean; batchNumber?: string; expiryDate?: string; error?: string };
     if (!res.ok || !out.ok) {
-      setOrderNotice({ text: out.error || "GRN confirmation failed." });
+      setOrderNotice({ text: out.error || "Delivery confirmation failed." });
       return;
     }
     setGs1Input("");
-    setOrderNotice({ text: `GRN Confirmed: Lot ${out.batchNumber} (Exp ${out.expiryDate}) added & escrow released.` });
+    setOrderNotice({ text: `Delivery Confirmed: Lot ${out.batchNumber} (Exp ${out.expiryDate}) added & escrow released.` });
     await onRefreshState();
   };
 
@@ -1131,7 +1129,7 @@ export default function PharmacyDashboard({
       playAppSound("alert");
       setPosMsg({
         ok: false,
-        text: `${batchMatch.brandName} lot ${batchMatch.batchNumber} is expired or quarantined. FEFO blocked dispensing.`,
+        text: `${batchMatch.brandName} lot ${batchMatch.batchNumber} is expired or quarantined and cannot be dispensed.`,
       });
       return;
     }
@@ -1449,7 +1447,7 @@ export default function PharmacyDashboard({
     const buckets = [
       { key: "safe", label: isSw ? "Salama (>90s)" : "Safe (>90d)", x: 24, count: 0, units: 0, valueTzs: 0 },
       { key: "watch", label: isSw ? "Fuatilia (31-90s)" : "Watch (31-90d)", x: 132, count: 0, units: 0, valueTzs: 0 },
-      { key: "fefo", label: isSw ? "Uza Kwanza (<=30s)" : "FEFO <=30d", x: 240, count: 0, units: 0, valueTzs: 0 },
+      { key: "fefo", label: isSw ? "Uza Kwanza (<=30s)" : "Expiring (<=30d)", x: 240, count: 0, units: 0, valueTzs: 0 },
       { key: "blocked", label: isSw ? "Imekwisha/Zuiwa" : "Expired/Blocked", x: 340, count: 0, units: 0, valueTzs: 0 },
     ];
     for (const b of batches) {
@@ -1580,7 +1578,7 @@ export default function PharmacyDashboard({
       badge: isSw ? "Siku 15" : "15 Days",
       badgeTone: "bg-[#E2F575] text-[#111317]",
       title: isSw ? "Washa Mpango Kamili" : "Activate Annual Plan",
-      desc: "Lock yearly branch rate cleanly while FEFO counter & POS stay live.",
+      desc: "Lock yearly branch rate cleanly while Counter POS stays live.",
       ctaLabel: isSw ? "Lipa & Washa" : "Pay & Activate",
       onClick: () => onPaySubscription(),
       href: undefined,
@@ -1591,28 +1589,28 @@ export default function PharmacyDashboard({
         badge: "1 Step Left",
         badgeTone: "bg-amber-200 text-amber-950",
         title: isSw ? "Pakia Cheti cha Duka" : "Verify Operating Permit",
-        desc: "Offline FEFO POS runs now. Upload permit to unlock Kasri wholesale trade.",
+        desc: "Offline Counter POS runs now. Upload permit to unlock Kasri wholesale trade.",
         ctaLabel: isSw ? "Pakia Cheti" : "Upload Permit",
         onClick: undefined,
         href: "/app/settings?tab=org#certificates",
       }
       : earliestNearExpiry
         ? {
-          eyebrow: isSw ? "Tahadhari ya FEFO" : "FEFO Expiry Watch",
+          eyebrow: isSw ? "Tahadhari ya Muda" : "Expiry Watch",
           badge: `${stockAlerts.nearExpiryCount} <= 30d`,
           badgeTone: "bg-[#E2F575] text-[#111317]",
           title: `${earliestNearExpiry.brandName} · ${earliestNearExpiry.batchNumber}`,
-          desc: `Priority lot (${earliestNearExpiry.quantity} packs, exp ${earliestNearExpiry.expiryDate}). Inspect or dispense first.`,
-          ctaLabel: isSw ? "Kagua Rafu & FEFO" : "Inspect Priority Stock",
+          desc: `Priority lot (${earliestNearExpiry.quantity} packs, exp ${earliestNearExpiry.expiryDate}). Inspect or sell first.`,
+          ctaLabel: isSw ? "Kagua Stoo" : "Inspect Expiring Stock",
           onClick: () => setTab("inventory"),
           href: undefined,
         }
         : {
           eyebrow: isSw ? "Hali ya Zamu" : "Dispensary Ready",
-          badge: "FEFO Clear",
+          badge: "Stock Clear",
           badgeTone: "bg-[#E2F575] text-[#111317]",
           title: "All Lots Within Range",
-          desc: "Every active batch is verified and FEFO-sorted. Open counter POS to issue receipts.",
+          desc: "Every active batch is verified and sorted by earliest expiry. Open Counter POS to sell.",
           ctaLabel: isSw ? "Fungua Kaunta" : "Open Counter POS",
           onClick: () => setTab("operations"),
           href: undefined,
@@ -1620,11 +1618,11 @@ export default function PharmacyDashboard({
 
   const tabHeading =
     tab === "operations"
-      ? isSw ? "Kaunta ya FEFO & Zamu" : "FEFO Counter & Shift"
+      ? isSw ? "Kaunta ya POS & Zamu" : "Counter POS & Shift"
       : tab === "receipts"
         ? isSw ? "Hifadhi ya Risiti" : "Receipts Vault"
         : tab === "inventory"
-          ? isSw ? "Usimamizi wa Stoo & FEFO" : "Inventory & Batch Guard"
+          ? isSw ? "Usimamizi wa Stoo" : "Inventory & Stock"
           : tab === "network"
             ? isSw ? "Jumla & Kasri Escrow" : "Wholesale & Kasri Escrow"
             : tab === "reports"
@@ -1757,7 +1755,7 @@ export default function PharmacyDashboard({
     <div className="space-y-5">
       {/* Crisp Header + Back / Quick Primary Action */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-1">
-        <div className="space-y-1.5">
+        <div data-tour="branch-header" className="space-y-1.5">
           <div className={`text-[11px] font-medium flex flex-wrap items-center gap-1.5 ${mutedCls}`}>
             {canManageAdmin && centres.length > 0 && onSetOrgScope && (
               <div className={`inline-flex rounded-full border p-0.5 mr-1 ${chipCls}`}>
@@ -1805,16 +1803,13 @@ export default function PharmacyDashboard({
           >
             {isSw ? "Mwongozo" : "Quick Tour"}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab("operations");
-              setTimeout(() => hardwareSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 90);
-            }}
+          <Link
+            href="/app/settings?tab=hardware"
+            data-tour="hardware-settings-link"
             className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer transition-colors ${chipCls} hover:border-slate-400`}
           >
             {isSw ? "Vifaa & Sauti" : "Hardware & Sound"}
-          </button>
+          </Link>
           {tab !== "overview" ? (
             <button
               type="button"
@@ -1834,11 +1829,12 @@ export default function PharmacyDashboard({
               </button>
               <button
                 type="button"
+                data-tour="open-pos-cta"
                 onClick={() => setTab("operations")}
                 className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer shadow-xs transition-opacity hover:opacity-90"
                 style={{ backgroundColor: accent }}
               >
-                + {isSw ? "Kaunta ya FEFO" : "Open Counter POS"}
+                + {isSw ? "Fungua Kaunta ya POS" : "Open Counter POS"}
               </button>
               {canManageAdmin && orgScope === "all" && (
                 <button
@@ -2851,7 +2847,7 @@ export default function PharmacyDashboard({
       )}
 
       {/* ================================================================ */}
-      {/* TAB: FEFO COUNTER POS + SHIFT CASH RECONCILIATION                */}
+      {/* TAB: COUNTER POS + SHIFT CASH RECONCILIATION (ONLY POS)          */}
       {/* ================================================================ */}
       {tab === "operations" && (
         <div className="space-y-4 animate-stage-pop">
@@ -2859,12 +2855,14 @@ export default function PharmacyDashboard({
             <div className={`lg:col-span-7 rounded-[24px] border p-6 space-y-4 ${cardCls}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-sm font-semibold">Branch Dispensary Shelf (FEFO Sorted)</h2>
+                  <h2 className="text-sm font-semibold">{isSw ? "Rafu ya Dawa za Kaunta" : "Dispensary Shelf"}</h2>
                   <p className={`text-[11px] ${mutedCls}`}>
-                    Earliest valid lot dispenses first. Expired lots ({stockAlerts.expiredCount}) are auto-blocked by @cervos/core.
+                    {isSw
+                      ? `Dawa za kuisha mapema huuzwa kwanza. Zilizokwisha muda (${stockAlerts.expiredCount}) huzuiliwa.`
+                      : `Earliest valid expiry dispatches first. Expired lots (${stockAlerts.expiredCount}) are blocked automatically.`}
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <button
                     type="button"
                     onClick={() => openReport("sales")}
@@ -2887,6 +2885,13 @@ export default function PharmacyDashboard({
                   >
                     {isSw ? `Risiti (${sales.length})` : `Receipts Vault (${sales.length})`} &rarr;
                   </button>
+                  <Link
+                    href="/app/settings?tab=hardware"
+                    className={`px-3 py-1 rounded-full border text-[11px] font-semibold cursor-pointer inline-flex items-center gap-1 hover:border-slate-400 transition-colors ${chipCls}`}
+                  >
+                    <span>{isSw ? "Mipangilio ya POS" : "POS Settings"}</span>
+                    <span>&rarr;</span>
+                  </Link>
                 </div>
               </div>
 
@@ -3204,7 +3209,7 @@ export default function PharmacyDashboard({
                   style={{ backgroundColor: accent }}
                 >
                   {posBusy
-                    ? "Allocating FEFO Lots..."
+                    ? isSw ? "Inakamilisha Mauzo..." : "Completing Sale..."
                     : isSw ? "Kagua & Uza ->" : "Review & Sell ->"}
                 </button>
               </div>
@@ -3313,7 +3318,7 @@ export default function PharmacyDashboard({
                     <div className="lg:col-span-8 space-y-3">
                       <div className={`p-4 rounded-2xl border space-y-2.5 text-xs ${chipCls}`}>
                         <div className="flex items-center justify-between font-bold text-[11px] uppercase opacity-75">
-                          <span>Medicine &amp; FEFO Lot</span>
+                          <span>Medicine &amp; Batch</span>
                           <span>Qty &times; Price = Subtotal</span>
                         </div>
                         {cartEntries.map(([productId, qty]) => {
@@ -3324,7 +3329,7 @@ export default function PharmacyDashboard({
                               <div>
                                 <div className="font-bold">{p.brandName} ({p.genericName})</div>
                                 <div className={`text-[10px] font-mono ${mutedCls}`}>
-                                  FEFO Lot: {p.earliestBatch || "AUTO"} &middot; Exp {p.earliestExpiry || "-"}
+                                  Batch: {p.earliestBatch || "AUTO"} &middot; Exp {p.earliestExpiry || "-"}
                                 </div>
                               </div>
                               <div className="text-right font-semibold tabular-nums">
@@ -3409,21 +3414,14 @@ export default function PharmacyDashboard({
                           <div className={mutedCls}>
                             Scanner: {hwConfig.scannerName}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCheckoutPreviewOpen(false);
-                              setTab("operations");
-                              setTimeout(
-                                () => hardwareSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
-                                100
-                              );
-                            }}
-                            className="text-[10px] font-semibold underline cursor-pointer"
+                          <Link
+                            href="/app/settings?tab=hardware"
+                            onClick={() => setCheckoutPreviewOpen(false)}
+                            className="inline-block text-[10px] font-semibold underline cursor-pointer"
                             style={{ color: accent }}
                           >
-                            {isSw ? "Unganisha / Tatua Vifaa ->" : "Connect Hardware / Troubleshoot ->"}
-                          </button>
+                            {isSw ? "Mipangilio ya Printa & Skana ->" : "Printer & Scanner Settings ->"}
+                          </Link>
                         </div>
                       </div>
 
@@ -3445,18 +3443,6 @@ export default function PharmacyDashboard({
               </div>,
               document.body
             )}
-
-          <div ref={hardwareSectionRef} className="pt-2">
-            <HardwareAndAudioStudio
-              orgName={account.orgName}
-              branchName={activeCentre?.name || account.region}
-              hwConfig={hwConfig}
-              onHwConfigChange={setHwConfig}
-              isDark={isDark}
-              isSw={isSw}
-              accent={accent}
-            />
-          </div>
         </div>
       )}
 
@@ -3542,7 +3528,7 @@ export default function PharmacyDashboard({
                       <div key={`${ln.productId}-${idx}`} className={`p-2.5 rounded-xl border flex justify-between ${chipCls}`}>
                         <span>
                           <strong>{ln.brandName}</strong> &times; {ln.qty}{" "}
-                          <span className={`font-mono text-[10px] ${mutedCls}`}>(Batch {ln.batchNumber || "FEFO"})</span>
+                          <span className={`font-mono text-[10px] ${mutedCls}`}>(Batch {ln.batchNumber || "Auto"})</span>
                         </span>
                         <span className="font-bold tabular-nums">
                           TZS {(ln.qty * ln.unitPriceTzs).toLocaleString("en-US")}
@@ -3779,12 +3765,12 @@ export default function PharmacyDashboard({
                     <h2 className="text-xl font-bold tracking-tight" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
                       {isSw
                         ? "Habari! Mtandao wa Kuagiza Dawa kwa Jumla & Kasri Escrow Unakuja Hivi Karibuni"
-                        : "Hi there! Direct B2B Wholesale Ordering & Kasri Escrow Is Coming Soon"}
+                        : "Hi there! Direct Wholesale Ordering & Kasri Escrow Is Coming Soon"}
                     </h2>
                     <p className={`text-xs leading-relaxed ${mutedCls}`}>
                       {isSw
-                        ? "Tunakamilisha uunganishaji na wauzaji wa jumla walioidhinishwa nchini Tanzania ili uweze kuagiza dawa, kufuatilia usafiri mubashara, na kulipa kwa usalama. Mauzo ya POS, Stoo ya FEFO, Risiti, na Ripoti vyote vinafanya kazi kikamilifu sasa."
-                        : "We are finalizing verified distributor onboarding and live dispatch payouts across Tanzania. While B2B network checkout prepares to go live, your POS counter, FEFO batch control, receipts vault, staff shifts, and financial intelligence reports are 100% live."}
+                        ? "Tunakamilisha uunganishaji na wauzaji wa jumla walioidhinishwa nchini Tanzania ili uweze kuagiza dawa, kufuatilia usafiri mubashara, na kulipa kwa usalama. Mauzo ya POS, Stoo ya Dawa, Risiti, na Ripoti vyote vinafanya kazi kikamilifu sasa."
+                        : "We are finalizing verified distributor onboarding and live dispatch payouts across Tanzania. While wholesale network checkout prepares to go live, your POS counter, batch expiry guard, receipts vault, staff shifts, and financial reports are 100% live."}
                     </p>
                   </div>
                   <button
@@ -4178,7 +4164,7 @@ export default function PharmacyDashboard({
           )}
 
           {!shiftPromptDismissed && (
-            <div className={`rounded-[22px] border p-4 sm:p-5 mb-4 flex flex-wrap items-center justify-between gap-3 ${cardCls}`}>
+            <div data-tour="shift-launch-card" className={`rounded-[22px] border p-4 sm:p-5 mb-4 flex flex-wrap items-center justify-between gap-3 ${cardCls}`}>
               <div className="space-y-0.5">
                 <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
                   {activeShift
@@ -4793,7 +4779,7 @@ export default function PharmacyDashboard({
                         onClick={() => setTab("inventory")}
                         className={`px-3.5 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
                       >
-                        {isSw ? "Stoo & FEFO" : "Stock & FEFO"}
+                        {isSw ? "Stoo & Makundi" : "Stock & Batches"}
                       </button>
                       <button
                         type="button"
@@ -4821,10 +4807,10 @@ export default function PharmacyDashboard({
                     <div className={`rounded-2xl border p-4 ${cardCls}`}>
                       <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>Kasri Escrow Held</div>
                       <div className="text-xl font-bold tabular-nums mt-1">{formatTzs(escrowHeldTzs)}</div>
-                      <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length} orders pending GRN</div>
+                      <div className={`text-[11px] mt-0.5 ${mutedCls}`}>{wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length} orders awaiting delivery</div>
                     </div>
                     <div className={`rounded-2xl border p-4 ${cardCls}`}>
-                      <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>{isSw ? "Usalama wa Rafu" : "FEFO Exposure"}</div>
+                      <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>{isSw ? "Usalama wa Rafu" : "Expiry Watch"}</div>
                       <div className="text-xl font-bold tabular-nums mt-1">{validLotsCount} lots</div>
                       <div className="text-[11px] mt-0.5 text-amber-600">{stockAlerts.nearExpiryCount} expiring &middot; {stockAlerts.expiredCount} expired</div>
                     </div>
@@ -4927,7 +4913,7 @@ export default function PharmacyDashboard({
                         <div className="flex items-baseline justify-between gap-2">
                           <div className="text-3xl font-normal tracking-tight tabular-nums" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
                             {sales.length}
-                            <span className={`text-lg ml-1 ${mutedCls}`}>tx</span>
+                            <span className={`text-lg ml-1 ${mutedCls}`}>{isSw ? "mauzo" : "sales"}</span>
                           </div>
                           <button
                             type="button"
@@ -5041,7 +5027,7 @@ export default function PharmacyDashboard({
                             </div>
                             <div className="flex items-center justify-between w-full text-[10px] font-mono opacity-80">
                               <span>{wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length} Held</span>
-                              <span>Open GRN &rarr;</span>
+                              <span>Deliveries &rarr;</span>
                             </div>
                           </button>
                         </div>
@@ -5059,10 +5045,10 @@ export default function PharmacyDashboard({
                       >
                         <div className="flex items-start justify-between">
                           <div>
-                            <div className="text-[14px] font-medium">{isSw ? "Usalama wa Rafu (FEFO)" : "Shelf & Expiry Risk"}</div>
-                            <div className={`text-[11px] mt-1 ${mutedCls}`}>{isSw ? "Utabiri wa hasara za muda" : "FEFO sell-through & write-off report"}</div>
+                            <div className="text-[14px] font-medium">{isSw ? "Usalama wa Rafu" : "Shelf & Expiry Risk"}</div>
+                            <div className={`text-[11px] mt-1 ${mutedCls}`}>{isSw ? "Utabiri wa hasara za muda" : "Expiry & stock health report"}</div>
                             <div className="text-2xl font-normal tracking-tight tabular-nums mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                              {productsSummary.length} SKUs
+                              {productsSummary.length} {isSw ? "bidhaa" : "items"}
                             </div>
                             <div className="text-[11px] font-medium text-amber-600 mt-0.5">
                               {stockAlerts.nearExpiryCount} expiring &le; 30d &middot; {stockAlerts.expiredCount} blocked
@@ -5157,10 +5143,10 @@ export default function PharmacyDashboard({
                                   {fefoChart.hasAnyStock
                                     ? isSw
                                       ? `Makundi ${validLotsCount} salama · ${stockAlerts.nearExpiryCount} yanakaribia kuisha <=30d`
-                                      : `${validLotsCount} active lots · ${fefoChart.nodes[2].units.toLocaleString("en-US")} units in <=30d FEFO window`
+                                      : `${validLotsCount} active lots · ${fefoChart.nodes[2].units.toLocaleString("en-US")} units expiring within 30d`
                                     : isSw
-                                      ? "Hakuna mzigo rafuni bado. Ingiza makundi kuona mchoro halisi wa FEFO."
-                                      : "No batches in stock yet. Receive batches to plot live FEFO expiry distribution."}
+                                      ? "Hakuna mzigo rafuni bado. Ingiza makundi kuona mchoro halisi wa muda."
+                                      : "No batches in stock yet. Receive batches to plot live expiry timeline."}
                                 </span>
                               </div>
                             );
@@ -5177,7 +5163,7 @@ export default function PharmacyDashboard({
                         })()}
                       </div>
 
-                      {/* Clickable Inventory Mix Card -> Opens Product ABC & Margin Intelligence */}
+                      {/* Clickable Inventory Mix Card -> Opens Product Margin Intelligence */}
                       <div
                         role="button"
                         tabIndex={0}
@@ -5187,7 +5173,7 @@ export default function PharmacyDashboard({
                       >
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-[14px] font-medium block">{isSw ? "ABC & Faida ya Rafu" : "Inventory Mix & ABC"}</span>
+                            <span className="text-[14px] font-medium block">{isSw ? "Mchanganuo wa Faida" : "Product Mix & Margins"}</span>
                             <span className={`text-[10px] ${mutedCls}`}>{isSw ? "Fungua jedwali la faida" : "Product margins & cover"}</span>
                           </div>
                           <span className={`w-7 h-7 rounded-full border flex items-center justify-center text-[11px] ${chipCls}`}>
@@ -5363,7 +5349,7 @@ export default function PharmacyDashboard({
                       >
                         {profiles.filter((p) => !activeCentre?.id || p.centreId === activeCentre.id).length} staff &middot; View League &rarr;
                       </button>
-                      <button type="button" onClick={onOpenChat} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
+                      <button type="button" data-tour="branch-chat-cta" onClick={onOpenChat} className="font-semibold hover:underline cursor-pointer" style={{ color: accent }}>
                         Open Branch Chat &rarr;
                       </button>
                     </div>

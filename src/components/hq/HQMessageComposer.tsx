@@ -21,12 +21,12 @@ type CtaTarget = "overview" | "reports" | "billing" | "network" | "team" | "down
 
 const TEMPLATES = [
   {
-    label: "FEFO Inspection",
+    label: "Expiry Inspection",
     severity: "action" as const,
     ctaLabel: "Open Reports",
     ctaTarget: "reports" as CtaTarget,
-    title: "Monthly FEFO & Cold-Chain Audit Due",
-    swTitle: "Ukaguzi wa Kila Mwezi wa FEFO na Stoo",
+    title: "Monthly Expiry & Cold-Chain Audit Due",
+    swTitle: "Ukaguzi wa Kila Mwezi wa Muda wa Dawa na Stoo",
     body: "Please verify all near-expiry lots in Reports and confirm quarantine tags before Friday 17:00 EAT.",
     swBody: "Tafadhali kagua dawa zinazokaribia kuisha muda kwenye Ripoti na uthibitishe karantini kabla ya Ijumaa saa 11 jioni.",
   },

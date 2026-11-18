@@ -1024,18 +1024,18 @@ export default function WorkspaceShell({
                   },
                   {
                     targetId: "operations",
-                    title: isSw ? "2. Kaunta ya POS & Ulinzi wa FEFO" : "2. Counter POS & FEFO Batch Lock",
+                    title: isSw ? "2. Kaunta ya POS & Ulinzi wa Muda" : "2. Counter POS & Expiry Guard",
                     body: isSw
-                      ? "Mfumo hupanga makundi ya dawa kulingana na tarehe ya kuisha (FEFO) na huzuia kiotomatiki kuuza dawa zilizopitwa na muda au zilizowekwa karantini."
-                      : "Counter POS picks the earliest valid expiry batch automatically (FEFO) and blocks expired or quarantined packs from checkout receipts.",
-                    tip: isSw ? "Tumia skana ya msimbo au tafuta kwa jina la dawa." : "Scan GS1 barcodes directly or search brand/generic names above the shelf.",
+                      ? "Mfumo hupanga makundi ya dawa kulingana na tarehe ya kuisha na huzuia kiotomatiki kuuza dawa zilizopitwa na muda au zilizowekwa karantini."
+                      : "Counter POS picks the earliest valid expiry batch automatically and blocks expired or quarantined packs from checkout receipts.",
+                    tip: isSw ? "Tumia skana ya msimbo au tafuta kwa jina la dawa." : "Scan barcodes directly or search brand/generic names above the shelf.",
                   },
                   {
                     targetId: "reports",
-                    title: isSw ? "3. Ripoti, Edge ML & PDF Safi" : "3. Reports, Edge ML & Clean Branded PDF",
+                    title: isSw ? "3. Ripoti, Utabiri & PDF Safi" : "3. Reports, Forecasts & Clean Branded PDF",
                     body: isSw
                       ? "Pata utabiri wa mauzo, alama ya afya ya duka, na ripoti binafsi za wafanyakazi. Bonyeza 'Chapisha / PDF Safi' kuchagua lugha kabla ya kutoa nakala yenye nembo ya kampuni."
-                      : "Explore shop health rings, 7-day Edge ML trends, and individual staff metrics. Clicking Clean PDF or CSV asks your language & narrative preference and prints with your company logo.",
+                      : "Explore shop health rings, 7-day sales forecasts, and individual staff metrics. Clicking Clean PDF or CSV lets you pick your language and prints with your company logo.",
                     tip: isSw ? "Kila mfanyakazi anaweza kuona ripoti yake binafsi hata bila ufikiaji wa shirika zima." : "Every operator always has a My Performance view for their own shift receipts.",
                   },
                   {

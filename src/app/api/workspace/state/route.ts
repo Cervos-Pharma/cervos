@@ -629,7 +629,7 @@ export async function POST(request: NextRequest) {
       );
       if (!fefo.ok) {
         return noStoreJson(
-          { error: `${sample.brandName}: ${fefo.error || "FEFO allocation blocked."}` },
+          { error: `${sample.brandName}: ${fefo.error || "Stock allocation blocked."}` },
           { status: 400 }
         );
       }
@@ -706,7 +706,7 @@ export async function POST(request: NextRequest) {
       accountId: account.id,
       actor: unlockedProfile.displayName,
       category: "POS",
-      action: `FEFO Dispense ${receiptNumber} (${paymentMethod.toUpperCase()}): ${allocatedSummary.join(", ")} - TZS ${totalTzs.toLocaleString("en-US")}`,
+      action: `POS Sale ${receiptNumber} (${paymentMethod.toUpperCase()}): ${allocatedSummary.join(", ")} - TZS ${totalTzs.toLocaleString("en-US")}`,
     });
     saveWorkspaceDb(db);
     await flushWorkspaceDb();
@@ -1054,7 +1054,7 @@ export async function POST(request: NextRequest) {
       return noStoreJson({ error: "Network permit verification required." }, { status: 403 });
     }
     if (hasAnyInjection([body.batchNumber, body.gs1Barcode])) {
-      return noStoreJson({ error: "Unsupported characters in GRN payload." }, { status: 400 });
+      return noStoreJson({ error: "Unsupported characters in delivery payload." }, { status: 400 });
     }
     const orderId = sanitizeText(body.orderId, 40);
     ensureAccountDomainData(db, account.id, unlockedProfile.centreId);
@@ -1105,7 +1105,7 @@ export async function POST(request: NextRequest) {
       accountId: account.id,
       actor: unlockedProfile.displayName,
       category: "COMPLIANCE",
-      action: `Confirmed GRN delivery ${order.orderReference} (${batchNumber}) & released Kasri escrow (TZS ${order.totalTzs.toLocaleString("en-US")})`,
+      action: `Confirmed delivery ${order.orderReference} (${batchNumber}) & released Kasri escrow (TZS ${order.totalTzs.toLocaleString("en-US")})`,
     });
     saveWorkspaceDb(db);
     await flushWorkspaceDb();

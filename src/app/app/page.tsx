@@ -131,7 +131,23 @@ export default function WorkspaceHomePage() {
   const { canPromptNative, isInstalled, installing, deviceKind, triggerInstall } = usePwaInstall();
 
   const [data, setData] = useState<AppWorkspaceData | null>(null);
-  const [tab, setTab] = useState<AppTab>("overview");
+  const [tab, setTab] = useState<AppTab>(() => {
+    if (typeof window === "undefined") return "overview";
+    const qt = new URLSearchParams(window.location.search).get("tab");
+    if (
+      qt === "overview" ||
+      qt === "operations" ||
+      qt === "receipts" ||
+      qt === "inventory" ||
+      qt === "network" ||
+      qt === "reports" ||
+      qt === "billing" ||
+      qt === "team"
+    ) {
+      return qt;
+    }
+    return "overview";
+  });
   const [orgScope, setOrgScope] = useState<"all" | "branch">("branch");
   const [sessionLockedOut, setSessionLockedOut] = useState(false);
   const userChoseScopeRef = useRef(false);
@@ -676,7 +692,7 @@ export default function WorkspaceHomePage() {
           ? [
             {
               id: "inventory",
-              label: isSw ? "Hifadhi & FEFO" : "Inventory & FEFO",
+              label: isSw ? "Stoo ya Dawa" : "Inventory",
               active: tab === "inventory",
               onClick: () => setTab("inventory"),
             },

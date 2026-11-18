@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { buildWorkspaceTourSteps, type TourTabTarget } from "@/components/onboarding/steps";
 
 interface WorkspaceTourProps {
   open: boolean;
@@ -11,7 +12,14 @@ interface WorkspaceTourProps {
   isDark: boolean;
   isSw: boolean;
   accent: string;
-  onJumpTab?: (tab: "overview" | "inventory" | "operations" | "receipts" | "billing" | "team") => void;
+  onJumpTab?: (tab: TourTabTarget) => void;
+}
+
+interface TargetRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
 }
 
 export default function WorkspaceTour({
@@ -25,112 +33,148 @@ export default function WorkspaceTour({
   onJumpTab,
 }: WorkspaceTourProps) {
   const [step, setStep] = useState(0);
+  const [rect, setRect] = useState<TargetRect | null>(null);
+  const [vp, setVp] = useState<{ w: number; h: number }>({ w: 1200, h: 800 });
+
+  const steps = buildWorkspaceTourSteps({ orgName, branchName, isSw });
+  const current = steps[step] ?? steps[0];
+
+  const measureTarget = useCallback((shouldScroll: boolean) => {
+    if (typeof window === "undefined") return;
+    setVp({ w: window.innerWidth, h: window.innerHeight });
+
+    if (!current.target) {
+      setRect(null);
+      return;
+    }
+
+    const el = document.querySelector(current.target);
+    if (!el) {
+      setRect(null);
+      return;
+    }
+
+    if (shouldScroll) {
+      try {
+        el.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      } catch {
+        // Ignore smooth scroll fallback error
+      }
+    }
+
+    const box = el.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) {
+      setRect(null);
+      return;
+    }
+
+    const pad = 8;
+    setRect({
+      top: Math.max(8, box.top - pad),
+      left: Math.max(8, box.left - pad),
+      width: Math.min(window.innerWidth - 16, box.width + pad * 2),
+      height: box.height + pad * 2,
+    });
+  }, [current.target]);
+
+  useEffect(() => {
+    if (!open) {
+      setStep(0);
+      setRect(null);
+      return;
+    }
+
+    if (onJumpTab && current.tab) {
+      onJumpTab(current.tab);
+    }
+
+    const t1 = setTimeout(() => measureTarget(true), 80);
+    const t2 = setTimeout(() => measureTarget(false), 380);
+    const onResizeOrScroll = () => measureTarget(false);
+
+    window.addEventListener("resize", onResizeOrScroll);
+    window.addEventListener("scroll", onResizeOrScroll, true);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener("resize", onResizeOrScroll);
+      window.removeEventListener("scroll", onResizeOrScroll, true);
+    };
+  }, [open, step, current.tab, measureTarget, onJumpTab]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose(true);
+      } else if (e.key === "ArrowRight") {
+        setStep((s) => Math.min(steps.length - 1, s + 1));
+      } else if (e.key === "ArrowLeft") {
+        setStep((s) => Math.max(0, s - 1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, steps.length]);
 
   if (!open || typeof document === "undefined") return null;
 
-  const steps = isSw
-    ? [
-        {
-          title: `Karibu kwenye Kituo cha ${branchName}`,
-          badge: "1 / 5 · UTENGAJI WA TAWI",
-          body: `${orgName} inaweza kuwa na matawi mengi, lakini stoo, mauzo ya kaunta, risiti, matumizi na soga za timu ya ${branchName} zimetenganishwa kikamilifu. Tumia kibadilisha tawi juu kuangalia tawi lingine.`,
-          tip: "Kila duka lina hesabu zake binafsi bila kuchanganyika.",
-          tab: "overview" as const,
-          actionLabel: "Tazama Muhtasari",
-        },
-        {
-          title: "Kuingia Zamu (Clock In) & Ulinzi wa Kiotomatiki",
-          badge: "2 / 5 · ZAMU YA KAZI",
-          body: "Unapofungua app nyumbani, hakikisha umeingia zamu ya leo moja kwa moja. Ukiacha app nje kwa saa nyingi bila shughuli, mfumo utakutoa zamu kiotomatiki ili kulinda rekodi za kazi na droo ya fedha.",
-          tip: "Hakikisha umefunga droo ya fedha mwisho wa zamu.",
-          tab: "overview" as const,
-          actionLabel: "Anza Nyumbani",
-        },
-        {
-          title: "Kaunta ya POS & Ulinzi wa FEFO",
-          badge: "3 / 5 · MAUZO YA HARAKA",
-          body: "Changanua msimbopau au gonga dawa yoyote. Cervos huchagua kiotomatiki toleo lililo karibu zaidi kuisha muda na huzuia dawa zilizopitwa au zilizowekwa karantini.",
-          tip: "Andika jina la dawa kwenye Stoo ili kujaza taarifa za awali haraka.",
-          tab: "inventory" as const,
-          actionLabel: "Fungua Stoo",
-        },
-        {
-          title: "Vifaa Halisi: Printa & Skana ya Msimbopau",
-          badge: "4 / 5 · MASHINE NA UTATUZI",
-          body: "Unganisha printa halisi ya USB/Serial/Bluetooth na ujaribu skana yako ndani ya Mipangilio ya Vifaa. Kuna mwongozo wa utatuzi wa hatua kwa hatua endapo karatasi haitoki au skana haibonyezi Enter.",
-          tip: "Kila risiti ya ukubwa wa 58mm au 80mm inaweza kuchapishwa au kupimwa.",
-          tab: "operations" as const,
-          actionLabel: "Fungua Vifaa & Mipangilio",
-        },
-        {
-          title: "Soga ya Tawi na Dawati la Msaada HQ",
-          badge: "5 / 5 · USHIRIKIANO NA MSAADA",
-          body: "Soga ya timu ipo kwa wafanyakazi wa tawi hili pekee. Ukihitaji msaada wa kiufundi au malipo kutoka Cervos HQ, tuma tiketi moja kwa moja kutoka kwenye kikasha cha HQ.",
-          tip: "Weka sauti ya arifa au nyamazisha muda wowote kwenye Mipangilio.",
-          tab: "receipts" as const,
-          actionLabel: "Tazama Risiti",
-        },
-      ]
-    : [
-        {
-          title: `Welcome to ${branchName} Counter`,
-          badge: "1 / 5 · STRICT BRANCH ISOLATION",
-          body: `Every branch under ${orgName} keeps its own separate inventory batches, POS sales, receipts, cash drawer, expenses, and staff chat. Switch branches in the top header bar whenever inspecting another location.`,
-          tip: "Dispensing or editing stock never touches another branch's shelf.",
-          tab: "overview" as const,
-          actionLabel: "Go to Counter Home",
-        },
-        {
-          title: "Clock In at Launch & Auto Clock-Out",
-          badge: "2 / 5 · SHIFT ATTENDANCE",
-          body: "When starting your day, confirm 'Are you in shift?' right at the top of Home before selling. If you stay out of the app for too long, Cervos automatically clocks out your idle shift to protect payroll & cash totals.",
-          tip: "Owner and managers can still audit every shift log under Operations.",
-          tab: "overview" as const,
-          actionLabel: "View Shift Prompt",
-        },
-        {
-          title: "POS Checkout, FEFO & Restock Autofill",
-          badge: "3 / 5 · DISPENSARY SAFETY",
-          body: "Scan GS1 barcodes or tap medicines to build a basket. Expired or quarantined boxes are automatically blocked. When restocking in Inventory, type any existing brand name to preload generic name, category, pricing, and WebP photo in one tap.",
-          tip: "You can also pick from category presets or save new custom categories.",
-          tab: "inventory" as const,
-          actionLabel: "Inspect Inventory",
-        },
-        {
-          title: "Real Hardware Setup & Troubleshooting",
-          badge: "4 / 5 · PRINTER & SCANNER GUIDE",
-          body: "Pair a real USB, Serial, or Bluetooth 58mm/80mm thermal receipt printer—or configure OS System Print—under Operations -> Hardware Studio. Built-in scanner calibration and troubleshooting diagnostics help solve paper or USB issues fast.",
-          tip: "Checkout Preview shows your real detected printer status, never fake statuses.",
-          tab: "operations" as const,
-          actionLabel: "Open Hardware Setup",
-        },
-        {
-          title: "Branch-Only Chat, Audio Cues & HQ Support",
-          badge: "5 / 5 · TEAM & HELP DESK",
-          body: "Team chat and @mentions stay scoped strictly inside this branch. Curated sound effects confirm scans, receipts, alerts, and shift punches (adjustable or mutable anytime). Need Cervos HQ assistance? Open a Support Ticket straight from the HQ Inbox.",
-          tip: "Replay this guide anytime from the Guide button in the top bar.",
-          tab: "overview" as const,
-          actionLabel: "Finish Guide",
-        },
-      ];
-
-  const current = steps[step] ?? steps[0];
   const cardCls = isDark
     ? "bg-[#11161F] border-slate-700 text-slate-100"
     : "bg-white border-slate-200 text-slate-900";
   const mutedCls = isDark ? "text-slate-400" : "text-slate-600";
+
+  // Anchor spotlight popover cleanly below or above the target; center when no target rect
+  const cardWidth = Math.min(460, vp.w - 32);
+  let anchoredStyle: React.CSSProperties | undefined;
+  if (rect && vp.w >= 640) {
+    const spaceBelow = vp.h - (rect.top + rect.height);
+    const placeBelow = spaceBelow >= 260 || rect.top < 250;
+    const rawTop = placeBelow ? rect.top + rect.height + 14 : Math.max(16, rect.top - 300);
+    const clampedTop = Math.min(Math.max(16, rawTop), Math.max(16, vp.h - 310));
+    const clampedLeft = Math.min(Math.max(16, rect.left), Math.max(16, vp.w - cardWidth - 16));
+    anchoredStyle = {
+      position: "fixed",
+      top: clampedTop,
+      left: clampedLeft,
+      width: cardWidth,
+    };
+  }
 
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={isSw ? "Mwongozo wa Kuanzia Cervos" : "Cervos Quick Start Guide"}
-      className="fixed inset-0 z-[130] bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-4"
+      className="fixed inset-0 z-[130]"
       onClick={() => onClose(true)}
     >
+      {rect ? (
+        <div
+          aria-hidden="true"
+          className="fixed rounded-[20px] pointer-events-none transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+          style={{
+            top: rect.top,
+            left: rect.left,
+            width: rect.width,
+            height: rect.height,
+            boxShadow: "0 0 0 9999px rgba(2, 6, 23, 0.62)",
+            border: `2px solid ${accent}`,
+          }}
+        />
+      ) : (
+        <div aria-hidden="true" className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs" />
+      )}
+
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-xl rounded-[28px] border p-6 sm:p-7 shadow-2xl space-y-5 animate-stage-pop ${cardCls}`}
+        style={anchoredStyle}
+        className={`${
+          anchoredStyle
+            ? ""
+            : "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-lg"
+        } rounded-[26px] border p-5 sm:p-6 shadow-2xl space-y-4 animate-stage-pop z-[131] ${cardCls}`}
       >
         <div className="flex items-center justify-between gap-2">
           <span
@@ -142,24 +186,23 @@ export default function WorkspaceTour({
           <button
             type="button"
             onClick={() => onClose(true)}
-            className={`text-xs font-semibold hover:underline cursor-pointer ${mutedCls}`}
+            className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${
+              isDark ? "border-slate-700 text-slate-300" : "border-slate-200 text-slate-600"
+            }`}
           >
-            {isSw ? "Ruka Mwongozo" : "Skip Guide"}
+            {isSw ? "Ruka" : "Skip Tour"}
           </button>
         </div>
 
         <div className="space-y-2">
-          <h2
-            className="text-xl font-bold tracking-tight"
-            style={{ fontFamily: "Outfit, Inter, sans-serif" }}
-          >
+          <h2 className="text-lg font-bold tracking-tight" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
             {current.title}
           </h2>
-          <p className={`text-sm leading-relaxed ${mutedCls}`}>{current.body}</p>
+          <p className={`text-xs sm:text-[13px] leading-relaxed ${mutedCls}`}>{current.body}</p>
         </div>
 
         <div
-          className={`rounded-2xl border px-4 py-3 text-xs font-medium ${
+          className={`rounded-2xl border px-3.5 py-2.5 text-xs font-medium ${
             isDark
               ? "border-slate-800 bg-slate-900/70 text-sky-300"
               : "border-blue-100 bg-blue-50/80 text-[#1039B9]"
@@ -168,12 +211,11 @@ export default function WorkspaceTour({
           Tip: {current.tip}
         </div>
 
-        {/* Step dots */}
         <div className="flex items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-1.5">
             {steps.map((s, idx) => (
               <button
-                key={s.badge}
+                key={s.id}
                 type="button"
                 aria-label={`Step ${idx + 1}`}
                 onClick={() => setStep(idx)}
@@ -197,12 +239,12 @@ export default function WorkspaceTour({
                 {isSw ? "Nyuma" : "Back"}
               </button>
             )}
-            {onJumpTab && step < steps.length - 1 && (
+            {onJumpTab && current.actionLabel && (
               <button
                 type="button"
                 onClick={() => {
-                  onJumpTab(current.tab);
-                  setStep((s) => Math.min(steps.length - 1, s + 1));
+                  onJumpTab(current.tab === "overview" ? "operations" : current.tab);
+                  onClose(true);
                 }}
                 className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${
                   isDark ? "border-slate-700 text-slate-200" : "border-slate-300 text-slate-700"
@@ -218,7 +260,7 @@ export default function WorkspaceTour({
                 className="px-5 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
                 style={{ backgroundColor: accent }}
               >
-                {isSw ? "Endelea ->" : "Next ->"}
+                {isSw ? "Endelea" : "Next"}
               </button>
             ) : (
               <button

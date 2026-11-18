@@ -4949,7 +4949,7 @@ export async function getHQAlerts(): Promise<{ data: HQAlert[]; error: string | 
         severity: "critical",
         category: "expiry",
         title: `${criticalExpiry.size} branch${criticalExpiry.size > 1 ? "es" : ""} with expiring stock`,
-        description: "Batches expiring within 30 days â€” immediate FEFO action required",
+        description: "Batches expiring within 30 days - immediate rotation needed",
         count: [...criticalExpiry.values()].reduce((a, b) => a + b, 0),
         route: "/hq/intelligence",
         createdAt: new Date().toISOString(),

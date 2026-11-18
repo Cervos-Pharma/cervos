@@ -270,11 +270,10 @@ export default function WorkspaceLoungePage() {
         {/* ============================================================ */}
         {req.status === "approved" && (
           <section
-            className={`rounded-[28px] border p-5 sm:p-9 space-y-5 animate-stage-pop ${
-              isDark
-                ? "bg-gradient-to-br from-emerald-950/60 via-[#11161F] to-[#11161F] border-emerald-700/60"
-                : "bg-gradient-to-br from-emerald-50 via-white to-[#F0FDF4] border-emerald-300 shadow-lg"
-            }`}
+            className={`rounded-[28px] border p-5 sm:p-9 space-y-5 animate-stage-pop ${isDark
+              ? "bg-gradient-to-br from-emerald-950/60 via-[#11161F] to-[#11161F] border-emerald-700/60"
+              : "bg-gradient-to-br from-emerald-50 via-white to-[#F0FDF4] border-emerald-300 shadow-lg"
+              }`}
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E2F575] text-[#111317] text-[11px] font-bold">
               <IconCheck className="w-3.5 h-3.5" />
@@ -407,11 +406,10 @@ export default function WorkspaceLoungePage() {
                       key={o.id}
                       type="button"
                       onClick={() => setSelectedOrgId(o.id)}
-                      className={`w-full min-h-[48px] p-3.5 rounded-xl border text-left text-xs flex items-center justify-between gap-3 cursor-pointer ${
-                        selectedOrgId === o.id
-                          ? "border-[#1039B9] bg-blue-500/10"
-                          : isDark ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-white"
-                      }`}
+                      className={`w-full min-h-[48px] p-3.5 rounded-xl border text-left text-xs flex items-center justify-between gap-3 cursor-pointer ${selectedOrgId === o.id
+                        ? "border-[#1039B9] bg-blue-500/10"
+                        : isDark ? "border-slate-800 bg-slate-900/50" : "border-slate-200 bg-white"
+                        }`}
                     >
                       <div>
                         <div className="font-bold">{o.orgName}</div>
@@ -518,10 +516,10 @@ export default function WorkspaceLoungePage() {
                 BUILT FOR TANZANIA PHARMACIES
               </div>
               <h3 className="text-base font-bold">
-                FEFO Safety, Kasri Escrow &amp; Seamless Offline Continuity
+                Expiry Safety, Kasri Escrow &amp; Seamless Offline Continuity
               </h3>
               <p className={`text-xs leading-relaxed ${mutedCls}`}>
-                From instant GS1 barcode intake to zero-variance evening shift closeouts and real-time multi-branch visibility, every station stays protected even without internet.
+                From instant barcode intake to zero-variance evening shift closeouts and real-time multi-branch visibility, every station stays protected even without internet.
               </p>
               <div className="flex flex-wrap gap-2.5 pt-1">
                 <Link href="/features" className="min-h-[44px] px-4 py-2.5 rounded-full bg-[#1039B9] text-white text-xs font-semibold inline-flex items-center justify-center">

@@ -26,7 +26,7 @@ interface HQSupportDeskSectionProps {
 
 const CANNED_REPLIES = [
   {
-    label: "POS & FEFO Steps",
+    label: "POS & Batch Steps",
     text: "Our support team reviewed your branch logs. Please tap Sync Now on the POS banner and confirm earliest batch expiry dates inside Inventory -> Lot Inspector.",
   },
   {

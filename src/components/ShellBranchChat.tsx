@@ -180,7 +180,7 @@ export function useShellBranchChat() {
         kind: "batch" as const,
         refId: b.id,
         title: `${b.brandName} (${b.batchNumber})`,
-        subtitle: `${b.quantity} packs · Exp ${b.expiryDate} · ${b.quarantined ? "Quarantined" : "Active FEFO"}`,
+        subtitle: `${b.quantity} packs · Exp ${b.expiryDate} · ${b.quarantined ? "Quarantined" : "In Stock"}`,
       }));
     const orderOpts = (state?.wholesaleOrders ?? []).slice(0, 5).map((o) => ({
       kind: "order" as const,

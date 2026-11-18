@@ -30,7 +30,7 @@ const EMPTY_DRAFT: Omit<HqPackageRecord, "features"> & { featuresText: string } 
   maxOperators: 5,
   maxSuppliers: 10,
   maxConnectedPharmacies: null,
-  featuresText: "1 Admin + 1 Operator / Branch\nOffline POS + FEFO Expiry Lock",
+  featuresText: "1 Admin + 1 Operator / Branch\nOffline POS + Expiry Guard",
   active: true,
 };
 
@@ -147,12 +147,11 @@ export default function HQPackagesSection({
                 <div
                   key={pkg.id}
                   onClick={() => loadIntoEditor(pkg)}
-                  className={`rounded-2xl border p-4 cursor-pointer transition-all space-y-2.5 ${
-                    isSelected
-                      ? "border-[#1039B9] ring-2 ring-[#1039B9]/15 " +
-                        (isDark ? "bg-[#151D2C]" : "bg-[#F4F7FF]")
-                      : `${subCls} hover:border-[#1039B9]/40`
-                  }`}
+                  className={`rounded-2xl border p-4 cursor-pointer transition-all space-y-2.5 ${isSelected
+                    ? "border-[#1039B9] ring-2 ring-[#1039B9]/15 " +
+                    (isDark ? "bg-[#151D2C]" : "bg-[#F4F7FF]")
+                    : `${subCls} hover:border-[#1039B9]/40`
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -172,11 +171,10 @@ export default function HQPackagesSection({
                           `${pkg.name} ${pkg.active ? "paused" : "activated"}`
                         );
                       }}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase cursor-pointer ${
-                        pkg.active
-                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
-                          : "bg-slate-500/20 text-slate-500"
-                      }`}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase cursor-pointer ${pkg.active
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                        : "bg-slate-500/20 text-slate-500"
+                        }`}
                     >
                       {pkg.active ? "Active" : "Paused"}
                     </button>

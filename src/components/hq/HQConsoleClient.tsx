@@ -153,7 +153,7 @@ export default function HQConsoleClient({
     {
       key: "support",
       label: "Support Desk",
-      sub: "Tickets, replies & SLA",
+      sub: "Tickets & response queue",
       badge: summary?.openSupportTickets ?? 0,
       urgent: (summary?.urgentSupportTickets ?? 0) > 0,
     },

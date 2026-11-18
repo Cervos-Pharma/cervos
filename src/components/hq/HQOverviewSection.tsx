@@ -144,7 +144,7 @@ export default function HQOverviewSection({
   }
   if (summary.expiredBatches > 0 || summary.nearExpiryBatches > 0) {
     alerts.push({
-      title: `FEFO Watch: ${summary.expiredBatches} expired, ${summary.nearExpiryBatches} near expiry`,
+      title: `Expiry Watch: ${summary.expiredBatches} expired, ${summary.nearExpiryBatches} near expiry`,
       detail: "Inspect affected pharmacy branches and trigger compliance notices.",
       tone: "amber",
       tab: "fleet",
@@ -248,7 +248,7 @@ export default function HQOverviewSection({
               Operational Attention Queue
             </h2>
             <p className={`text-xs ${t.mutedCls}`}>
-              Live support tickets, access locks, FEFO expiry exposure, pending join approvals, and Kasri escrow holds.
+              Live support tickets, access locks, expiry exposure, pending join approvals, and Kasri escrow holds.
             </p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-mono ${t.wellCls} ${t.mutedCls}`}>
@@ -258,7 +258,7 @@ export default function HQOverviewSection({
 
         {alerts.length === 0 ? (
           <div className={`px-4 py-3 text-xs ${t.wellCls}`}>
-            All fleet organizations, support queues, FEFO stock batches, and Kasri settlements are operating within normal bounds.
+            All fleet organizations, support queues, inventory batches, and Kasri settlements are operating within normal bounds.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -395,7 +395,7 @@ export default function HQOverviewSection({
               </div>
               <div className="flex items-center gap-4 text-xs tabular-nums">
                 <div className={`px-3 py-1 rounded-full ${t.wellCls}`}>
-                  <span className={t.mutedCls}>Est. MRR: </span>
+                  <span className={t.mutedCls}>Monthly Recurring: </span>
                   <strong className="text-emerald-600 dark:text-emerald-400">
                     {formatTzs(peakTelemetry.monthlyRecurringRevenueTzs)}
                   </strong>

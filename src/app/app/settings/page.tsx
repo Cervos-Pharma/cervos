@@ -2,15 +2,18 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import WorkspaceShell, { type WorkspaceNavItem } from "@/components/WorkspaceShell";
 import CertificateDropzone from "@/components/CertificateDropzone";
+import HardwareAndAudioStudio from "@/components/dashboards/HardwareAndAudioStudio";
 import { evaluatePinStrength } from "@/lib/security/client-validators";
 import { enrollPasskeyForAccount, isPasskeySupported } from "@/lib/security/client-passkey";
 import { IconCheck, IconLock } from "@/components/LandingIcons";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { useI18n } from "@/lib/i18n/context";
 import { matchesSearch } from "@/lib/search";
+import { loadHardwareConfig, type HardwareConfigState } from "@/lib/hardware/devices";
 
 interface SettingsState {
   authenticated: boolean;
@@ -34,6 +37,7 @@ interface SettingsState {
     };
   };
   centres: Array<{ id: string; name: string; region: string; address: string; phone: string }>;
+  activeCentreId?: string | null;
   profiles: Array<{ id: string; centreId: string; displayName: string; role: string; isMasterAdmin: boolean }>;
   passkeys: Array<{ credentialId: string; label: string; createdAt: string }>;
   activeProfile: {
@@ -63,9 +67,12 @@ function WorkspaceSettingsInner() {
   const { setLang: setI18nLang } = useI18n();
   const { theme, isDark, setTheme, toggleTheme } = useWorkspaceTheme();
 
-  const initialTab = searchParams.get("tab") === "org" ? "org" : "user";
-  const [settingsScope, setSettingsScope] = useState<"user" | "org">(initialTab);
+  const paramTab = searchParams.get("tab");
+  const initialTab: "user" | "hardware" | "org" =
+    paramTab === "org" ? "org" : paramTab === "hardware" ? "hardware" : "user";
+  const [settingsScope, setSettingsScope] = useState<"user" | "hardware" | "org">(initialTab);
   const [state, setState] = useState<SettingsState | null>(null);
+  const [hwConfig, setHwConfig] = useState<HardwareConfigState>(() => loadHardwareConfig());
   const [searchQuery, setSearchQuery] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -102,7 +109,7 @@ function WorkspaceSettingsInner() {
 
   useEffect(() => {
     const paramTab = searchParams.get("tab");
-    if (paramTab === "org" || paramTab === "user") {
+    if (paramTab === "org" || paramTab === "user" || paramTab === "hardware") {
       setSettingsScope(paramTab);
     }
   }, [searchParams]);
@@ -323,6 +330,10 @@ function WorkspaceSettingsInner() {
 
   const newPinCheck = newPin ? evaluatePinStrength(newPin) : null;
   const staffPinCheck = evaluatePinStrength(profPin);
+  const activeCentreName =
+    state.centres.find((c) => c.id === state.activeCentreId)?.name ||
+    state.centres[0]?.name ||
+    "Primary Centre";
 
   const navItems: WorkspaceNavItem[] = [
     { id: "home", label: isSw ? "Muhtasari" : "Overview", href: "/app" },
@@ -331,6 +342,12 @@ function WorkspaceSettingsInner() {
       label: isSw ? "Wasifu Wangu" : "My Settings",
       active: settingsScope === "user",
       onClick: () => setSettingsScope("user"),
+    },
+    {
+      id: "hardware_settings",
+      label: isSw ? "Vifaa vya POS" : "POS Hardware",
+      active: settingsScope === "hardware",
+      onClick: () => setSettingsScope("hardware"),
     },
     ...(isManagerRole
       ? [
@@ -375,44 +392,70 @@ function WorkspaceSettingsInner() {
       onSignOut={signOutOrg}
     >
       <div className="max-w-4xl mx-auto space-y-6">
-        {/* Clear Scope Switcher: Personal User Settings vs Organization Settings */}
+        {/* Clear Scope Switcher: Personal User Settings, POS Hardware & Org Settings */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="space-y-1">
-            <div className={`text-[11px] font-medium ${mutedCls}`}>
-              {state.activeProfile.displayName} &middot; {state.activeProfile.role.replace(/_/g, " ")}
+            <div className={`text-[11px] font-medium flex flex-wrap items-center gap-2 ${mutedCls}`}>
+              <span>
+                {state.activeProfile.displayName} &middot; {state.activeProfile.role.replace(/_/g, " ")}
+              </span>
+              <span>&middot;</span>
+              <Link
+                href="/app?tab=operations"
+                className="font-semibold hover:underline"
+                style={{ color: accent }}
+              >
+                &larr; {isSw ? "Rudi Kaunta ya POS" : "Back to Counter POS"}
+              </Link>
             </div>
             <h1 className="text-2xl sm:text-3xl font-normal tracking-tight" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
               {settingsScope === "user"
                 ? isSw
                   ? "Mipangilio ya Mtumiaji"
                   : "User Profile Settings"
-                : isSw
-                  ? "Mipangilio ya Shirika & Tawi"
-                  : "Organization Settings"}
+                : settingsScope === "hardware"
+                  ? isSw
+                    ? "Mipangilio ya Vifaa vya POS & Sauti"
+                    : "POS Hardware, Audio & Diagnostics"
+                  : isSw
+                    ? "Mipangilio ya Shirika & Tawi"
+                    : "Organization Settings"}
             </h1>
           </div>
 
           <div
-            className={`inline-flex p-1 rounded-full border ${
+            className={`inline-flex flex-wrap p-1 rounded-full border ${
               isDark ? "bg-[#11161F] border-slate-800" : "bg-white border-[#EAECF0] shadow-2xs"
             }`}
           >
             <button
               type="button"
               onClick={() => setSettingsScope("user")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 settingsScope === "user"
                   ? "text-white shadow-xs"
                   : mutedCls
               }`}
               style={settingsScope === "user" ? { backgroundColor: accent } : undefined}
             >
-              {isSw ? "Wasifu Wangu (User)" : "My User Settings"}
+              {isSw ? "Wasifu Wangu" : "My User Settings"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSettingsScope("hardware")}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                settingsScope === "hardware"
+                  ? "text-white shadow-xs"
+                  : mutedCls
+              }`}
+              style={settingsScope === "hardware" ? { backgroundColor: accent } : undefined}
+            >
+              {isSw ? "Vifaa & Sauti" : "POS & Hardware"}
             </button>
             <button
               type="button"
               onClick={() => setSettingsScope("org")}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer ${
                 settingsScope === "org"
                   ? "text-white shadow-xs"
                   : mutedCls
@@ -420,7 +463,7 @@ function WorkspaceSettingsInner() {
               style={settingsScope === "org" ? { backgroundColor: accent } : undefined}
             >
               {!isManagerRole && <IconLock className="w-3 h-3 text-amber-500" />}
-              <span>{isSw ? "Shirika (Org)" : "Organization Settings"}</span>
+              <span>{isSw ? "Shirika" : "Organization Settings"}</span>
             </button>
           </div>
         </div>
@@ -604,6 +647,23 @@ function WorkspaceSettingsInner() {
                 </div>
               )}
             </section>
+          </div>
+        )}
+
+        {/* ================================================================ */}
+        {/* POS HARDWARE, THERMAL PRINTER, SCANNER & SOUND SETTINGS SCOPE   */}
+        {/* ================================================================ */}
+        {settingsScope === "hardware" && (
+          <div id="hardware" className="space-y-5 animate-stage-pop">
+            <HardwareAndAudioStudio
+              orgName={state.account.orgName}
+              branchName={activeCentreName}
+              hwConfig={hwConfig}
+              onHwConfigChange={setHwConfig}
+              isDark={isDark}
+              isSw={isSw}
+              accent={accent}
+            />
           </div>
         )}
 
