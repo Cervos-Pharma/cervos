@@ -27,6 +27,7 @@ import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
 import WebpPhotoInput from "@/components/WebpPhotoInput";
 import WorkspaceTour from "@/components/WorkspaceTour";
+import { StationChecklist } from "@/components/onboarding";
 import { loadHardwareConfig, type HardwareConfigState } from "@/lib/hardware/devices";
 import { playAppSound } from "@/lib/sounds";
 
@@ -4149,6 +4150,19 @@ export default function PharmacyDashboard({
       {/* ================================================================ */}
       {tab === "overview" && (
         <>
+          <StationChecklist
+            profileId={activeProfileId || ""}
+            orgName={account.orgName}
+            branchName={activeCentre?.name || account.region}
+            isDark={isDark}
+            isSw={isSw}
+            accent={accent}
+            hasActiveShift={Boolean(activeShift)}
+            batchCount={batches.length}
+            saleCount={sales.length}
+            onJumpTab={(nextTab) => setTab(nextTab)}
+            onStartTour={() => setTourOpen(true)}
+          />
           {/* Home Launch Shift Attendance Check (Immediate Visibility on App Home + Auto Clock-Out Alert) */}
           {autoClockOutNotice && (
             <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2 mb-4">

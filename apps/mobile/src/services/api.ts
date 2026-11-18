@@ -1,3 +1,4 @@
+import { fetch } from "expo/fetch";
 import * as SecureStore from "expo-secure-store";
 import type {
   WorkspaceAuthRequestJoinPayload,
@@ -5,11 +6,23 @@ import type {
   WorkspaceAuthSignInPayload,
   WorkspaceAuthSignUpPayload,
 } from "@cervos/core";
+import type { WorkspaceStateResponse } from "@/types/workspace";
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "https://cervos.online").replace(/\/$/, "");
 const STORE_ACCT_KEY = "cervos_account_token";
 const STORE_PROF_KEY = "cervos_profile_token";
 const STORE_TRUST_KEY = "cervos_trust_token";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 export interface StoredSessionTokens {
   accountToken: string | null;
@@ -19,9 +32,9 @@ export interface StoredSessionTokens {
 
 export async function getStoredTokens(): Promise<StoredSessionTokens> {
   const [accountToken, profileToken, trustToken] = await Promise.all([
-    SecureStore.getItemAsync(STORE_ACCT_KEY),
-    SecureStore.getItemAsync(STORE_PROF_KEY),
-    SecureStore.getItemAsync(STORE_TRUST_KEY),
+    SecureStore.getItemAsync(STORE_ACCT_KEY).catch(() => null),
+    SecureStore.getItemAsync(STORE_PROF_KEY).catch(() => null),
+    SecureStore.getItemAsync(STORE_TRUST_KEY).catch(() => null),
   ]);
   return { accountToken, profileToken, trustToken };
 }
@@ -48,13 +61,17 @@ export async function saveTokens(tokens?: {
 
 export async function clearAllTokens() {
   await Promise.all([
-    SecureStore.deleteItemAsync(STORE_ACCT_KEY),
-    SecureStore.deleteItemAsync(STORE_PROF_KEY),
-    SecureStore.deleteItemAsync(STORE_TRUST_KEY),
+    SecureStore.deleteItemAsync(STORE_ACCT_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(STORE_PROF_KEY).catch(() => undefined),
+    SecureStore.deleteItemAsync(STORE_TRUST_KEY).catch(() => undefined),
   ]);
 }
 
-async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<{ ok: boolean; status: number; data: T }> {
+async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+  timeoutMs = 14_000
+): Promise<{ ok: boolean; status: number; data: T }> {
   const tokens = await getStoredTokens();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -65,9 +82,29 @@ async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<{ ok
     ...((init.headers as Record<string, string>) || {}),
   };
 
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  const data = (await res.json().catch(() => ({}))) as T;
-  return { ok: res.ok, status: res.status, data };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers,
+      signal: init.signal ?? controller.signal,
+    } as Parameters<typeof fetch>[1]);
+    const data = (await res.json().catch(() => ({}))) as T;
+    return { ok: res.ok, status: res.status, data };
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError("Request timed out. Check connection.", 0, "TIMEOUT");
+    }
+    throw new ApiError(
+      err instanceof Error ? err.message : "Network connection unavailable",
+      0,
+      "NETWORK_ERROR"
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function signInWorkspace(payload: WorkspaceAuthSignInPayload) {
@@ -94,54 +131,87 @@ export async function signUpWorkspace(
   return res;
 }
 
+export async function signOutWorkspace() {
+  await apiRequest("/api/workspace/auth", {
+    method: "POST",
+    body: JSON.stringify({ action: "signout" }),
+  }).catch(() => undefined);
+  await clearAllTokens();
+}
+
 export async function searchOrgs(q: string) {
-  return apiRequest<{ organizations: Array<{ id: string; orgName: string; region: string; ownerName: string }> }>(
-    `/api/workspace/orgs?q=${encodeURIComponent(q)}`,
-    { method: "GET" }
-  );
+  return apiRequest<{
+    organizations: Array<{ id: string; orgName: string; region: string; ownerName: string }>;
+  }>(`/api/workspace/orgs?q=${encodeURIComponent(q)}`, { method: "GET" });
 }
 
 export async function fetchWorkspaceState() {
-  return apiRequest<Record<string, unknown>>("/api/workspace/state", { method: "GET" });
+  return apiRequest<WorkspaceStateResponse & { error?: string }>("/api/workspace/state", {
+    method: "GET",
+  });
 }
 
-export async function postWorkspaceAction(payload: Record<string, unknown>) {
-  return apiRequest<Record<string, unknown>>("/api/workspace/state", {
+export async function postWorkspaceAction<T = Record<string, unknown>>(
+  payload: Record<string, unknown>
+) {
+  return apiRequest<T & { ok?: boolean; error?: string }>("/api/workspace/state", {
     method: "POST",
     body: JSON.stringify({ ...payload, clientMode: "bearer" }),
   });
 }
 
 export async function postGateAction(payload: Record<string, unknown>) {
-  const res = await apiRequest<Record<string, unknown> & { tokens?: { profileToken?: string; trustToken?: string } }>(
-    "/api/workspace/gate",
-    {
-      method: "POST",
-      body: JSON.stringify({ ...payload, clientMode: "bearer" }),
+  const res = await apiRequest<
+    Record<string, unknown> & {
+      ok?: boolean;
+      error?: string;
+      tokens?: { profileToken?: string; trustToken?: string };
     }
-  );
+  >("/api/workspace/gate", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, clientMode: "bearer" }),
+  });
   if (res.ok && res.data.tokens) {
     await saveTokens(res.data.tokens);
   }
   return res;
+}
+
+export async function submitOnboarding(payload: Record<string, unknown>) {
+  return apiRequest<{ ok?: boolean; error?: string }>("/api/workspace/onboarding", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, clientMode: "bearer" }),
+  });
 }
 
 export async function fetchLoungeState() {
-  return apiRequest<Record<string, unknown>>("/api/workspace/lounge", { method: "GET" });
+  return apiRequest<Record<string, unknown> & { error?: string }>("/api/workspace/lounge", {
+    method: "GET",
+  });
 }
 
 export async function postLoungeAction(payload: Record<string, unknown>) {
-  const res = await apiRequest<Record<string, unknown> & { tokens?: { accountToken?: string; profileToken?: string } }>(
-    "/api/workspace/lounge",
-    {
-      method: "POST",
-      body: JSON.stringify({ ...payload, clientMode: "bearer" }),
+  const res = await apiRequest<
+    Record<string, unknown> & {
+      ok?: boolean;
+      error?: string;
+      tokens?: { accountToken?: string; profileToken?: string };
     }
-  );
+  >("/api/workspace/lounge", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, clientMode: "bearer" }),
+  });
   if (res.ok && res.data.tokens) {
     await saveTokens(res.data.tokens);
   }
   return res;
+}
+
+export async function fetchPackages(audience?: string) {
+  const suffix = audience ? `?audience=${encodeURIComponent(audience)}` : "";
+  return apiRequest<{ packages: Array<Record<string, unknown>> }>(`/api/workspace/packages${suffix}`, {
+    method: "GET",
+  });
 }
 
 export async function pullDeltaSync(sinceIso: string) {

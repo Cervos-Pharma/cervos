@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import ClaymorphicStageBackdrop from "@/components/ClaymorphicStageBackdrop";
+import PinPad from "@/components/PinPad";
 import { authenticateWithPasskey, isPasskeySupported } from "@/lib/security/client-passkey";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { useI18n } from "@/lib/i18n/context";
@@ -75,16 +76,40 @@ function GateInner() {
         setLangOverride(data.account.lang);
         setI18nLang(data.account.lang);
         const firstCentre = data.centres[0]?.id || "";
-        setSelectedCentreId(firstCentre);
+        let restoredCentreId = firstCentre;
+        let restoredProfileId =
+          data.profiles.filter((p) => p.centreId === firstCentre)[0]?.id || data.profiles[0]?.id || "";
+        let hasSavedOperator = false;
 
-        const matchingProfiles = data.profiles.filter((p) => p.centreId === firstCentre);
-        setSelectedProfileId(matchingProfiles[0]?.id || data.profiles[0]?.id || "");
+        try {
+          const rawSaved = window.localStorage.getItem("cervos-last-profile");
+          if (rawSaved) {
+            const saved = JSON.parse(rawSaved) as {
+              accountId?: string;
+              centreId?: string;
+              profileId?: string;
+            };
+            if (saved.accountId === data.account.id && saved.profileId) {
+              const matchedProf = data.profiles.find((p) => p.id === saved.profileId);
+              if (matchedProf) {
+                restoredProfileId = matchedProf.id;
+                restoredCentreId = matchedProf.centreId || restoredCentreId;
+                hasSavedOperator = true;
+              }
+            }
+          }
+        } catch {
+          // Ignore storage read failure
+        }
+
+        setSelectedCentreId(restoredCentreId);
+        setSelectedProfileId(restoredProfileId);
 
         const skipSecurity =
           (!data.account.requireSecurityEveryTime || data.browserTrusted) && requestedStage !== "security";
         if (!skipSecurity) {
           setStage("security");
-        } else if (data.centres.length > 1 && requestedStage !== "profile") {
+        } else if (data.centres.length > 1 && requestedStage !== "profile" && !hasSavedOperator) {
           setStage("centre");
         } else {
           setStage("profile");
@@ -93,9 +118,20 @@ function GateInner() {
       .catch(() => setErrorMsg("Unable to load security gate."));
   }, [router, requestedStage]);
 
-  const markJustLoggedIn = () => {
+  const markJustLoggedIn = (profileOverride?: { centreId?: string; profileId?: string }) => {
     try {
       window.sessionStorage.setItem("cervos-just-logged-in", "1");
+      window.sessionStorage.setItem("cervos-station-active", "1");
+      if (state?.account?.id) {
+        window.localStorage.setItem(
+          "cervos-last-profile",
+          JSON.stringify({
+            accountId: state.account.id,
+            centreId: profileOverride?.centreId || selectedCentreId,
+            profileId: profileOverride?.profileId || selectedProfileId,
+          })
+        );
+      }
     } catch {
       // Ignore storage block
     }
@@ -147,8 +183,8 @@ function GateInner() {
     switchStage("profile");
   };
 
-  const unlockWithPin = async (e: FormEvent) => {
-    e.preventDefault();
+  const submitPin = async () => {
+    if (busy || pin.length < 4) return;
     setErrorMsg(null);
     setBusy(true);
     try {
@@ -168,13 +204,18 @@ function GateInner() {
         setPin("");
         return;
       }
-      markJustLoggedIn();
+      markJustLoggedIn({ centreId: selectedCentreId, profileId: selectedProfileId });
       router.push(out.redirectTo || "/app");
     } catch {
       setErrorMsg("Network error.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const unlockWithPin = async (e: FormEvent) => {
+    e.preventDefault();
+    await submitPin();
   };
 
   const unlockWithPasskey = async () => {
@@ -471,20 +512,19 @@ function GateInner() {
 
             <div>
               <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                {isSw ? "PIN ya Wasifu (Tarakimu 4-6)" : "Profile PIN (4-6 digits)"}
+                {isSw ? "Weka PIN kwenye Kipad (Tarakimu 4-6)" : "Enter PIN on PIN Pad (4-6 digits)"}
               </label>
-              <input
-                type="password"
-                inputMode="numeric"
-                required
-                maxLength={6}
+              <PinPad
                 value={pin}
-                onChange={(e) => {
-                  setPin(e.target.value.replace(/\D/g, ""));
+                maxLength={6}
+                isDark={isDark}
+                isSw={isSw}
+                busy={busy}
+                onChange={(nextPin) => {
+                  setPin(nextPin);
                   if (errorMsg) setErrorMsg(null);
                 }}
-                placeholder="••••"
-                className={`w-full min-h-[48px] px-4 py-3 rounded-md border text-center text-lg font-bold tracking-[0.5em] focus:outline-none transition-colors ${inputCls}`}
+                onSubmit={submitPin}
               />
             </div>
 

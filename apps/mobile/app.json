@@ -3,48 +3,66 @@
     "name": "Cervos Pharma",
     "slug": "cervos-pharma",
     "scheme": "cervos",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "automatic",
-    "icon": "../../public/logo.png",
-    "splash": {
-      "image": "../../public/logo.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0B0F17"
+    "ios": {
+      "bundleIdentifier": "com.cervos.pharma",
+      "supportsTablet": true,
+      "infoPlist": {
+        "CADisableMinimumFrameDurationOnPhone": true,
+        "NSCameraUsageDescription": "Scan medicine barcodes and QR labels for checkout and stock receiving.",
+        "NSLocationWhenInUseUsageDescription": "Capture branch coordinates for supplier delivery estimates.",
+        "NSFaceIDUsageDescription": "Unlock your staff station profile quickly with Face ID."
+      }
     },
     "android": {
       "package": "com.cervos.pharma",
-      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "../../public/logo.png",
-        "backgroundColor": "#1039B9"
+        "backgroundColor": "#1039B9",
+        "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
+      "predictiveBackGestureEnabled": false,
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
         "BLUETOOTH",
-        "BLUETOOTH_CONNECT",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "BLUETOOTH_CONNECT"
       ]
     },
-    "ios": {
-      "bundleIdentifier": "com.cervos.pharma",
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSCameraUsageDescription": "Scan GS1-128 and QR medicine barcodes on pharmacy shelves and GRN receipts.",
-        "NSLocationWhenInUseUsageDescription": "Pin your pharmacy branch coordinates cleanly on Cervos regional maps."
-      }
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B0F17",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96
+        }
+      ],
       "expo-secure-store",
+      "expo-sqlite",
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Cervos Pharma to scan medicine GS1/QR barcodes."
+          "cameraPermission": "Allow Cervos Pharma to scan medicine barcodes and QR labels."
+        }
+      ],
+      "expo-audio",
+      "expo-sharing",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Cervos Pharma to unlock your station profile with Face ID."
         }
       ],
       [
@@ -52,17 +70,12 @@
         {
           "color": "#1039B9"
         }
-      ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "kotlinVersion": "1.9.25"
-          }
-        }
-      ],
-      "expo-sqlite"
+      ]
     ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
     "extra": {
       "router": {
         "origin": false

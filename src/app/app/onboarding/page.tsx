@@ -284,6 +284,7 @@ export default function WorkspaceOnboardingPage() {
       }
       try {
         window.sessionStorage.setItem("cervos-just-logged-in", "1");
+        window.sessionStorage.setItem("cervos-station-active", "1");
       } catch {
         // Ignore
       }
@@ -1227,6 +1228,7 @@ export default function WorkspaceOnboardingPage() {
                     onClick={() => {
                       try {
                         window.sessionStorage.setItem("cervos-just-logged-in", "1");
+                        window.sessionStorage.setItem("cervos-station-active", "1");
                       } catch {
                         // Ignore
                       }

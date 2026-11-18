@@ -271,8 +271,31 @@ export default function WorkspaceHomePage() {
         userChoseScopeRef.current = true;
         setOrgScope("branch");
       }
+
+      // PWA standalone & Native Desktop require PIN pad entry on every fresh app launch after exit
+      const win = window as unknown as {
+        __TAURI__?: unknown;
+        __TAURI_INTERNALS__?: unknown;
+        navigator: Navigator & { standalone?: boolean };
+      };
+      const isPwaOrDesktop =
+        window.matchMedia?.("(display-mode: standalone)").matches ||
+        win.navigator?.standalone === true ||
+        Boolean(win.__TAURI__ || win.__TAURI_INTERNALS__) ||
+        /electron|tauri|cervos/i.test(window.navigator.userAgent || "");
+
+      if (isPwaOrDesktop && window.sessionStorage.getItem("cervos-station-active") !== "1") {
+        void fetch("/api/workspace/gate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "lock_profile" }),
+        }).finally(() => {
+          router.replace("/app/gate?stage=profile");
+        });
+        return;
+      }
     } catch {
-      // Ignore URL parse error
+      // Ignore URL / storage parse error
     }
     fetchState();
     const onRefresh = () => fetchState();

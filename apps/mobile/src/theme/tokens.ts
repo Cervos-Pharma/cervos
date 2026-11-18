@@ -1,55 +1,47 @@
-export type AppLang = "EN" | "SW";
+import { TextStyle } from "react-native";
+import { colors } from "./colors";
 
-export const CERVOS_COLORS = {
-  cobalt: "#1039B9",
-  cobaltDark: "#0D2E94",
-  lime: "#E2F575",
-  emerald: "#10B981",
-  amber: "#F59E0B",
-  rose: "#F43F5E",
-  lightBg: "#F7F8FA",
-  lightCard: "#FFFFFF",
-  lightBorder: "#E2E8F0",
-  lightText: "#111317",
-  lightMuted: "#64748B",
-  darkBg: "#0B0F17",
-  darkCard: "#11161F",
-  darkBorder: "#1E293B",
-  darkText: "#F8FAFC",
-  darkMuted: "#94A3B8",
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
 } as const;
 
-export const TOUCH_MIN_HEIGHT = 48;
-
-export const MOBILE_COPY = {
-  EN: {
-    welcomeTitle: "Run your pharmacy with calm speed",
-    welcomeSub: "Offline POS, FEFO batch safety, camera barcode scanning, permits, and live sync.",
-    chooseLang: "Choose Language",
-    getStarted: "Create Workspace / Join",
-    signIn: "Sign In",
-    tutorialTitle: "Quick Pharmacy Tutorial",
-    syncOnline: "Synced",
-    syncPending: "Queued Offline",
-    permits: "Permits & Sync",
-    receipts: "Receipts",
-    inventory: "Inventory",
-    scanner: "Scanner",
-    counter: "Counter",
-  },
-  SW: {
-    welcomeTitle: "Endesha duka lako kwa kasi na utulivu",
-    welcomeSub: "POS bila mtandao, usalama wa FEFO, skana ya kamera, leseni na sync mubashara.",
-    chooseLang: "Chagua Lugha",
-    getStarted: "Fungua Akaunti / Jiunge",
-    signIn: "Ingia",
-    tutorialTitle: "Mwongozo wa Haraka",
-    syncOnline: "Imesawazishwa",
-    syncPending: "Inasubiri Mtandao",
-    permits: "Leseni & Sync",
-    receipts: "Risiti",
-    inventory: "Stoo",
-    scanner: "Skana",
-    counter: "Kaunta",
-  },
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 22,
+  full: 9999,
 } as const;
+
+export const shadows = {
+  card: "0 1px 2px rgba(0, 0, 0, 0.04)",
+  raised: "0 4px 12px rgba(0, 0, 0, 0.08)",
+  overlay: "0 8px 24px rgba(0, 0, 0, 0.16)",
+} as const;
+
+export const motion = {
+  fast: 150,
+  base: 250,
+  slow: 400,
+} as const;
+
+export const typography = {
+  largeTitle: { fontSize: 32, fontWeight: "700", color: colors.label, letterSpacing: -0.5 },
+  title: { fontSize: 22, fontWeight: "700", color: colors.label, letterSpacing: -0.3 },
+  headline: { fontSize: 17, fontWeight: "600", color: colors.label },
+  body: { fontSize: 16, fontWeight: "400", color: colors.label },
+  subhead: { fontSize: 14, fontWeight: "400", color: colors.secondaryLabel },
+  caption: { fontSize: 12, fontWeight: "400", color: colors.secondaryLabel },
+  overline: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.tertiaryLabel,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+} as const satisfies Record<string, TextStyle>;
