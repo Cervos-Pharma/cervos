@@ -431,14 +431,20 @@ export default function WorkspaceShell({
         </div>
       )}
 
-      {/* TOP NAVIGATION HEADER: Responsive 375px Mobile Flow & Full Desktop Bar */}
-      <header className="relative z-30 w-full max-w-[1440px] mx-auto px-3.5 sm:px-7 pt-3.5 pb-2 flex items-center justify-between gap-2 sm:gap-3">
+      {/* TOP NAVIGATION HEADER: Sticky frosted bar following user on scroll */}
+      <header
+        className={`sticky top-0 z-30 w-full border-b backdrop-blur-xl transition-colors duration-200 ${
+          isDark
+            ? "bg-[#090C12]/88 border-slate-800/75"
+            : "bg-[#F5F6F8]/88 border-[#E2E8F0]/80"
+        }`}
+      >
+        <div className="w-full max-w-[1440px] mx-auto px-3.5 sm:px-7 py-2.5 flex items-center justify-between gap-2 sm:gap-3">
         {/* Left: Compact Org + Branch Identity (smoothly yields space on <lg when animated search expands) */}
         <Link
           href="/app"
-          className={`flex items-center gap-2 min-w-0 transition-all duration-300 ${
-            mobileSearchOpen ? "max-w-[44px] sm:max-w-none overflow-hidden" : "flex-1 lg:flex-initial"
-          }`}
+          className={`flex items-center gap-2 min-w-0 transition-all duration-300 ${mobileSearchOpen ? "max-w-[44px] sm:max-w-none overflow-hidden" : "flex-1 lg:flex-initial"
+            }`}
         >
           <div className="relative w-9 h-9 rounded-full overflow-hidden ring-1 ring-slate-200/80 bg-white shrink-0 shadow-2xs">
             <Image
@@ -459,13 +465,11 @@ export default function WorkspaceShell({
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
           {/* Mobile (< lg): Animated Expanding Inline Search Pill */}
           <div
-            className={`lg:hidden relative flex items-center h-9 rounded-full border transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] overflow-hidden ${
-              mobileSearchOpen
-                ? `w-[186px] sm:w-64 px-2.5 ${
-                    isDark ? "bg-[#11161F] border-slate-700 text-white" : "bg-white border-slate-300 text-[#111317] shadow-xs"
-                  }`
-                : `w-9 justify-center ${railPillCls}`
-            }`}
+            className={`lg:hidden relative flex items-center h-9 rounded-full border transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] overflow-hidden ${mobileSearchOpen
+              ? `w-[186px] sm:w-64 px-2.5 ${isDark ? "bg-[#11161F] border-slate-700 text-white" : "bg-white border-slate-300 text-[#111317] shadow-xs"
+              }`
+              : `w-9 justify-center ${railPillCls}`
+              }`}
           >
             <button
               type="button"
@@ -492,9 +496,8 @@ export default function WorkspaceShell({
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={isSw ? "Tafuta..." : "Search..."}
-              className={`bg-transparent text-xs focus:outline-none transition-all duration-300 ${
-                mobileSearchOpen ? "w-full ml-1.5 opacity-100" : "w-0 ml-0 opacity-0 pointer-events-none"
-              }`}
+              className={`bg-transparent text-xs focus:outline-none transition-all duration-300 ${mobileSearchOpen ? "w-full ml-1.5 opacity-100" : "w-0 ml-0 opacity-0 pointer-events-none"
+                }`}
             />
             {mobileSearchOpen && (
               <button
@@ -755,367 +758,366 @@ export default function WorkspaceShell({
             )}
           </div>
         </div>
+        </div>
       </header>
 
-      {/* BODY: EXPANDABLE LEFT ICON -> WORD RAIL + MAIN STAGE + FULL-BLEED RIGHT CHAT */}
-      <div className={`relative z-10 flex-1 w-full px-3.5 sm:px-7 ${showBranchChat ? "lg:pr-0" : ""} py-3 sm:py-4 flex gap-5`}>
-          {/* Left Expandable Floating Pill Rail (Icons Collapse <-> Smooth Word Labels) */}
-          <aside
-            className={`hidden lg:flex flex-col justify-between py-2 shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded ? "w-48 items-stretch" : "w-11 items-center"
-              }`}
-          >
-            <div className={`flex flex-col gap-2.5 ${railExpanded ? "items-stretch" : "items-center"}`}>
-              {/* Smooth Rail Expand / Collapse Toggle */}
-              <button
-                type="button"
-                onClick={toggleRailExpanded}
-                aria-label={railExpanded ? "Collapse left menu to icons" : "Expand left menu to show labels"}
-                title={railExpanded ? (isSw ? "Funga maneno" : "Icons only") : isSw ? "Panua menyu" : "Expand menu"}
-                className={`h-9 rounded-full border flex items-center transition-all duration-300 cursor-pointer ${railExpanded ? "px-3 justify-between w-full" : "w-9 justify-center"
-                  } ${railPillCls}`}
-              >
-                {railExpanded && (
-                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 truncate">
-                    {isSw ? "Menyu" : "Menu"}
-                  </span>
-                )}
-                <svg
-                  className={`w-3.5 h-3.5 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded ? "rotate-180" : "rotate-0"
-                    }`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                </svg>
-              </button>
-
-              {navItems.map((item) => {
-                const btnCls = `group relative h-10 rounded-full border flex items-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer overflow-hidden ${railExpanded ? "px-3.5 gap-2.5 justify-start w-full" : "w-10 justify-center"
-                  } ${item.active
-                    ? isDark
-                      ? "bg-white text-[#111317] border-white shadow-md"
-                      : "bg-[#111317] text-white border-[#111317] shadow-md"
-                    : `${railPillCls} hover:scale-[1.03]`
-                  }`;
-
-                const inner = (
-                  <>
-                    <span className="shrink-0 transition-transform duration-200 group-hover:scale-105">
-                      <RailItemIcon id={item.id} active={item.active} />
-                    </span>
-                    <span
-                      className={`text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded
-                        ? "opacity-100 translate-x-0 max-w-[140px]"
-                        : "opacity-0 -translate-x-2 max-w-0 pointer-events-none"
-                        }`}
-                    >
-                      {item.label}
-                    </span>
-                    {item.locked && (
-                      <span
-                        className={`${railExpanded
-                          ? "ml-auto w-2 h-2 rounded-full bg-amber-400 shrink-0"
-                          : "absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-white dark:ring-[#090C12]"
-                          }`}
-                      />
-                    )}
-                  </>
-                );
-
-                if (item.href) {
-                  return (
-                    <Link key={item.id} href={item.href} title={railExpanded ? undefined : item.label} className={btnCls}>
-                      {inner}
-                    </Link>
-                  );
-                }
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={item.onClick}
-                    title={railExpanded ? undefined : item.label}
-                    className={btnCls}
-                  >
-                    {inner}
-                  </button>
-                );
-              })}
-            </div>
-
+      {/* BODY: STICKY EXPANDABLE LEFT RAIL + MAIN STAGE + STICKY RIGHT CHAT */}
+      <div className={`relative z-10 flex-1 w-full px-3.5 sm:px-7 ${showBranchChat ? "lg:pr-0" : ""} py-3 sm:py-4 flex gap-5 items-start`}>
+        {/* Left Expandable Sticky Pill Rail (Follows scroll cleanly) */}
+        <aside
+          className={`hidden lg:flex lg:sticky lg:top-[66px] lg:self-start lg:h-[calc(100dvh-76px)] flex-col justify-between py-2 shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded ? "w-48 items-stretch" : "w-11 items-center"
+            }`}
+        >
+          <div className={`flex flex-col gap-2.5 ${railExpanded ? "items-stretch" : "items-center"}`}>
+            {/* Smooth Rail Expand / Collapse Toggle */}
             <button
               type="button"
-              onClick={onLockProfile}
-              title={railExpanded ? undefined : isSw ? "Funga / Badili Wasifu" : "Switch / Lock PIN Profile"}
-              className={`group h-10 rounded-full border flex items-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer overflow-hidden ${railExpanded ? "px-3.5 gap-2.5 justify-start w-full" : "w-10 justify-center"
+              onClick={toggleRailExpanded}
+              aria-label={railExpanded ? "Collapse left menu to icons" : "Expand left menu to show labels"}
+              title={railExpanded ? (isSw ? "Funga maneno" : "Icons only") : isSw ? "Panua menyu" : "Expand menu"}
+              className={`h-9 rounded-full border flex items-center transition-all duration-300 cursor-pointer ${railExpanded ? "px-3 justify-between w-full" : "w-9 justify-center"
                 } ${railPillCls}`}
             >
-              <span className="shrink-0">
-                <IconShield className="w-4 h-4" />
-              </span>
-              <span
-                className={`text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded
-                  ? "opacity-100 translate-x-0 max-w-[140px]"
-                  : "opacity-0 -translate-x-2 max-w-0 pointer-events-none"
-                  }`}
-              >
-                {isSw ? "Badili Wasifu" : "Switch Profile"}
-              </span>
-            </button>
-          </aside>
-
-          {/* Main Workspace Canvas (extra bottom padding for Mobile Bottom Dock) */}
-          <main className="flex-1 min-w-0 pb-24 lg:pb-10 animate-page-enter transition-all duration-300">{children}</main>
-
-          {/* Right Docked Branch Messages Panel (ONLY mounts inside a specific branch station) */}
-          {showBranchChat && (
-            <BranchChatDockedAside
-              chat={branchChat}
-              accent={brandAccent}
-              isDark={isDark}
-              isSw={isSw}
-              railPillCls={railPillCls}
-            />
-          )}
-        </div>
-
-        {/* Role-First 3-Button Mobile Dock (< 1024px): Home | Big Primary Action | Messages */}
-        {!branchChat.open && !sidebarOpen && (() => {
-          const homeItem = navItems.find((n) => n.id === "overview" || n.id === "home") ?? navItems[0];
-          const primaryItem = resolvePrimaryMobileAction(navItems, profileRole);
-          const msgCount =
-            showBranchChat && branchChat.available
-              ? branchChat.badge
-              : notifications.filter((n) => !n.read).length;
-
-          return (
-            <nav
-              aria-label={isSw ? "Menyu ya Simu" : "Mobile Bottom Navigation"}
-              className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl px-4 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-3 ${
-                isDark
-                  ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
-                  : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.06)]"
-              }`}
-            >
-              {/* Left: Home / Dashboard */}
-              {homeItem && (
-                homeItem.href ? (
-                  <Link
-                    href={homeItem.href}
-                    className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${
-                      homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
-                    }`}
-                    style={homeItem.active ? { color: brandAccent } : undefined}
-                  >
-                    <RailItemIcon id={homeItem.id} active={homeItem.active} />
-                    <span className="truncate max-w-[78px]">{homeItem.label}</span>
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={homeItem.onClick}
-                    className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
-                      homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
-                    }`}
-                    style={homeItem.active ? { color: brandAccent } : undefined}
-                  >
-                    <RailItemIcon id={homeItem.id} active={homeItem.active} />
-                    <span className="truncate max-w-[78px]">{homeItem.label}</span>
-                  </button>
-                )
-              )}
-
-              {/* Center: Elevated Large Role-Primary CTA */}
-              {primaryItem && (
-                primaryItem.href ? (
-                  <Link
-                    href={primaryItem.href}
-                    className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform"
-                    style={{ backgroundColor: brandAccent }}
-                  >
-                    <RailItemIcon id={primaryItem.id} active />
-                    <span className="truncate max-w-[125px]">{primaryItem.label}</span>
-                  </Link>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={primaryItem.onClick}
-                    className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform cursor-pointer"
-                    style={{ backgroundColor: brandAccent }}
-                  >
-                    <RailItemIcon id={primaryItem.id} active />
-                    <span className="truncate max-w-[125px]">{primaryItem.label}</span>
-                  </button>
-                )
-              )}
-
-              {/* Right: Messages / Branch Chat */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (showBranchChat && branchChat.available) {
-                    branchChat.toggle();
-                  } else {
-                    if (onMarkNotificationsRead) onMarkNotificationsRead();
-                    setSidebarOpen(true);
-                  }
-                }}
-                className={`relative flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
-                  isDark ? "text-slate-400" : "text-slate-600"
-                }`}
-              >
-                <span className="relative">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-                  </svg>
-                  {msgCount > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-[#111317] text-[9px] font-extrabold flex items-center justify-center">
-                      {msgCount}
-                    </span>
-                  )}
+              {railExpanded && (
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 truncate">
+                  {isSw ? "Menyu" : "Menu"}
                 </span>
-                <span>{isSw ? "Ujumbe" : "Messages"}</span>
-              </button>
-            </nav>
-          );
-        })()}
-
-      {/* Interactive Guided Tutorial & Help Modal */}
-      {helpOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setHelpOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-2xl rounded-[28px] border p-6 sm:p-7 space-y-5 shadow-2xl animate-stage-pop ${isDark ? "bg-[#0F141D] border-slate-800 text-slate-100" : "bg-white border-[#EAECF0] text-[#111317]"
-              }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: brandAccent }}>
-                  {isSw ? "MWONGOZO WA HARAKA WA CERVOS" : "CERVOS INTERACTIVE GUIDE"}
-                </div>
-                <h2 className="text-xl font-bold mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
-                  {isSw ? "Jinsi ya Kutumia Kituo Chako" : "How to Run Your Pharmacy Workspace"}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setHelpOpen(false)}
-                className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${railPillCls}`}
+              )}
+              <svg
+                className={`w-3.5 h-3.5 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded ? "rotate-180" : "rotate-0"
+                  }`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.2}
               >
-                {isSw ? "Funga" : "Close"} &times;
-              </button>
-            </div>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
 
-            {(() => {
-              const steps = [
-                {
-                  targetId: "overview",
-                  title: isSw ? "1. Mtazamo Mkuu & Matawi" : "1. Org Hub & Entering a Branch",
-                  body: isSw
-                    ? "Wamiliki huanza kwenye Mtazamo Mkuu kuona matawi yote, maombi ya wafanyakazi, na ujumbe wa HQ. Bonyeza 'Ingia' kwenye kadi ya tawi lolote kufungua kaunta na gumzo lake."
-                    : "Owners start in the All Centres hub to inspect gross totals, HQ notices, and access requests. Click Enter on any floating centre card to open that dispensary's live POS and branch chat.",
-                  tip: isSw ? "Kila tawi lina gumzo lake la faragha upande wa kulia." : "Branch chat on the right is private per branch and activates only inside a station.",
-                },
-                {
-                  targetId: "operations",
-                  title: isSw ? "2. Kaunta ya POS & Ulinzi wa FEFO" : "2. Counter POS & FEFO Batch Lock",
-                  body: isSw
-                    ? "Mfumo hupanga makundi ya dawa kulingana na tarehe ya kuisha (FEFO) na huzuia kiotomatiki kuuza dawa zilizopitwa na muda au zilizowekwa karantini."
-                    : "Counter POS picks the earliest valid expiry batch automatically (FEFO) and blocks expired or quarantined packs from checkout receipts.",
-                  tip: isSw ? "Tumia skana ya msimbo au tafuta kwa jina la dawa." : "Scan GS1 barcodes directly or search brand/generic names above the shelf.",
-                },
-                {
-                  targetId: "reports",
-                  title: isSw ? "3. Ripoti, Edge ML & PDF Safi" : "3. Reports, Edge ML & Clean Branded PDF",
-                  body: isSw
-                    ? "Pata utabiri wa mauzo, alama ya afya ya duka, na ripoti binafsi za wafanyakazi. Bonyeza 'Chapisha / PDF Safi' kuchagua lugha kabla ya kutoa nakala yenye nembo ya kampuni."
-                    : "Explore shop health rings, 7-day Edge ML trends, and individual staff metrics. Clicking Clean PDF or CSV asks your language & narrative preference and prints with your company logo.",
-                  tip: isSw ? "Kila mfanyakazi anaweza kuona ripoti yake binafsi hata bila ufikiaji wa shirika zima." : "Every operator always has a My Performance view for their own shift receipts.",
-                },
-                {
-                  targetId: "team",
-                  title: isSw ? "4. Timu, Vibali & Usalama wa PIN" : "4. Team Permits, Immutable Guardrails & Screen Lock",
-                  body: isSw
-                    ? "Katika Timu & Vibali, chagua haki za kila mhudumu. Sheria za msingi za usalama hulinda fedha na stoo. Tumia 'Switch Profile' au 'Lock' ukiondoka kaunta."
-                    : "Grant role checkboxes cleanly in Team & Permits. Immutable role guardrails protect financial P&L and batch integrity. Always lock or switch profiles between shift handoffs.",
-                  tip: isSw ? "Unaweza kurekebisha PIN na haki za wafanyakazi kutoka mahali popote." : "Owners can rotate operator PINs and approve Welcome Lounge requests remotely.",
-                },
-              ];
-              const active = steps[tutorialStep] ?? steps[0];
-              const matchingNav = navItems.find((n) => n.id === active.targetId);
+            {navItems.map((item) => {
+              const btnCls = `group relative h-10 rounded-full border flex items-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer overflow-hidden ${railExpanded ? "px-3.5 gap-2.5 justify-start w-full" : "w-10 justify-center"
+                } ${item.active
+                  ? isDark
+                    ? "bg-white text-[#111317] border-white shadow-md"
+                    : "bg-[#111317] text-white border-[#111317] shadow-md"
+                  : `${railPillCls} hover:scale-[1.03]`
+                }`;
 
-              return (
-                <div className="space-y-4">
-                  <div className="flex flex-wrap gap-1.5">
-                    {steps.map((st, idx) => (
-                      <button
-                        key={st.title}
-                        type="button"
-                        onClick={() => setTutorialStep(idx)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${tutorialStep === idx ? "text-white" : railPillCls
-                          }`}
-                        style={tutorialStep === idx ? { backgroundColor: brandAccent } : undefined}
-                      >
-                        {isSw ? `Hatua ${idx + 1}` : `Step ${idx + 1}`}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div
-                    className={`p-5 rounded-2xl border space-y-2.5 ${isDark ? "bg-[#171D28] border-slate-800" : "bg-[#F8FAFC] border-[#EAECF0]"
+              const inner = (
+                <>
+                  <span className="shrink-0 transition-transform duration-200 group-hover:scale-105">
+                    <RailItemIcon id={item.id} active={item.active} />
+                  </span>
+                  <span
+                    className={`text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded
+                      ? "opacity-100 translate-x-0 max-w-[140px]"
+                      : "opacity-0 -translate-x-2 max-w-0 pointer-events-none"
                       }`}
                   >
-                    <h3 className="text-base font-bold">{active.title}</h3>
-                    <p className={`text-xs leading-relaxed ${isDark ? "text-slate-300" : "text-slate-600"}`}>{active.body}</p>
-                    <div className="pt-1 text-[11px] font-semibold" style={{ color: brandAccent }}>
-                      {isSw ? "Dokezo:" : "Tip:"} {active.tip}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={tutorialStep === 0}
-                        onClick={() => setTutorialStep((s) => Math.max(0, s - 1))}
-                        className={`px-3.5 py-2 rounded-full border text-xs font-semibold disabled:opacity-40 cursor-pointer ${railPillCls}`}
-                      >
-                        &larr; {isSw ? "Nyuma" : "Previous"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTutorialStep((s) => (s + 1) % steps.length)}
-                        className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${railPillCls}`}
-                      >
-                        {isSw ? "Hatua Ijayo" : "Next Step"} &rarr;
-                      </button>
-                    </div>
-
-                    {matchingNav?.onClick && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          matchingNav.onClick?.();
-                          setHelpOpen(false);
-                        }}
-                        className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
-                        style={{ backgroundColor: brandAccent }}
-                      >
-                        {isSw ? `Nenda: ${matchingNav.label}` : `Jump to ${matchingNav.label}`} &rarr;
-                      </button>
-                    )}
-                  </div>
-                </div>
+                    {item.label}
+                  </span>
+                  {item.locked && (
+                    <span
+                      className={`${railExpanded
+                        ? "ml-auto w-2 h-2 rounded-full bg-amber-400 shrink-0"
+                        : "absolute top-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-white dark:ring-[#090C12]"
+                        }`}
+                    />
+                  )}
+                </>
               );
-            })()}
+
+              if (item.href) {
+                return (
+                  <Link key={item.id} href={item.href} title={railExpanded ? undefined : item.label} className={btnCls}>
+                    {inner}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={item.onClick}
+                  title={railExpanded ? undefined : item.label}
+                  className={btnCls}
+                >
+                  {inner}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
-    </div>
+
+          <button
+            type="button"
+            onClick={onLockProfile}
+            title={railExpanded ? undefined : isSw ? "Funga / Badili Wasifu" : "Switch / Lock PIN Profile"}
+            className={`group h-10 rounded-full border flex items-center transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer overflow-hidden ${railExpanded ? "px-3.5 gap-2.5 justify-start w-full" : "w-10 justify-center"
+              } ${railPillCls}`}
+          >
+            <span className="shrink-0">
+              <IconShield className="w-4 h-4" />
+            </span>
+            <span
+              className={`text-xs font-semibold whitespace-nowrap transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${railExpanded
+                ? "opacity-100 translate-x-0 max-w-[140px]"
+                : "opacity-0 -translate-x-2 max-w-0 pointer-events-none"
+                }`}
+            >
+              {isSw ? "Badili Wasifu" : "Switch Profile"}
+            </span>
+          </button>
+        </aside>
+
+        {/* Main Workspace Canvas (extra bottom padding for Mobile Bottom Dock) */}
+        <main className="flex-1 min-w-0 pb-24 lg:pb-10 animate-page-enter transition-all duration-300">{children}</main>
+
+        {/* Right Docked Branch Messages Panel (ONLY mounts inside a specific branch station) */}
+        {showBranchChat && (
+          <BranchChatDockedAside
+            chat={branchChat}
+            accent={brandAccent}
+            isDark={isDark}
+            isSw={isSw}
+            railPillCls={railPillCls}
+          />
+        )}
+      </div>
+
+      {/* Role-First 3-Button Mobile Dock (< 1024px): Home | Big Primary Action | Messages */}
+      {!branchChat.open && !sidebarOpen && (() => {
+        const homeItem = navItems.find((n) => n.id === "overview" || n.id === "home") ?? navItems[0];
+        const primaryItem = resolvePrimaryMobileAction(navItems, profileRole);
+        const msgCount =
+          showBranchChat && branchChat.available
+            ? branchChat.badge
+            : notifications.filter((n) => !n.read).length;
+
+        return (
+          <nav
+            aria-label={isSw ? "Menyu ya Simu" : "Mobile Bottom Navigation"}
+            className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl px-4 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-3 ${isDark
+              ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
+              : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.06)]"
+              }`}
+          >
+            {/* Left: Home / Dashboard */}
+            {homeItem && (
+              homeItem.href ? (
+                <Link
+                  href={homeItem.href}
+                  className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
+                    }`}
+                  style={homeItem.active ? { color: brandAccent } : undefined}
+                >
+                  <RailItemIcon id={homeItem.id} active={homeItem.active} />
+                  <span className="truncate max-w-[78px]">{homeItem.label}</span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={homeItem.onClick}
+                  className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
+                    }`}
+                  style={homeItem.active ? { color: brandAccent } : undefined}
+                >
+                  <RailItemIcon id={homeItem.id} active={homeItem.active} />
+                  <span className="truncate max-w-[78px]">{homeItem.label}</span>
+                </button>
+              )
+            )}
+
+            {/* Center: Elevated Large Role-Primary CTA */}
+            {primaryItem && (
+              primaryItem.href ? (
+                <Link
+                  href={primaryItem.href}
+                  className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform"
+                  style={{ backgroundColor: brandAccent }}
+                >
+                  <RailItemIcon id={primaryItem.id} active />
+                  <span className="truncate max-w-[125px]">{primaryItem.label}</span>
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={primaryItem.onClick}
+                  className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform cursor-pointer"
+                  style={{ backgroundColor: brandAccent }}
+                >
+                  <RailItemIcon id={primaryItem.id} active />
+                  <span className="truncate max-w-[125px]">{primaryItem.label}</span>
+                </button>
+              )
+            )}
+
+            {/* Right: Messages / Branch Chat */}
+            <Link
+              type="button"
+              onClick={() => {
+                if (showBranchChat && branchChat.available) {
+                  branchChat.toggle();
+                } else {
+                  if (onMarkNotificationsRead) onMarkNotificationsRead();
+                  setSidebarOpen(true);
+                }
+              }}
+              className={`relative flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${isDark ? "text-slate-400" : "text-slate-600"
+                }`}
+            >
+              <span className="relative">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+                </svg>
+                {msgCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-[#111317] text-[9px] font-extrabold flex items-center justify-center">
+                    {msgCount}
+                  </span>
+                )}
+              </span>
+              <span>{isSw ? "Ujumbe" : "Messages"}</span>
+            </Link>
+          </nav>
+        );
+      })()}
+
+      {/* Interactive Guided Tutorial & Help Modal */}
+      {
+        helpOpen && (
+          <div
+            className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setHelpOpen(false)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`w-full max-w-2xl rounded-[28px] border p-6 sm:p-7 space-y-5 shadow-2xl animate-stage-pop ${isDark ? "bg-[#0F141D] border-slate-800 text-slate-100" : "bg-white border-[#EAECF0] text-[#111317]"
+                }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: brandAccent }}>
+                    {isSw ? "MWONGOZO WA HARAKA WA CERVOS" : "CERVOS INTERACTIVE GUIDE"}
+                  </div>
+                  <h2 className="text-xl font-bold mt-0.5" style={{ fontFamily: "Outfit, Inter, sans-serif" }}>
+                    {isSw ? "Jinsi ya Kutumia Kituo Chako" : "How to Run Your Pharmacy Workspace"}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(false)}
+                  className={`px-3 py-1 rounded-full border text-xs font-semibold cursor-pointer ${railPillCls}`}
+                >
+                  {isSw ? "Funga" : "Close"} &times;
+                </button>
+              </div>
+
+              {(() => {
+                const steps = [
+                  {
+                    targetId: "overview",
+                    title: isSw ? "1. Mtazamo Mkuu & Matawi" : "1. Org Hub & Entering a Branch",
+                    body: isSw
+                      ? "Wamiliki huanza kwenye Mtazamo Mkuu kuona matawi yote, maombi ya wafanyakazi, na ujumbe wa HQ. Bonyeza 'Ingia' kwenye kadi ya tawi lolote kufungua kaunta na gumzo lake."
+                      : "Owners start in the All Centres hub to inspect gross totals, HQ notices, and access requests. Click Enter on any floating centre card to open that dispensary's live POS and branch chat.",
+                    tip: isSw ? "Kila tawi lina gumzo lake la faragha upande wa kulia." : "Branch chat on the right is private per branch and activates only inside a station.",
+                  },
+                  {
+                    targetId: "operations",
+                    title: isSw ? "2. Kaunta ya POS & Ulinzi wa FEFO" : "2. Counter POS & FEFO Batch Lock",
+                    body: isSw
+                      ? "Mfumo hupanga makundi ya dawa kulingana na tarehe ya kuisha (FEFO) na huzuia kiotomatiki kuuza dawa zilizopitwa na muda au zilizowekwa karantini."
+                      : "Counter POS picks the earliest valid expiry batch automatically (FEFO) and blocks expired or quarantined packs from checkout receipts.",
+                    tip: isSw ? "Tumia skana ya msimbo au tafuta kwa jina la dawa." : "Scan GS1 barcodes directly or search brand/generic names above the shelf.",
+                  },
+                  {
+                    targetId: "reports",
+                    title: isSw ? "3. Ripoti, Edge ML & PDF Safi" : "3. Reports, Edge ML & Clean Branded PDF",
+                    body: isSw
+                      ? "Pata utabiri wa mauzo, alama ya afya ya duka, na ripoti binafsi za wafanyakazi. Bonyeza 'Chapisha / PDF Safi' kuchagua lugha kabla ya kutoa nakala yenye nembo ya kampuni."
+                      : "Explore shop health rings, 7-day Edge ML trends, and individual staff metrics. Clicking Clean PDF or CSV asks your language & narrative preference and prints with your company logo.",
+                    tip: isSw ? "Kila mfanyakazi anaweza kuona ripoti yake binafsi hata bila ufikiaji wa shirika zima." : "Every operator always has a My Performance view for their own shift receipts.",
+                  },
+                  {
+                    targetId: "team",
+                    title: isSw ? "4. Timu, Vibali & Usalama wa PIN" : "4. Team Permits, Immutable Guardrails & Screen Lock",
+                    body: isSw
+                      ? "Katika Timu & Vibali, chagua haki za kila mhudumu. Sheria za msingi za usalama hulinda fedha na stoo. Tumia 'Switch Profile' au 'Lock' ukiondoka kaunta."
+                      : "Grant role checkboxes cleanly in Team & Permits. Immutable role guardrails protect financial P&L and batch integrity. Always lock or switch profiles between shift handoffs.",
+                    tip: isSw ? "Unaweza kurekebisha PIN na haki za wafanyakazi kutoka mahali popote." : "Owners can rotate operator PINs and approve Welcome Lounge requests remotely.",
+                  },
+                ];
+                const active = steps[tutorialStep] ?? steps[0];
+                const matchingNav = navItems.find((n) => n.id === active.targetId);
+
+                return (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-1.5">
+                      {steps.map((st, idx) => (
+                        <button
+                          key={st.title}
+                          type="button"
+                          onClick={() => setTutorialStep(idx)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer transition-colors ${tutorialStep === idx ? "text-white" : railPillCls
+                            }`}
+                          style={tutorialStep === idx ? { backgroundColor: brandAccent } : undefined}
+                        >
+                          {isSw ? `Hatua ${idx + 1}` : `Step ${idx + 1}`}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div
+                      className={`p-5 rounded-2xl border space-y-2.5 ${isDark ? "bg-[#171D28] border-slate-800" : "bg-[#F8FAFC] border-[#EAECF0]"
+                        }`}
+                    >
+                      <h3 className="text-base font-bold">{active.title}</h3>
+                      <p className={`text-xs leading-relaxed ${isDark ? "text-slate-300" : "text-slate-600"}`}>{active.body}</p>
+                      <div className="pt-1 text-[11px] font-semibold" style={{ color: brandAccent }}>
+                        {isSw ? "Dokezo:" : "Tip:"} {active.tip}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={tutorialStep === 0}
+                          onClick={() => setTutorialStep((s) => Math.max(0, s - 1))}
+                          className={`px-3.5 py-2 rounded-full border text-xs font-semibold disabled:opacity-40 cursor-pointer ${railPillCls}`}
+                        >
+                          &larr; {isSw ? "Nyuma" : "Previous"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTutorialStep((s) => (s + 1) % steps.length)}
+                          className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${railPillCls}`}
+                        >
+                          {isSw ? "Hatua Ijayo" : "Next Step"} &rarr;
+                        </button>
+                      </div>
+
+                      {matchingNav?.onClick && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            matchingNav.onClick?.();
+                            setHelpOpen(false);
+                          }}
+                          className="px-4 py-2 rounded-full text-white text-xs font-semibold cursor-pointer"
+                          style={{ backgroundColor: brandAccent }}
+                        >
+                          {isSw ? `Nenda: ${matchingNav.label}` : `Jump to ${matchingNav.label}`} &rarr;
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )
+      }
+    </div >
   );
 }

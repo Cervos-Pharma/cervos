@@ -227,19 +227,19 @@ export function BranchChatDockedAside({
 
   return (
     <>
-      {/* Desktop: Full-Bleed Edge-to-Edge Structural Column (zero boxed card border) */}
+      {/* Desktop: Sticky Edge-to-Edge Structural Column & Clicker (Follows scroll collapsed & open) */}
       <aside
         aria-label="Branch Team Messages"
         onMouseDown={chat.markInteracted}
-        className={`hidden lg:flex flex-col shrink-0 -my-4 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`hidden lg:flex flex-col shrink-0 sticky top-[57px] self-start h-[calc(100dvh-57px)] -my-4 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           chat.open
-            ? `w-[336px] xl:w-[368px] sticky top-0 h-[calc(100dvh-76px)] border-l ${
+            ? `w-[336px] xl:w-[368px] border-l ${
                 isDark
-                  ? "bg-[#0B0F17]/82 border-slate-800/80 backdrop-blur-xl"
-                  : "bg-white/70 border-[#E2E8F0] backdrop-blur-xl"
+                  ? "bg-[#0B0F17]/88 border-slate-800/80 backdrop-blur-xl"
+                  : "bg-white/80 border-[#E2E8F0] backdrop-blur-xl"
               }`
-            : `w-12 items-center pt-5 border-l ${
-                isDark ? "border-slate-800/60 bg-[#0B0F17]/25" : "border-[#E2E8F0]/75 bg-white/30"
+            : `w-12 items-center pt-6 border-l ${
+                isDark ? "border-slate-800/60 bg-[#0B0F17]/35" : "border-[#E2E8F0]/75 bg-white/40"
               }`
         }`}
       >
