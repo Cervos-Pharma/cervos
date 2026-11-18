@@ -18,7 +18,7 @@ interface MobileBatch {
 }
 
 export default function MobileCounterHubScreen() {
-  const { workspaceState, lang, isDark, pendingSync, refreshWorkspace, syncNow } = useMobileSession();
+  const { workspaceState, lang, isDark, pendingSync, searchQuery, brandAccent, fontMultiplier, refreshWorkspace, syncNow, schedulePromptSync } = useMobileSession();
   const isSw = lang === "SW";
 
   const account = (workspaceState?.account as { orgName?: string; fullName?: string } | undefined) || {};
@@ -40,8 +40,15 @@ export default function MobileCounterHubScreen() {
       if (cur) cur.qty += b.quantity;
       else map.set(b.productId, { productId: b.productId, brandName: b.brandName, genericName: b.genericName, price: b.salePriceTzs, qty: b.quantity });
     }
-    return Array.from(map.values());
-  }, [batches]);
+    const list = Array.from(map.values());
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (item) =>
+        item.brandName.toLowerCase().includes(q) ||
+        item.genericName.toLowerCase().includes(q)
+    );
+  }, [batches, searchQuery]);
 
   const cartEntries = Object.entries(cart).filter(([, q]) => q > 0);
   const cartTotal = cartEntries.reduce((sum, [pid, qty]) => {
@@ -80,9 +87,10 @@ export default function MobileCounterHubScreen() {
         operatorName: activeProfile.displayName || account.fullName || "Mobile POS",
         profileId: activeProfile.id || "mobile",
       });
+      schedulePromptSync();
       setCart({});
       setPreviewOpen(false);
-      setNotice(isSw ? "Imehifadhiwa nje ya mtandao (itapakiwa kiotomatiki)." : "Saved offline cleanly; queued for next sync.");
+      setNotice(isSw ? "Imehifadhiwa nje ya mtandao (itapakiwa kiotomatiki)." : "Saved offline cleanly; auto-sync scheduled.");
     } finally {
       setBusy(false);
     }
@@ -98,8 +106,8 @@ export default function MobileCounterHubScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: bg }} contentContainerStyle={styles.container}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.orgTag, { color: CERVOS_COLORS.cobalt }]}>{account.orgName || "CERVOS PHARMACY"}</Text>
-          <Text style={[styles.greeting, { color: text }]}>
+          <Text style={[styles.orgTag, { color: brandAccent }]}>{account.orgName || "CERVOS PHARMACY"}</Text>
+          <Text style={[styles.greeting, { color: text, fontSize: Math.round(20 * fontMultiplier) }]}>
             {isSw ? `Karibu, ${activeProfile.displayName || account.fullName || "Mhudumu"}` : `Hi, ${activeProfile.displayName || account.fullName || "Operator"}`}
           </Text>
         </View>

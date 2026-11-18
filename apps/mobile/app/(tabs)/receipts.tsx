@@ -5,7 +5,7 @@ import { useMobileSession } from "../../src/context/MobileSessionContext";
 import { CERVOS_COLORS, TOUCH_MIN_HEIGHT } from "../../src/theme/tokens";
 
 export default function MobileReceiptsScreen() {
-  const { workspaceState, lang, isDark } = useMobileSession();
+  const { workspaceState, lang, isDark, searchQuery } = useMobileSession();
   const isSw = lang === "SW";
   const [query, setQuery] = useState("");
   const sales = (workspaceState?.sales as Array<{
@@ -20,7 +20,7 @@ export default function MobileReceiptsScreen() {
   }> | undefined) || [];
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = (query || searchQuery).trim().toLowerCase();
     if (!q) return sales;
     return sales.filter(
       (s) =>
@@ -75,7 +75,7 @@ export default function MobileReceiptsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 18, paddingTop: 54, paddingBottom: 32, gap: 12 },
+  container: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32, gap: 12 },
   title: { fontSize: 22, fontWeight: "700" },
   search: { minHeight: TOUCH_MIN_HEIGHT, borderRadius: 16, borderWidth: 1, paddingHorizontal: 14, fontSize: 14 },
   card: { borderRadius: 18, borderWidth: 1, padding: 16, gap: 6 },

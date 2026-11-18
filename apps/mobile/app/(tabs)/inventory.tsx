@@ -5,7 +5,7 @@ import { useMobileSession } from "../../src/context/MobileSessionContext";
 import { CERVOS_COLORS, TOUCH_MIN_HEIGHT } from "../../src/theme/tokens";
 
 export default function MobileInventoryScreen() {
-  const { workspaceState, lang, isDark } = useMobileSession();
+  const { workspaceState, lang, isDark, searchQuery } = useMobileSession();
   const isSw = lang === "SW";
   const [query, setQuery] = useState("");
   const batches = (workspaceState?.batches as Array<{
@@ -20,7 +20,7 @@ export default function MobileInventoryScreen() {
   }> | undefined) || [];
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = (query || searchQuery).trim().toLowerCase();
     if (!q) return batches;
     return batches.filter(
       (b) =>
