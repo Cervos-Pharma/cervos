@@ -206,5 +206,68 @@ describe("Obfuscated Ops Auth & Dispatch Telemetry API", () => {
       })
     );
     expect(delRes.status).toBe(200);
+
+    // Enforces 5,000 TZS per-branch minimum floor when HQ configures pricing packages
+    const lowPkgRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", cookie: `${HQ_COOKIE_NAME}=${token}` },
+        body: JSON.stringify({
+          action: "upsert_package",
+          id: "too_cheap",
+          name: "Too Cheap Plan",
+          pricePerBranchMonthlyTzs: 2500,
+          priceMonthlyTzs: 2500,
+        }),
+      })
+    );
+    expect(lowPkgRes.status).toBe(400);
+
+    const okPkgRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", cookie: `${HQ_COOKIE_NAME}=${token}` },
+        body: JSON.stringify({
+          action: "upsert_package",
+          id: "district_duo",
+          name: "District Branch Plan",
+          audience: "pharmacy",
+          pricePerBranchMonthlyTzs: 5000,
+          priceMonthlyTzs: 5000,
+          includedAdminsPerBranch: 1,
+          includedOperatorsPerBranch: 1,
+        }),
+      })
+    );
+    expect(okPkgRes.status).toBe(200);
+    const okPkgJson = await okPkgRes.json();
+    expect(okPkgJson.pkg.pricePerBranchMonthlyTzs).toBe(5000);
+    expect(okPkgJson.pkg.includedAdminsPerBranch).toBe(1);
+    expect(okPkgJson.pkg.includedOperatorsPerBranch).toBe(1);
+
+    const rmPkgRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", cookie: `${HQ_COOKIE_NAME}=${token}` },
+        body: JSON.stringify({ action: "delete_package", id: "district_duo" }),
+      })
+    );
+    expect(rmPkgRes.status).toBe(200);
+
+    // HQ branch terminal command dispatch
+    const firstCentreId = fleetJson.accounts[0]?.centres?.[0]?.id as string;
+    const cmdRes = await dispatchPost(
+      new NextRequest("http://localhost:3000/api/ops-v9k4m/dispatch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", cookie: `${HQ_COOKIE_NAME}=${token}` },
+        body: JSON.stringify({
+          action: "branch_command",
+          accountId: targetAccountId,
+          centreId: firstCentreId,
+          cmd: "force_sync",
+        }),
+      })
+    );
+    expect(cmdRes.status).toBe(200);
   });
 });

@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import type {
   HqFleetAccount,
   HqJoinRequestRecord,
+  HqQuoteRequestRecord,
+  HqSupplierInviteRecord,
   HqUpdateRecord,
 } from "./types";
 
@@ -11,6 +13,8 @@ interface HQLoungeAndUpdatesProps {
   joinRequests: HqJoinRequestRecord[];
   accounts: HqFleetAccount[];
   hqUpdates: HqUpdateRecord[];
+  quoteRequests?: HqQuoteRequestRecord[];
+  supplierInvites?: HqSupplierInviteRecord[];
   onRunAction: (
     payload: Record<string, unknown>,
     successMessage: string
@@ -31,10 +35,14 @@ export default function HQLoungeAndUpdates({
   joinRequests,
   accounts,
   hqUpdates,
+  quoteRequests = [],
+  supplierInvites = [],
   onRunAction,
   isDark,
   busy,
 }: HQLoungeAndUpdatesProps) {
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteCompany, setInviteCompany] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "pending" | "approved" | "declined" | "accepted"
   >("all");
@@ -487,6 +495,153 @@ export default function HQLoungeAndUpdates({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Bottom Full-Width Row: Enterprise Quote Requests & Supplier Invites */}
+      <div className={`xl:col-span-12 rounded-2xl border p-5 space-y-4 ${cardCls}`}>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Enterprise Quotes */}
+          <div className="space-y-3">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-[#1039B9] dark:text-[#38BDF8]">
+                Sales Pipeline
+              </div>
+              <h3 className="text-base font-semibold">
+                Enterprise &amp; Partner Quote Requests ({quoteRequests.length})
+              </h3>
+            </div>
+            {quoteRequests.length === 0 ? (
+              <div className={`rounded-xl border p-4 text-xs ${chipCls} ${mutedCls}`}>
+                No Supabase quote requests currently queued.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {quoteRequests.map((q) => (
+                  <div key={q.id} className={`rounded-xl border p-3 text-xs flex flex-wrap items-center justify-between gap-2 ${chipCls}`}>
+                    <div className="min-w-0">
+                      <div className="font-bold">{q.companyName} ({q.locations} locations)</div>
+                      <div className={`text-[11px] ${mutedCls}`}>
+                        {q.contactName} &middot; {q.email} &middot; {q.planName}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-500/15 text-[10px] font-mono uppercase">
+                        {q.status}
+                      </span>
+                      {q.status !== "contacted" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void onRunAction(
+                              { action: "mark_quote_contacted", quoteId: q.id },
+                              `Marked quote from ${q.companyName} as contacted`
+                            )
+                          }
+                          className="px-2.5 py-1 rounded-lg bg-[#1039B9] text-white text-[11px] font-semibold cursor-pointer"
+                        >
+                          Mark Contacted
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Supplier Onboarding Invites */}
+          <div className="space-y-3">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-[#1039B9] dark:text-[#38BDF8]">
+                Wholesale Distribution
+              </div>
+              <h3 className="text-base font-semibold">
+                Supplier Invites ({supplierInvites.length})
+              </h3>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!inviteEmail.trim() || !inviteCompany.trim()) return;
+                const ok = await onRunAction(
+                  {
+                    action: "create_supplier_invite",
+                    email: inviteEmail.trim(),
+                    companyName: inviteCompany.trim(),
+                  },
+                  `Dispatched supplier invite to ${inviteEmail.trim()}`
+                );
+                if (ok) {
+                  setInviteEmail("");
+                  setInviteCompany("");
+                }
+              }}
+              className="flex flex-wrap gap-2 text-xs"
+            >
+              <input
+                type="text"
+                value={inviteCompany}
+                onChange={(e) => setInviteCompany(e.target.value)}
+                placeholder="Supplier company name"
+                required
+                className={`flex-1 min-w-[140px] h-8 px-2.5 rounded-lg border ${inputCls}`}
+              />
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="supplier@company.co.tz"
+                required
+                className={`flex-1 min-w-[160px] h-8 px-2.5 rounded-lg border ${inputCls}`}
+              />
+              <button
+                type="submit"
+                disabled={busy}
+                className="h-8 px-3 rounded-lg bg-[#1039B9] text-white font-semibold cursor-pointer"
+              >
+                Send Invite
+              </button>
+            </form>
+
+            {supplierInvites.length === 0 ? (
+              <div className={`rounded-xl border p-4 text-xs ${chipCls} ${mutedCls}`}>
+                No pending supplier invites in Supabase.
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {supplierInvites.map((inv) => (
+                  <div key={inv.id} className={`rounded-xl border p-2.5 text-xs flex items-center justify-between gap-2 ${chipCls}`}>
+                    <div className="min-w-0 truncate">
+                      <span className="font-bold">{inv.companyName}</span>{" "}
+                      <span className={mutedCls}>&middot; {inv.email}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-2 py-0.5 rounded-full bg-slate-500/15 text-[10px] font-mono uppercase">
+                        {inv.status}
+                      </span>
+                      {inv.status === "pending" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void onRunAction(
+                              { action: "cancel_supplier_invite", inviteId: inv.id },
+                              `Cancelled invite for ${inv.companyName}`
+                            )
+                          }
+                          className="px-2 py-0.5 rounded border border-red-500/30 text-red-600 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -7,12 +7,14 @@ import {
   isValidHQToken,
 } from "@/lib/hq-auth";
 import { clientIpFrom } from "@/lib/rate-limit";
+import { createServiceClient } from "@/lib/supabase/server";
 import {
   checkRateLimit,
   clearFailedAttempts,
   hashSecret,
   recordFailedAttempt,
   sanitizeText,
+  validatePinPolicy,
 } from "@/lib/security/harness";
 import { noStoreJson } from "@/lib/workspace/cookies";
 import {
@@ -28,17 +30,33 @@ import {
 import { hasAnyInjection, parseJsonObject } from "@/lib/workspace/request-auth";
 import {
   appendAuditLog,
+  flushWorkspaceDb,
   getHqUpdates,
   getWorkspaceDb,
+  getWorkspacePackages,
   isAccountAccessLocked,
+  MIN_BRANCH_PRICE_TZS,
   newId,
   publicAccountSummary,
   pushHqMessage,
   saveWorkspaceDb,
   suggestUniqueUsername,
+  upsertWorkspacePackage,
+  warmDbFromSupabase,
   type AuditLogEntry,
   type HqUpdateItem,
 } from "@/lib/workspace/store";
+
+async function persistDb(db: ReturnType<typeof getWorkspaceDb>) {
+  saveWorkspaceDb(db);
+  await flushWorkspaceDb();
+}
+
+function canQuerySupabaseTables(): boolean {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
+  return Boolean(url && key && process.env.NEXT_PUBLIC_MOCK_MODE !== "true" && process.env.NODE_ENV !== "test");
+}
 
 const ALLOWED_ROLES = new Set<WorkspaceProfileRole>([
   "pharmacy_owner",
@@ -89,7 +107,7 @@ function checkHqRequestAuth(request: NextRequest) {
   return { ok: true as const, operator };
 }
 
-function buildFleetPayload(operator: string) {
+async function buildFleetPayload(operator: string) {
   const db = getWorkspaceDb();
   const nowMs = Date.now();
   const cutoff30dMs = nowMs - 30 * 24 * 60 * 60 * 1000;
@@ -259,9 +277,81 @@ function buildFleetPayload(operator: string) {
   const trialOrgs = accounts.filter((a) => !a.accessLock.locked && !a.subscriptionActive).length;
   const lockedOrgs = accounts.filter((a) => a.accessLock.locked).length;
 
+  const wholesaleOrders = (db.wholesaleOrders ?? []).slice(0, 120).map((o) => ({
+    id: o.id,
+    accountId: o.accountId,
+    orgName: accountNames.get(o.accountId)?.orgName ?? o.accountId,
+    orderReference: o.orderReference,
+    supplierName: o.supplierName,
+    productName: o.productName,
+    quantity: o.quantity,
+    totalTzs: o.totalTzs,
+    escrowStatus: o.escrowStatus,
+    orderStatus: o.orderStatus,
+    createdAt: o.createdAt,
+  }));
+
+  let quoteRequests: Array<{
+    id: string;
+    companyName: string;
+    contactName: string;
+    email: string;
+    phone: string;
+    planName: string;
+    locations: number;
+    status: string;
+    createdAt: string;
+  }> = [];
+  let supplierInvites: Array<{
+    id: string;
+    email: string;
+    companyName: string;
+    status: string;
+    createdAt: string;
+  }> = [];
+
+  if (canQuerySupabaseTables()) {
+    try {
+      const supabase = await createServiceClient();
+      const [quotesRes, invitesRes] = await Promise.all([
+        supabase
+          .from("quote_requests")
+          .select("id, company_name, contact_name, email, phone, plan_name, locations, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50),
+        supabase
+          .from("supplier_invites")
+          .select("id, email, company_name, status, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+      quoteRequests = (quotesRes.data ?? []).map((q) => ({
+        id: String(q.id),
+        companyName: String(q.company_name ?? ""),
+        contactName: String(q.contact_name ?? ""),
+        email: String(q.email ?? ""),
+        phone: String(q.phone ?? ""),
+        planName: String(q.plan_name ?? "Custom"),
+        locations: Number(q.locations ?? 1),
+        status: String(q.status ?? "pending"),
+        createdAt: String(q.created_at ?? ""),
+      }));
+      supplierInvites = (invitesRes.data ?? []).map((inv) => ({
+        id: String(inv.id),
+        email: String(inv.email ?? ""),
+        companyName: String(inv.company_name ?? ""),
+        status: String(inv.status ?? "pending"),
+        createdAt: String(inv.created_at ?? ""),
+      }));
+    } catch {
+      // Optional telemetry tables may not exist in all environments
+    }
+  }
+
   return {
     scope: "fleet" as const,
     operator,
+    minBranchPriceTzs: MIN_BRANCH_PRICE_TZS,
     fleetSummary: {
       totalOrgs: accounts.length,
       activeOrgs,
@@ -281,6 +371,10 @@ function buildFleetPayload(operator: string) {
       unreadHqMessages: hqMessages.filter((m) => !m.acknowledged).length,
     },
     accounts,
+    packages: getWorkspacePackages(db),
+    wholesaleOrders,
+    quoteRequests,
+    supplierInvites,
     auditLogs,
     auditCategoryCounts,
     hqMessages,
@@ -296,9 +390,10 @@ export async function GET(request: NextRequest) {
     return noStoreJson({ error: auth.error }, { status: auth.status });
   }
 
+  await warmDbFromSupabase();
   const scope = request.nextUrl.searchParams.get("scope")?.trim();
   if (scope === "fleet") {
-    return noStoreJson(buildFleetPayload(auth.operator));
+    return noStoreJson(await buildFleetPayload(auth.operator));
   }
 
   const db = getWorkspaceDb();
@@ -352,8 +447,166 @@ export async function POST(request: NextRequest) {
     return noStoreJson({ error: "Unsupported characters in ops payload." }, { status: 400 });
   }
 
+  await warmDbFromSupabase();
   const db = getWorkspaceDb();
   const actorName = sanitizeText(body.senderName, 80) || auth.operator;
+
+  if (action === "upsert_package") {
+    const id = sanitizeText(body.id, 60) || sanitizeText(body.name, 40).toLowerCase().replace(/[^a-z0-9_-]+/g, "_");
+    const name = sanitizeText(body.name, 80);
+    if (!id || name.length < 2) {
+      return noStoreJson({ error: "Package ID and name are required." }, { status: 400 });
+    }
+    const perBranchRaw = Number(body.pricePerBranchMonthlyTzs ?? body.priceMonthlyTzs ?? MIN_BRANCH_PRICE_TZS);
+    if (!Number.isFinite(perBranchRaw) || perBranchRaw < MIN_BRANCH_PRICE_TZS) {
+      return noStoreJson(
+        { error: `Per-branch price must be at least ${MIN_BRANCH_PRICE_TZS.toLocaleString("en-US")} TZS/month.` },
+        { status: 400 }
+      );
+    }
+    const monthlyRaw = Number(body.priceMonthlyTzs ?? perBranchRaw);
+    if (!Number.isFinite(monthlyRaw) || monthlyRaw < MIN_BRANCH_PRICE_TZS) {
+      return noStoreJson(
+        { error: `Monthly package base price must be at least ${MIN_BRANCH_PRICE_TZS.toLocaleString("en-US")} TZS.` },
+        { status: 400 }
+      );
+    }
+
+    const updated = upsertWorkspacePackage(db, {
+      id,
+      audience:
+        body.audience === "hospital" || body.audience === "supplier" ? body.audience : "pharmacy",
+      name,
+      priceMonthlyTzs: monthlyRaw,
+      priceAnnualTzs: Number(body.priceAnnualTzs ?? monthlyRaw * 10),
+      pricePerBranchMonthlyTzs: perBranchRaw,
+      includedAdminsPerBranch: Number(body.includedAdminsPerBranch ?? 1),
+      includedOperatorsPerBranch: Number(body.includedOperatorsPerBranch ?? 1),
+      extraOperatorMonthlyTzs: Number(body.extraOperatorMonthlyTzs ?? 5000),
+      maxBranches: body.maxBranches === null || body.maxBranches === "" ? null : Number(body.maxBranches ?? 1),
+      maxOperators: body.maxOperators === null || body.maxOperators === "" ? null : Number(body.maxOperators ?? 2),
+      maxSuppliers: body.maxSuppliers === null || body.maxSuppliers === "" ? null : Number(body.maxSuppliers ?? 5),
+      maxConnectedPharmacies:
+        body.maxConnectedPharmacies === null || body.maxConnectedPharmacies === ""
+          ? null
+          : Number(body.maxConnectedPharmacies ?? 15),
+      features: Array.isArray(body.features) ? body.features : undefined,
+      active: body.active !== false,
+    });
+
+    if (canQuerySupabaseTables()) {
+      try {
+        const supabase = await createServiceClient();
+        await supabase.from("subscription_plans").upsert({
+          id: updated.id,
+          name: updated.name,
+          price_monthly_tzs: updated.priceMonthlyTzs,
+          price_annual_tzs: updated.priceAnnualTzs,
+          max_branches: updated.maxBranches,
+          max_operators: updated.maxOperators,
+          features: updated.features,
+        });
+      } catch {
+        // subscription_plans mirror is optional
+      }
+    }
+
+    appendAuditLog(db, {
+      accountId: db.accounts[0]?.id ?? "acc-hq",
+      actor: actorName,
+      category: "BILLING",
+      action: `HQ updated package ${updated.name} (${updated.pricePerBranchMonthlyTzs.toLocaleString("en-US")} TZS/branch/mo, ${updated.includedAdminsPerBranch} Admin + ${updated.includedOperatorsPerBranch} Operator included)`,
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, pkg: updated, packages: getWorkspacePackages(db) });
+  }
+
+  if (action === "toggle_package_active") {
+    const id = sanitizeText(body.id, 60);
+    const list = getWorkspacePackages(db);
+    const target = list.find((p) => p.id === id);
+    if (!target) {
+      return noStoreJson({ error: "Package not found." }, { status: 404 });
+    }
+    target.active = typeof body.active === "boolean" ? body.active : !target.active;
+    db.packages = list;
+    await persistDb(db);
+    return noStoreJson({ ok: true, pkg: target, packages: list });
+  }
+
+  if (action === "delete_package") {
+    const id = sanitizeText(body.id, 60);
+    const list = getWorkspacePackages(db);
+    const next = list.filter((p) => p.id !== id);
+    if (next.length === list.length) {
+      return noStoreJson({ error: "Package not found." }, { status: 404 });
+    }
+    db.packages = next;
+    await persistDb(db);
+    return noStoreJson({ ok: true, packages: next });
+  }
+
+  if (action === "resolve_escrow") {
+    const orderId = sanitizeText(body.orderId, 80);
+    const decision = body.decision === "cancel" ? "cancel" : "release";
+    const order = (db.wholesaleOrders ?? []).find((o) => o.id === orderId);
+    if (!order) {
+      return noStoreJson({ error: "Wholesale order not found." }, { status: 404 });
+    }
+    if (decision === "cancel") {
+      order.escrowStatus = "cancelled";
+    } else {
+      order.escrowStatus = "released";
+      order.orderStatus = "delivered";
+      order.deliveredAt = new Date().toISOString();
+    }
+    appendAuditLog(db, {
+      accountId: order.accountId,
+      actor: actorName,
+      category: "BILLING",
+      action:
+        decision === "cancel"
+          ? `HQ cancelled order ${order.orderReference} & refunded Kasri escrow`
+          : `HQ released Kasri escrow on order ${order.orderReference} (TZS ${order.totalTzs.toLocaleString("en-US")})`,
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, order });
+  }
+
+  if (action === "mark_quote_contacted" || action === "create_supplier_invite" || action === "cancel_supplier_invite") {
+    if (!canQuerySupabaseTables()) {
+      return noStoreJson({ error: "Supabase service credentials required for quotes & invites." }, { status: 400 });
+    }
+    const supabase = await createServiceClient();
+    if (action === "mark_quote_contacted") {
+      const quoteId = sanitizeText(body.quoteId, 80);
+      const { error } = await supabase.from("quote_requests").update({ status: "contacted" }).eq("id", quoteId);
+      if (error) return noStoreJson({ error: error.message }, { status: 500 });
+      return noStoreJson({ ok: true });
+    }
+    if (action === "create_supplier_invite") {
+      const quoteRequestId = sanitizeText(body.quoteRequestId, 80) || null;
+      const email = sanitizeText(body.email, 120).toLowerCase();
+      const companyName = sanitizeText(body.companyName, 120);
+      if (!email || !companyName) {
+        return noStoreJson({ error: "Email and company name are required." }, { status: 400 });
+      }
+      const token = `sup_${newId("inv").replace(/[^a-zA-Z0-9]/g, "")}`;
+      const { error } = await supabase.from("supplier_invites").insert({
+        quote_request_id: quoteRequestId,
+        email,
+        company_name: companyName,
+        token,
+        status: "pending",
+      });
+      if (error) return noStoreJson({ error: error.message }, { status: 500 });
+      return noStoreJson({ ok: true, inviteToken: token });
+    }
+    const inviteId = sanitizeText(body.inviteId, 80);
+    const { error } = await supabase.from("supplier_invites").update({ status: "cancelled" }).eq("id", inviteId);
+    if (error) return noStoreJson({ error: error.message }, { status: 500 });
+    return noStoreJson({ ok: true });
+  }
 
   if (action === "publish_hq_update") {
     const title = sanitizeText(body.title, 120);
@@ -381,7 +634,7 @@ export async function POST(request: NextRequest) {
       publishedAt: new Date().toISOString(),
     };
     list.unshift(created);
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true, hqUpdate: created });
   }
 
@@ -393,7 +646,7 @@ export async function POST(request: NextRequest) {
       return noStoreJson({ error: "HQ update not found." }, { status: 404 });
     }
     db.hqUpdates = next;
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true });
   }
 
@@ -405,7 +658,7 @@ export async function POST(request: NextRequest) {
       return noStoreJson({ error: "Message not found." }, { status: 404 });
     }
     db.hqMessages = next;
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true });
   }
 
@@ -429,7 +682,7 @@ export async function POST(request: NextRequest) {
         category: "SECURITY",
         action: `HQ declined join request from @${reqItem.requesterUsername}`,
       });
-      saveWorkspaceDb(db);
+      await persistDb(db);
       return noStoreJson({ ok: true, status: "declined" });
     }
 
@@ -479,7 +732,7 @@ export async function POST(request: NextRequest) {
       category: "SECURITY",
       action: `HQ approved & allocated @${finalUsername} to ${targetCentre.name}`,
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true, status: "approved", profileId: profId });
   }
 
@@ -572,7 +825,7 @@ export async function POST(request: NextRequest) {
         });
       }
     }
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({
       ok: true,
       hqMessage: firstCreated,
@@ -612,7 +865,7 @@ export async function POST(request: NextRequest) {
       category,
       action: auditAction,
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true, auditLog: created });
   }
 
@@ -643,7 +896,7 @@ export async function POST(request: NextRequest) {
       category: "SECURITY",
       action: `HQ manual lock activated: ${reason}`,
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     await dispatchExceptionNotification({
       accountId: targetAccount.id,
       orgName: targetAccount.orgName,
@@ -668,7 +921,7 @@ export async function POST(request: NextRequest) {
       category: "SECURITY",
       action: "HQ manual override released and workspace unlocked",
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true, accessLock: isAccountAccessLocked(targetAccount) });
   }
 
@@ -704,7 +957,7 @@ export async function POST(request: NextRequest) {
       category: "BILLING",
       action: overdue ? "Billing lock engaged (payment required)" : "Billing lock cleared",
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true, accessLock: isAccountAccessLocked(targetAccount) });
   }
 
@@ -720,7 +973,7 @@ export async function POST(request: NextRequest) {
         ? "HQ verified compliance permits and unlocked wholesale preview"
         : "HQ paused compliance verification flag",
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({ ok: true, verificationStatus: targetAccount.verificationStatus });
   }
 
@@ -737,7 +990,7 @@ export async function POST(request: NextRequest) {
         category: "BILLING",
         action: `HQ extended trial window by ${Math.min(90, body.extendTrialDays)} days`,
       });
-      saveWorkspaceDb(db);
+      await persistDb(db);
       return noStoreJson({ ok: true, trialEndsAt: targetAccount.trialEndsAt });
     }
 
@@ -753,12 +1006,157 @@ export async function POST(request: NextRequest) {
       category: "BILLING",
       action: `HQ updated subscription plan (${targetAccount.subscriptionPlan})`,
     });
-    saveWorkspaceDb(db);
+    await persistDb(db);
     return noStoreJson({
       ok: true,
       subscriptionPlan: targetAccount.subscriptionPlan,
       subscriptionActive: targetAccount.subscriptionActive,
     });
+  }
+
+  if (action === "branch_command") {
+    const centreId = sanitizeText(body.centreId, 80);
+    const cmd = sanitizeText(body.cmd, 40);
+    const reason = sanitizeText(body.reason, 220);
+    const allowedCmds = new Set(["force_sync", "lock_branch", "unlock_branch", "suspend_branch"]);
+    if (!allowedCmds.has(cmd)) {
+      return noStoreJson({ error: "Invalid branch command." }, { status: 400 });
+    }
+    const centre = db.centres.find((c) => c.id === centreId && c.accountId === targetAccount.id);
+    if (!centre) {
+      return noStoreJson({ error: "Branch not found on organization." }, { status: 404 });
+    }
+
+    if (canQuerySupabaseTables()) {
+      try {
+        const supabase = await createServiceClient();
+        await supabase.from("branch_commands").insert({
+          branch_id: centre.id,
+          account_id: targetAccount.id,
+          command: cmd,
+          reason: reason || null,
+          status: "pending",
+        });
+        if (cmd === "lock_branch" || cmd === "suspend_branch") {
+          await supabase.from("branches").update({ subscription_status: "locked", locked_reason: reason || "hq_command" }).eq("id", centre.id);
+        } else if (cmd === "unlock_branch") {
+          await supabase.from("branches").update({ subscription_status: "active", locked_reason: null }).eq("id", centre.id);
+        }
+      } catch {
+        // Optional branch telemetry table sync
+      }
+    }
+
+    appendAuditLog(db, {
+      accountId: targetAccount.id,
+      actor: actorName,
+      category: "SECURITY",
+      action: `HQ queued '${cmd}' on branch ${centre.name}${reason ? ` (${reason})` : ""}`,
+    });
+    if (cmd === "lock_branch" || cmd === "suspend_branch") {
+      pushHqMessage(db, {
+        accountId: targetAccount.id,
+        title: `Branch Command: ${centre.name}`,
+        swTitle: `Amri ya Tawi: ${centre.name}`,
+        body: reason || `Terminal command ${cmd} issued by HQ.`,
+        swBody: reason || `Amri ${cmd} imetumwa kutoka HQ.`,
+        severity: "action",
+        ctaLabel: "Inspect",
+        ctaTarget: "overview",
+        senderName: actorName,
+      });
+    }
+    await persistDb(db);
+    return noStoreJson({ ok: true, cmd, centreId: centre.id });
+  }
+
+  if (action === "manage_operator") {
+    const op = sanitizeText(body.op, 30);
+    if (op === "add") {
+      const displayName = sanitizeText(body.displayName, 80);
+      const centreId = sanitizeText(body.centreId, 80) || db.centres.find((c) => c.accountId === targetAccount.id)?.id || "";
+      const roleRaw = sanitizeText(body.role, 40) as WorkspaceProfileRole;
+      const role: WorkspaceProfileRole = ALLOWED_ROLES.has(roleRaw) ? roleRaw : "pos_cashier";
+      const pinStr = String(body.pin ?? "").trim();
+      const pinCheck = validatePinPolicy(pinStr);
+      if (!pinCheck.ok) return noStoreJson({ error: pinCheck.error ?? "Invalid PIN." }, { status: 400 });
+      if (displayName.length < 2 || !centreId) {
+        return noStoreJson({ error: "Operator display name and branch are required." }, { status: 400 });
+      }
+      const rawUser = sanitizeText(body.username, 40) || displayName.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const username = db.profiles.some((p) => p.username?.toLowerCase() === rawUser.toLowerCase())
+        ? suggestUniqueUsername(db, rawUser)
+        : rawUser;
+      const created = {
+        id: newId("prof"),
+        accountId: targetAccount.id,
+        centreId,
+        username,
+        displayName,
+        role,
+        pinHash: hashSecret(pinStr).hash,
+        isMasterAdmin: false,
+        capabilities: clampProfileCapabilities(role),
+        createdAt: new Date().toISOString(),
+      };
+      db.profiles.push(created);
+      appendAuditLog(db, {
+        accountId: targetAccount.id,
+        actor: actorName,
+        category: "SECURITY",
+        action: `HQ provisioned operator @${username} (${role})`,
+      });
+      await persistDb(db);
+      return noStoreJson({ ok: true, profileId: created.id, username });
+    }
+
+    const profileId = sanitizeText(body.profileId, 80);
+    const prof = db.profiles.find((p) => p.id === profileId && p.accountId === targetAccount.id);
+    if (!prof) return noStoreJson({ error: "Operator profile not found." }, { status: 404 });
+
+    if (op === "set_role") {
+      const roleRaw = sanitizeText(body.role, 40) as WorkspaceProfileRole;
+      if (!ALLOWED_ROLES.has(roleRaw)) return noStoreJson({ error: "Invalid role." }, { status: 400 });
+      prof.role = roleRaw;
+      prof.capabilities = clampProfileCapabilities(roleRaw, prof.capabilities);
+      appendAuditLog(db, {
+        accountId: targetAccount.id,
+        actor: actorName,
+        category: "SECURITY",
+        action: `HQ changed role for ${prof.displayName} to ${roleRaw}`,
+      });
+      await persistDb(db);
+      return noStoreJson({ ok: true });
+    }
+    if (op === "reset_pin") {
+      const pinStr = String(body.pin ?? "").trim();
+      const pinCheck = validatePinPolicy(pinStr);
+      if (!pinCheck.ok) return noStoreJson({ error: pinCheck.error ?? "Invalid PIN." }, { status: 400 });
+      prof.pinHash = hashSecret(pinStr).hash;
+      appendAuditLog(db, {
+        accountId: targetAccount.id,
+        actor: actorName,
+        category: "SECURITY",
+        action: `HQ reset terminal PIN for ${prof.displayName}`,
+      });
+      await persistDb(db);
+      return noStoreJson({ ok: true });
+    }
+    if (op === "remove") {
+      if (prof.isMasterAdmin) {
+        return noStoreJson({ error: "Cannot remove primary account owner." }, { status: 400 });
+      }
+      db.profiles = db.profiles.filter((p) => p.id !== prof.id);
+      appendAuditLog(db, {
+        accountId: targetAccount.id,
+        actor: actorName,
+        category: "SECURITY",
+        action: `HQ removed operator ${prof.displayName}`,
+      });
+      await persistDb(db);
+      return noStoreJson({ ok: true });
+    }
+    return noStoreJson({ error: "Invalid operator operation." }, { status: 400 });
   }
 
   return noStoreJson({ error: "Unsupported ops dispatch action." }, { status: 400 });

@@ -6,7 +6,65 @@ export type AuditCategory =
   | "COMPLIANCE"
   | "BILLING";
 
-export type HqTab = "fleet" | "events" | "composer" | "lounge";
+export type HqTab =
+  | "overview"
+  | "fleet"
+  | "packages"
+  | "finance"
+  | "onboarding"
+  | "comms";
+
+export interface HqPackageRecord {
+  id: string;
+  audience: "pharmacy" | "hospital" | "supplier";
+  name: string;
+  priceMonthlyTzs: number;
+  priceAnnualTzs: number;
+  pricePerBranchMonthlyTzs: number;
+  includedAdminsPerBranch: number;
+  includedOperatorsPerBranch: number;
+  extraOperatorMonthlyTzs: number;
+  maxBranches: number | null;
+  maxOperators: number | null;
+  maxSuppliers: number | null;
+  maxConnectedPharmacies: number | null;
+  features: string[];
+  active: boolean;
+}
+
+export interface HqWholesaleOrderRecord {
+  id: string;
+  accountId: string;
+  orgName: string;
+  orderReference: string;
+  supplierName: string;
+  productName: string;
+  quantity: number;
+  totalTzs: number;
+  escrowStatus: "escrow_held" | "released" | "cancelled";
+  orderStatus: "pending" | "in_transit" | "delivered";
+  createdAt: string;
+}
+
+export interface HqQuoteRequestRecord {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  planName: string;
+  locations: number;
+  status: string;
+  createdAt: string;
+}
+
+export interface HqSupplierInviteRecord {
+  id: string;
+  email: string;
+  companyName: string;
+  status: string;
+  createdAt: string;
+}
 
 export interface HqFleetCentre {
   id: string;
@@ -183,8 +241,13 @@ export interface HqNotificationEnv {
 export interface HqFleetPayload {
   scope: "fleet";
   operator: string;
+  minBranchPriceTzs: number;
   fleetSummary: HqFleetSummary;
   accounts: HqFleetAccount[];
+  packages: HqPackageRecord[];
+  wholesaleOrders: HqWholesaleOrderRecord[];
+  quoteRequests: HqQuoteRequestRecord[];
+  supplierInvites: HqSupplierInviteRecord[];
   auditLogs: HqAuditEvent[];
   auditCategoryCounts: Record<AuditCategory, number>;
   hqMessages: HqMessageRecord[];
