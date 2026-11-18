@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import PublicNav from "@/components/PublicNav";
 import FlipText from "@/components/FlipText";
 import DispatchInteractions from "@/components/DispatchInteractions";
-import { DISPATCH_ESSAYS, type EssayTopic } from "@/lib/dispatch-catalog";
+import { DISPATCH_ESSAYS, type DispatchEssay, type EssayTopic } from "@/lib/dispatch-catalog";
 import { useI18n } from "@/lib/i18n/context";
 import { useIsLowEndDevice } from "@/lib/useDeviceTier";
 
@@ -15,8 +15,22 @@ export default function DispatchJournalPage() {
   const isSw = lang === "SW";
   const isLowEnd = useIsLowEndDevice();
 
+  const [essays, setEssays] = useState<DispatchEssay[]>(DISPATCH_ESSAYS);
   const [topic, setTopic] = useState<EssayTopic | "all">("all");
   const [sortBy, setSortBy] = useState<"featured" | "top">("featured");
+
+  useEffect(() => {
+    fetch("/api/dispatch", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((out: { articles?: DispatchEssay[] } | null) => {
+        if (out?.articles && out.articles.length > 0) {
+          setEssays(out.articles);
+        }
+      })
+      .catch(() => {
+        /* keep static catalog fallback */
+      });
+  }, []);
 
   const topics: Array<{ id: EssayTopic | "all"; label: string }> = [
     { id: "all", label: isSw ? "Insha Zote" : "All Essays" },
@@ -25,11 +39,11 @@ export default function DispatchJournalPage() {
     { id: "supply", label: isSw ? "Safari ya Ugavi" : "Supply Notes" },
   ];
 
-  const leadEssay = DISPATCH_ESSAYS[0];
+  const leadEssay = essays[0] ?? DISPATCH_ESSAYS[0];
   const filteredPool =
     topic === "all" && sortBy === "featured"
-      ? DISPATCH_ESSAYS.slice(1)
-      : DISPATCH_ESSAYS.filter((e) => topic === "all" || e.topic === topic);
+      ? essays.slice(1)
+      : essays.filter((e) => topic === "all" || e.topic === topic);
 
   const visibleEssays =
     sortBy === "top"
@@ -86,13 +100,22 @@ export default function DispatchJournalPage() {
                 href={`/dispatch/${leadEssay.slug}`}
                 className="group relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-[#E2E8F0] block shadow-sm"
               >
-                <Image
-                  src={leadEssay.image}
-                  alt={isSw ? leadEssay.titleSw : leadEssay.titleEn}
-                  fill
-                  className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
-                  priority
-                />
+                {leadEssay.image.startsWith("data:") ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={leadEssay.image}
+                    alt={isSw ? leadEssay.titleSw : leadEssay.titleEn}
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+                  />
+                ) : (
+                  <Image
+                    src={leadEssay.image}
+                    alt={isSw ? leadEssay.titleSw : leadEssay.titleEn}
+                    fill
+                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.02]"
+                    priority
+                  />
+                )}
               </Link>
             </div>
 
@@ -211,12 +234,21 @@ export default function DispatchJournalPage() {
                         href={`/dispatch/${essay.slug}`}
                         className="group relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-[#E2E8F0] block bg-white shadow-2xs"
                       >
-                        <Image
-                          src={essay.image}
-                          alt={essayTitle}
-                          fill
-                          className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-                        />
+                        {essay.image.startsWith("data:") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={essay.image}
+                            alt={essayTitle}
+                            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                          />
+                        ) : (
+                          <Image
+                            src={essay.image}
+                            alt={essayTitle}
+                            fill
+                            className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+                          />
+                        )}
                       </Link>
                     </div>
 

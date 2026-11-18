@@ -27,11 +27,14 @@ import {
   clampProfileCapabilities,
   type WorkspaceProfileRole,
 } from "@/lib/workspace/permissions";
-import { hasAnyInjection, parseJsonObject } from "@/lib/workspace/request-auth";
+import { hasAnyInjection, parseJsonObject, sanitizeBatchImageUrl } from "@/lib/workspace/request-auth";
 import {
   appendAuditLog,
+  findWorkspacePackageMatch,
   flushWorkspaceDb,
   getHqUpdates,
+  getJournalArticles,
+  getSubscriptionExpiryInfo,
   getWorkspaceDb,
   getWorkspacePackages,
   isAccountAccessLocked,
@@ -41,6 +44,7 @@ import {
   pushHqMessage,
   saveWorkspaceDb,
   suggestUniqueUsername,
+  upsertJournalArticle,
   upsertWorkspacePackage,
   warmDbFromSupabase,
   type AuditLogEntry,
@@ -126,6 +130,15 @@ async function buildFleetPayload(operator: string) {
     accountNames.set(acc.id, { orgName: acc.orgName, region: acc.region });
   }
 
+  const packages = getWorkspacePackages(db);
+  let monthlyRecurringRevenueTzs = 0;
+  let fleetExpiryExposureTzs = 0;
+  const regionMap = new Map<
+    string,
+    { region: string; orgsCount: number; branchesCount: number; revenue30dTzs: number; lowStockCount: number; expiryExposureTzs: number }
+  >();
+  const skuMap = new Map<string, { brandName: string; genericName: string; unitsSold: number; revenueTzs: number }>();
+
   const accounts = db.accounts.map((acc) => {
     const centres = db.centres.filter((c) => c.accountId === acc.id);
     const profiles = db.profiles.filter((p) => p.accountId === acc.id);
@@ -145,7 +158,21 @@ async function buildFleetPayload(operator: string) {
     let sales30d = 0;
     for (const s of sales) {
       salesRev += s.totalTzs;
-      if (Date.parse(s.createdAt) >= cutoff30dMs) sales30d += s.totalTzs;
+      const in30d = Date.parse(s.createdAt) >= cutoff30dMs;
+      if (in30d) sales30d += s.totalTzs;
+      for (const ln of s.lines ?? []) {
+        const key = (ln.brandName || "").trim().toLowerCase();
+        if (!key) continue;
+        const curSku = skuMap.get(key) ?? {
+          brandName: ln.brandName,
+          genericName: ln.category || "Medicine",
+          unitsSold: 0,
+          revenueTzs: 0,
+        };
+        curSku.unitsSold += ln.qty;
+        curSku.revenueTzs += ln.qty * ln.unitPriceTzs;
+        skuMap.set(key, curSku);
+      }
     }
 
     let stockUnitsTotal = 0;
@@ -154,17 +181,49 @@ async function buildFleetPayload(operator: string) {
     let expCount = 0;
     let lowCount = 0;
     let quarCount = 0;
+    let orgExpiryExposureTzs = 0;
     for (const b of batches) {
       stockUnitsTotal += b.quantity;
       stockCost += b.quantity * b.costPriceTzs;
       const expMs = Date.parse(b.expiryDate);
       if (Number.isFinite(expMs)) {
-        if (expMs < nowMs) expCount += 1;
-        else if (expMs <= nearCutoffMs) nearExp += 1;
+        if (expMs < nowMs) {
+          expCount += 1;
+          orgExpiryExposureTzs += Math.max(0, b.quantity * b.costPriceTzs);
+        } else if (expMs <= nearCutoffMs) {
+          nearExp += 1;
+          orgExpiryExposureTzs += Math.max(0, b.quantity * b.costPriceTzs);
+        }
       }
       if (b.quantity <= (b.lowStockThreshold ?? 15)) lowCount += 1;
       if (b.quarantined) quarCount += 1;
     }
+
+    const matchedPkg = findWorkspacePackageMatch(packages, acc.subscriptionPlan);
+    const branchCountSafe = Math.max(1, centres.length);
+    const estMonthly = matchedPkg
+      ? Math.max(matchedPkg.priceMonthlyTzs, matchedPkg.pricePerBranchMonthlyTzs * branchCountSafe)
+      : 45000;
+    if (acc.subscriptionActive && !acc.billingOverdue) {
+      monthlyRecurringRevenueTzs += estMonthly;
+    }
+    fleetExpiryExposureTzs += orgExpiryExposureTzs;
+
+    const regKey = (acc.region || "Dar es Salaam").trim() || "Dar es Salaam";
+    const regEntry = regionMap.get(regKey) ?? {
+      region: regKey,
+      orgsCount: 0,
+      branchesCount: 0,
+      revenue30dTzs: 0,
+      lowStockCount: 0,
+      expiryExposureTzs: 0,
+    };
+    regEntry.orgsCount += 1;
+    regEntry.branchesCount += centres.length;
+    regEntry.revenue30dTzs += sales30d;
+    regEntry.lowStockCount += lowCount;
+    regEntry.expiryExposureTzs += orgExpiryExposureTzs;
+    regionMap.set(regKey, regEntry);
 
     totalBranches += centres.length;
     totalOperators += profiles.length;
@@ -175,6 +234,7 @@ async function buildFleetPayload(operator: string) {
     expiredBatches += expCount;
 
     const pub = publicAccountSummary(acc);
+    const expInfo = getSubscriptionExpiryInfo(acc, nowMs);
     return {
       ...pub,
       username: acc.username,
@@ -225,6 +285,11 @@ async function buildFleetPayload(operator: string) {
       lastActivityAt: audits[0]?.createdAt ?? acc.createdAt,
       pendingJoinRequestsCount: joinReqs.length,
       unacknowledgedHqMessagesCount: msgs.length,
+      planMaxBranches: matchedPkg?.maxBranches ?? null,
+      planMaxOperators: matchedPkg?.maxOperators ?? null,
+      subscriptionDaysLeft: expInfo.daysLeft,
+      expiryExposureTzs: orgExpiryExposureTzs,
+      estimatedMonthlyFeeTzs: estMonthly,
     };
   });
 
@@ -370,8 +435,16 @@ async function buildFleetPayload(operator: string) {
       pendingJoinRequests: joinRequests.filter((r) => r.status === "pending").length,
       unreadHqMessages: hqMessages.filter((m) => !m.acknowledged).length,
     },
+    peakTelemetry: {
+      monthlyRecurringRevenueTzs,
+      expiryExposureTzs: fleetExpiryExposureTzs,
+      regionDemand: Array.from(regionMap.values()).sort((a, b) => b.revenue30dTzs - a.revenue30dTzs),
+      topDispensedProducts: Array.from(skuMap.values())
+        .sort((a, b) => b.unitsSold - a.unitsSold)
+        .slice(0, 8),
+    },
     accounts,
-    packages: getWorkspacePackages(db),
+    packages,
     wholesaleOrders,
     quoteRequests,
     supplierInvites,
@@ -380,6 +453,7 @@ async function buildFleetPayload(operator: string) {
     hqMessages,
     joinRequests,
     hqUpdates: getHqUpdates(db),
+    journalArticles: getJournalArticles(db),
     notificationEnv: getNotificationEnvStatus(),
   };
 }
@@ -450,6 +524,63 @@ export async function POST(request: NextRequest) {
   await warmDbFromSupabase();
   const db = getWorkspaceDb();
   const actorName = sanitizeText(body.senderName, 80) || auth.operator;
+
+  if (action === "upsert_journal_article") {
+    const titleEn = sanitizeText(body.titleEn, 180);
+    const deckEn = sanitizeText(body.deckEn, 320);
+    if (titleEn.length < 4 || deckEn.length < 8) {
+      return noStoreJson({ error: "Headline and summary deck are required for The Dispatch journal." }, { status: 400 });
+    }
+    const paragraphsEn = Array.isArray(body.paragraphsEn)
+      ? body.paragraphsEn.map((p) => sanitizeText(p, 2000)).filter(Boolean)
+      : typeof body.bodyEn === "string"
+        ? body.bodyEn.split(/\n{2,}/).map((p) => sanitizeText(p, 2000)).filter(Boolean)
+        : [deckEn];
+    const paragraphsSw = Array.isArray(body.paragraphsSw)
+      ? body.paragraphsSw.map((p) => sanitizeText(p, 2000)).filter(Boolean)
+      : typeof body.bodySw === "string"
+        ? body.bodySw.split(/\n{2,}/).map((p) => sanitizeText(p, 2000)).filter(Boolean)
+        : [];
+    const safeCover = sanitizeBatchImageUrl(body.image) || "/cervos-people-counter.jpg";
+    const article = upsertJournalArticle(db, {
+      id: typeof body.id === "string" ? sanitizeText(body.id, 80) : undefined,
+      slug: typeof body.slug === "string" ? sanitizeText(body.slug, 80) : undefined,
+      topic: body.topic === "craft" || body.topic === "supply" ? body.topic : "field",
+      titleEn,
+      titleSw: sanitizeText(body.titleSw, 180) || titleEn,
+      deckEn,
+      deckSw: sanitizeText(body.deckSw, 320) || deckEn,
+      quoteEn: sanitizeText(body.quoteEn, 260) || deckEn,
+      quoteSw: sanitizeText(body.quoteSw, 260) || sanitizeText(body.quoteEn, 260) || deckEn,
+      paragraphsEn,
+      paragraphsSw: paragraphsSw.length > 0 ? paragraphsSw : paragraphsEn,
+      author: sanitizeText(body.author, 80) || actorName,
+      authorRoleEn: sanitizeText(body.authorRoleEn, 80) || "Cervos Field Desk",
+      authorRoleSw: sanitizeText(body.authorRoleSw, 80) || "Dawati la Cervos",
+      image: safeCover,
+      status: body.status === "draft" ? "draft" : "published",
+    });
+    appendAuditLog(db, {
+      accountId: db.accounts[0]?.id ?? "acc-hq",
+      actor: actorName,
+      category: "COMPLIANCE",
+      action: `HQ ${article.status === "published" ? "published" : "saved draft"} journal article: ${article.titleEn} (/dispatch/${article.slug})`,
+    });
+    await persistDb(db);
+    return noStoreJson({ ok: true, article, journalArticles: getJournalArticles(db) });
+  }
+
+  if (action === "delete_journal_article") {
+    const id = sanitizeText(body.id, 80);
+    const list = (db.journalArticles ??= []);
+    const next = list.filter((a) => a.id !== id);
+    if (next.length === list.length) {
+      return noStoreJson({ error: "Journal article not found." }, { status: 404 });
+    }
+    db.journalArticles = next;
+    await persistDb(db);
+    return noStoreJson({ ok: true, journalArticles: next });
+  }
 
   if (action === "upsert_package") {
     const id = sanitizeText(body.id, 60) || sanitizeText(body.name, 40).toLowerCase().replace(/[^a-z0-9_-]+/g, "_");

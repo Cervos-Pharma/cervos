@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Outfit } from "next/font/google";
 import Providers from "@/providers";
+
+const interFont = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const outfitFont = Outfit({ subsets: ["latin"], variable: "--font-outfit", display: "swap" });
 import MockModeBar from "@/components/MockModeBar";
 import PwaRegister from "@/components/PwaRegister";
 import { CervosCommandBar } from "@cervos/ui";
@@ -68,7 +72,11 @@ export default async function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const lang = await getLang();
   return (
-    <html lang={lang === "SW" ? "sw" : "en"} suppressHydrationWarning>
+    <html
+      lang={lang === "SW" ? "sw" : "en"}
+      className={`${interFont.variable} ${outfitFont.variable}`}
+      suppressHydrationWarning
+    >
       <body className="bg-surface text-on-surface font-body-md antialiased selection:bg-primary/15 selection:text-primary">
         <Providers initialLang={lang}>
           {children}

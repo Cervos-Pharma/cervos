@@ -25,6 +25,7 @@ import {
 } from "@/lib/workspace/intelligence";
 import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
+import WebpPhotoInput from "@/components/WebpPhotoInput";
 
 export type PharmacyTab =
   | "overview"
@@ -1882,8 +1883,14 @@ export default function PharmacyDashboard({
                             <input type="date" value={editBatchExpiry} onChange={(e) => setEditBatchExpiry(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
                           </div>
                           <div className="sm:col-span-2">
-                            <label className={`block text-[10px] mb-1 ${mutedCls}`}>Picture URL (Optional)</label>
-                            <input type="text" value={editBatchImageUrl} onChange={(e) => setEditBatchImageUrl(e.target.value)} placeholder="https://... or /images/..." className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            <WebpPhotoInput
+                              value={editBatchImageUrl}
+                              onChange={setEditBatchImageUrl}
+                              label="Product Photo (480p WebP)"
+                              isDark={isDark}
+                              accent={accent}
+                              compact
+                            />
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
@@ -2070,12 +2077,13 @@ export default function PharmacyDashboard({
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
-                      Product Image URL (Optional)
-                    </label>
-                    <input type="text" value={newImageUrl} onChange={(e) => setNewImageUrl(e.target.value)} placeholder="https://... or /images/..." className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`} />
-                  </div>
+                  <WebpPhotoInput
+                    value={newImageUrl}
+                    onChange={setNewImageUrl}
+                    label="Product Photo (Camera / 480p WebP)"
+                    isDark={isDark}
+                    accent={accent}
+                  />
                   <label className="inline-flex items-center gap-2 text-xs cursor-pointer">
                     <input type="checkbox" checked={newRequiresRx} onChange={(e) => setNewRequiresRx(e.target.checked)} />
                     <span>Requires Prescription (Rx)</span>

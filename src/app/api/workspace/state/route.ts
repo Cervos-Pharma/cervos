@@ -35,6 +35,7 @@ import {
 } from "@/lib/workspace/request-auth";
 import {
   appendAuditLog,
+  checkPharmacyPlanQuota,
   clampProfileCapabilities,
   computePlanCheckoutQuote,
   ensureAccountDomainData,
@@ -842,7 +843,7 @@ export async function POST(request: NextRequest) {
       attachment,
       createdAt: new Date().toISOString(),
     };
-    db.branchMessages!.push(createdMsg);
+    (db.branchMessages ??= []).push(createdMsg);
 
     if (mentionMatches.size > 0) {
       db.notifications ??= [];
@@ -1288,6 +1289,22 @@ export async function POST(request: NextRequest) {
     if (!callerCaps.canManageTeam) {
       return noStoreJson({ error: "Team & organization management permission required." }, { status: 403 });
     }
+    if (account.roleType !== "supplier") {
+      const branchQuota = checkPharmacyPlanQuota(db, account, "branch");
+      if (!branchQuota.allowed) {
+        return noStoreJson(
+          {
+            error: branchQuota.reason,
+            code: "PLAN_LIMIT_REACHED",
+            quota: branchQuota,
+            upgradeUrl: branchQuota.suggestedUpgradePlan
+              ? `/app/billing?plan=${encodeURIComponent(branchQuota.suggestedUpgradePlan)}`
+              : "/app/billing",
+          },
+          { status: 402 }
+        );
+      }
+    }
     const name = sanitizeText(body.name, 120);
     const region = sanitizeText(body.region, 80) || account.region;
     const address = sanitizeText(body.address, 180);
@@ -1339,7 +1356,40 @@ export async function POST(request: NextRequest) {
     if (!callerCaps.canManageTeam) {
       return noStoreJson({ error: "Team management permission required." }, { status: 403 });
     }
+    if (account.roleType !== "supplier") {
+      const opQuota = checkPharmacyPlanQuota(db, account, "operator");
+      if (!opQuota.allowed) {
+        return noStoreJson(
+          {
+            error: opQuota.reason,
+            code: "PLAN_LIMIT_REACHED",
+            quota: opQuota,
+            upgradeUrl: opQuota.suggestedUpgradePlan
+              ? `/app/billing?plan=${encodeURIComponent(opQuota.suggestedUpgradePlan)}`
+              : "/app/billing",
+          },
+          { status: 402 }
+        );
+      }
+    }
     const displayName = sanitizeText(body.displayName, 100);
+    if (account.roleType !== "supplier") {
+      const opQuota = checkPharmacyPlanQuota(db, account, "operator");
+      if (!opQuota.allowed) {
+        return noStoreJson(
+          {
+            error: opQuota.reason,
+            code: "PLAN_LIMIT_REACHED",
+            quota: opQuota,
+            upgradeUrl: opQuota.suggestedUpgradePlan
+              ? `/app/billing?plan=${encodeURIComponent(opQuota.suggestedUpgradePlan)}`
+              : "/app/billing",
+          },
+          { status: 402 }
+        );
+      }
+    }
+
     const centreId = sanitizeText(body.centreId, 80);
     const roleRaw = sanitizeText(body.role, 40) as WorkspaceProfileRole;
     const pinCheck = validatePinPolicy(body.pin);
@@ -1996,6 +2046,23 @@ export async function POST(request: NextRequest) {
       saveWorkspaceDb(db);
     await flushWorkspaceDb();
       return noStoreJson({ ok: true, status: "declined" });
+    }
+
+    if (account.roleType !== "supplier") {
+      const opQuota = checkPharmacyPlanQuota(db, account, "operator");
+      if (!opQuota.allowed) {
+        return noStoreJson(
+          {
+            error: opQuota.reason,
+            code: "PLAN_LIMIT_REACHED",
+            quota: opQuota,
+            upgradeUrl: opQuota.suggestedUpgradePlan
+              ? `/app/billing?plan=${encodeURIComponent(opQuota.suggestedUpgradePlan)}`
+              : "/app/billing",
+          },
+          { status: 402 }
+        );
+      }
     }
 
     const centreId = sanitizeText(body.centreId, 80);

@@ -6,12 +6,14 @@ import {
   getWorkspaceDb,
   isAccountAccessLocked,
   MIN_BRANCH_PRICE_TZS,
+  upsertJournalArticle,
   type WorkspaceAccount,
 } from "@/lib/workspace/store";
 import { hashSecret, normalizeSecurityAnswer } from "@/lib/security/harness";
 import { createAccountCookieValue, createProfileCookieValue, WS_ACCOUNT_COOKIE, WS_PROFILE_COOKIE } from "@/lib/security/session";
 import { POST as statePost } from "@/app/api/workspace/state/route";
 import { GET as cronGet } from "@/app/api/cron/daily-summary/route";
+import { GET as dispatchGet } from "@/app/api/dispatch/route";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
 
 function makeAccount(id: string, overrides: Partial<WorkspaceAccount> = {}): WorkspaceAccount {
@@ -247,5 +249,103 @@ describe("Plan Upgrades, Expiry Cutoff & Personalized Daily Summary Cron", () =>
       matchesSearch("Eden Arusha", "Eden Care Branch", "Kinondoni St", "Dar es Salaam")
     ).toBe(false);
     expect(combineSearchQueries("  panadol ", " 500mg ")).toBe("panadol 500mg");
+  });
+
+  it("handles branch chat send, reply, @mention, and reaction even when branchMessages starts undefined, and enforces pharmacy branch quota", async () => {
+    const db = getWorkspaceDb();
+    db.branchMessages = undefined;
+    db.notifications = undefined;
+    const now = Date.now();
+    const acc = makeAccount(`acc_chat_${now}`, {
+      subscriptionActive: true,
+      subscriptionPlan: "Community Standard", // maxBranches: 1, maxOperators: 6
+    });
+    const ctrId = `ctr_chat_${now}`;
+    const profId = `prof_chat_${now}`;
+    db.accounts.push(acc);
+    db.centres.push({
+      id: ctrId,
+      accountId: acc.id,
+      name: "Eden Care",
+      region: "Dar es Salaam",
+      address: "Mikocheni",
+      phone: "+255712340099",
+      isPrimary: true,
+      createdAt: new Date().toISOString(),
+    });
+    db.profiles.push({
+      id: profId,
+      accountId: acc.id,
+      centreId: ctrId,
+      username: "nadia",
+      displayName: "Nadia Mwangi",
+      role: "pharmacy_owner",
+      pinHash: hashSecret("1947").hash,
+      isMasterAdmin: true,
+      createdAt: new Date().toISOString(),
+    });
+
+    const accCookie = createAccountCookieValue(acc.id, acc.email);
+    const profCookie = createProfileCookieValue(acc.id, ctrId, profId, "pharmacy_owner");
+    const cookieHeader = `${WS_ACCOUNT_COOKIE}=${accCookie}; ${WS_PROFILE_COOKIE}=${profCookie}`;
+
+    const chatRes = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+        body: JSON.stringify({ action: "send_branch_chat", body: "Hello @nadia stock checked" }),
+      })
+    );
+    expect(chatRes.status).toBe(200);
+    const chatJson = await chatRes.json();
+    expect(chatJson.ok).toBe(true);
+    expect(chatJson.message.mentions).toContain("Nadia Mwangi");
+
+    const reactRes = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+        body: JSON.stringify({
+          action: "react_branch_chat",
+          messageId: chatJson.message.id,
+          kind: "thumbs_up",
+        }),
+      })
+    );
+    expect(reactRes.status).toBe(200);
+
+    // Community Standard allows 1 branch — trying to add a 2nd returns 402 PLAN_LIMIT_REACHED
+    const branchQuotaRes = await statePost(
+      new NextRequest("http://localhost:3000/api/workspace/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+        body: JSON.stringify({
+          action: "add_centre",
+          name: "Second Branch",
+          address: "Msasani Road",
+        }),
+      })
+    );
+    expect(branchQuotaRes.status).toBe(402);
+    const quotaJson = await branchQuotaRes.json();
+    expect(quotaJson.code).toBe("PLAN_LIMIT_REACHED");
+    expect(quotaJson.upgradeUrl).toContain("/app/billing");
+  });
+
+  it("publishes HQ journal articles cleanly to /api/dispatch", async () => {
+    const db = getWorkspaceDb();
+    const article = upsertJournalArticle(db, {
+      titleEn: "How 480p WebP Product Photos Speed Counter Audits",
+      deckEn: "Field notes from Dar es Salaam dispensaries replacing manual URL links.",
+      paragraphsEn: ["First paragraph of editorial insight.", "Second paragraph of closing notes."],
+      status: "published",
+    });
+    const res = await dispatchGet(
+      new NextRequest(`http://localhost:3000/api/dispatch?slug=${encodeURIComponent(article.slug)}`)
+    );
+    expect(res.status).toBe(200);
+    const out = await res.json();
+    expect(out.article.slug).toBe(article.slug);
+    expect(out.article.titleEn).toContain("WebP");
   });
 });

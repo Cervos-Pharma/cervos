@@ -1,12 +1,12 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import PublicNav from "@/components/PublicNav";
 import DispatchInteractions from "@/components/DispatchInteractions";
-import { DISPATCH_ESSAYS, getDispatchEssayBySlug } from "@/lib/dispatch-catalog";
+import { DISPATCH_ESSAYS, getDispatchEssayBySlug, type DispatchEssay } from "@/lib/dispatch-catalog";
 import { useI18n } from "@/lib/i18n/context";
 import { useIsLowEndDevice } from "@/lib/useDeviceTier";
 
@@ -16,15 +16,47 @@ export default function DispatchArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = use(params);
-  const essay = getDispatchEssayBySlug(slug);
-  if (!essay) notFound();
+  const staticEssay = getDispatchEssayBySlug(slug);
+  const [essay, setEssay] = useState<DispatchEssay | null>(staticEssay ?? null);
+  const [allEssays, setAllEssays] = useState<DispatchEssay[]>(DISPATCH_ESSAYS);
+  const [loadingRemote, setLoadingRemote] = useState(!staticEssay);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/dispatch?slug=${encodeURIComponent(slug)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((out: { article?: DispatchEssay; all?: DispatchEssay[] } | null) => {
+        if (!active) return;
+        if (out?.article) setEssay(out.article);
+        if (out?.all && out.all.length > 0) setAllEssays(out.all);
+      })
+      .finally(() => {
+        if (active) setLoadingRemote(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [slug]);
 
   const { lang } = useI18n();
   const isSw = lang === "SW";
   const isLowEnd = useIsLowEndDevice();
 
-  const currentIdx = DISPATCH_ESSAYS.findIndex((e) => e.slug === essay.slug);
-  const nextEssay = DISPATCH_ESSAYS[(currentIdx + 1) % DISPATCH_ESSAYS.length];
+  if (loadingRemote && !essay) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
+        <div className="flex items-center gap-3 text-sm font-semibold text-[#0F172A]">
+          <span className="w-5 h-5 rounded-full border-2 border-[#1039B9] border-t-transparent animate-spin" />
+          <span>{isSw ? "Inapakia makala..." : "Loading article..."}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!essay) notFound();
+
+  const currentIdx = Math.max(0, allEssays.findIndex((e) => e.slug === essay.slug));
+  const nextEssay = allEssays[(currentIdx + 1) % allEssays.length] ?? DISPATCH_ESSAYS[0];
 
   const title = isSw ? essay.titleSw : essay.titleEn;
   const deck = isSw ? essay.deckSw : essay.deckEn;
@@ -88,13 +120,18 @@ export default function DispatchArticlePage({
           </header>
 
           <div className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-md">
-            <Image
-              src={essay.image}
-              alt={title}
-              fill
-              className="object-cover"
-              priority
-            />
+            {essay.image.startsWith("data:") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={essay.image} alt={title} className="w-full h-full object-cover" />
+            ) : (
+              <Image
+                src={essay.image}
+                alt={title}
+                fill
+                className="object-cover"
+                priority
+              />
+            )}
           </div>
 
           <blockquote

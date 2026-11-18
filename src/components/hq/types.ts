@@ -12,6 +12,7 @@ export type HqTab =
   | "packages"
   | "finance"
   | "onboarding"
+  | "journal"
   | "comms";
 
 export interface HqPackageRecord {
@@ -147,6 +148,11 @@ export interface HqFleetAccount {
   lastActivityAt: string;
   pendingJoinRequestsCount: number;
   unacknowledgedHqMessagesCount: number;
+  planMaxBranches?: number | null;
+  planMaxOperators?: number | null;
+  subscriptionDaysLeft?: number | null;
+  expiryExposureTzs?: number;
+  estimatedMonthlyFeeTzs?: number;
 }
 
 export interface HqAuditEvent {
@@ -229,6 +235,46 @@ export interface HqFleetSummary {
   unreadHqMessages: number;
 }
 
+export interface HqJournalArticleRecord {
+  id: string;
+  slug: string;
+  topic: "field" | "craft" | "supply";
+  titleEn: string;
+  titleSw: string;
+  deckEn: string;
+  deckSw: string;
+  quoteEn: string;
+  quoteSw: string;
+  paragraphsEn: string[];
+  paragraphsSw: string[];
+  author: string;
+  authorRoleEn: string;
+  authorRoleSw: string;
+  image: string;
+  status: "draft" | "published";
+  publishedAt: string;
+  updatedAt: string;
+}
+
+export interface HqPeakTelemetry {
+  monthlyRecurringRevenueTzs: number;
+  expiryExposureTzs: number;
+  regionDemand: Array<{
+    region: string;
+    orgsCount: number;
+    branchesCount: number;
+    revenue30dTzs: number;
+    lowStockCount: number;
+    expiryExposureTzs: number;
+  }>;
+  topDispensedProducts: Array<{
+    brandName: string;
+    genericName: string;
+    unitsSold: number;
+    revenueTzs: number;
+  }>;
+}
+
 export interface HqNotificationEnv {
   hqEndpointConfigured: boolean;
   exceptionWebhookConfigured: boolean;
@@ -243,6 +289,7 @@ export interface HqFleetPayload {
   operator: string;
   minBranchPriceTzs: number;
   fleetSummary: HqFleetSummary;
+  peakTelemetry?: HqPeakTelemetry;
   accounts: HqFleetAccount[];
   packages: HqPackageRecord[];
   wholesaleOrders: HqWholesaleOrderRecord[];
@@ -253,5 +300,6 @@ export interface HqFleetPayload {
   hqMessages: HqMessageRecord[];
   joinRequests: HqJoinRequestRecord[];
   hqUpdates: HqUpdateRecord[];
+  journalArticles?: HqJournalArticleRecord[];
   notificationEnv: HqNotificationEnv;
 }

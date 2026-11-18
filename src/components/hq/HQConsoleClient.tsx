@@ -11,6 +11,7 @@ import HQFinanceSection from "./HQFinanceSection";
 import HQEventExplorer from "./HQEventExplorer";
 import HQMessageComposer from "./HQMessageComposer";
 import HQLoungeAndUpdates from "./HQLoungeAndUpdates";
+import HQJournalSection from "./HQJournalSection";
 import type { HqFleetPayload, HqTab } from "./types";
 
 interface HQConsoleClientProps {
@@ -138,11 +139,12 @@ export default function HQConsoleClient({
     data?.wholesaleOrders.filter((o) => o.escrowStatus === "escrow_held").length ?? 0;
 
   const navItems: Array<{ key: HqTab; label: string; sub: string; badge?: number }> = [
-    { key: "overview", label: "Overview & Map", sub: "Alerts, CSV, geo fleet" },
-    { key: "fleet", label: "Orgs & Branches", sub: "Locks, commands, PINs", badge: summary?.totalOrgs },
+    { key: "overview", label: "Overview & Map", sub: "Peak telemetry, CSV, map" },
+    { key: "fleet", label: "Orgs & Branches", sub: "Quota, locks, PINs", badge: summary?.totalOrgs },
     { key: "packages", label: "Packages & Prices", sub: "Plans & 5,000 TZS floor", badge: data?.packages.length },
     { key: "finance", label: "Wholesale & Escrow", sub: "Kasri PO holds & settlement", badge: heldOrdersCount },
     { key: "onboarding", label: "Onboarding & Quotes", sub: "Joins, quotes, invites, news", badge: (summary?.pendingJoinRequests ?? 0) + (data?.quoteRequests.length ?? 0) },
+    { key: "journal", label: "Dispatch Journal", sub: "Write essays & WebP covers", badge: data?.journalArticles?.length },
     { key: "comms", label: "Comms & Audit", sub: "SMS, broadcasts, event log", badge: summary?.unreadHqMessages },
   ];
 
@@ -320,6 +322,7 @@ export default function HQConsoleClient({
           {data && summary && activeTab === "overview" && (
             <HQOverviewSection
               summary={summary}
+              peakTelemetry={data.peakTelemetry}
               accounts={data.accounts}
               wholesaleOrders={data.wholesaleOrders}
               auditLogs={data.auditLogs}
@@ -380,6 +383,16 @@ export default function HQConsoleClient({
               hqUpdates={data.hqUpdates}
               quoteRequests={data.quoteRequests}
               supplierInvites={data.supplierInvites}
+              onRunAction={runAction}
+              isDark={isDark}
+              busy={busy}
+            />
+          )}
+
+          {data && activeTab === "journal" && (
+            <HQJournalSection
+              articles={data.journalArticles ?? []}
+              operatorName={data.operator || initialOperator}
               onRunAction={runAction}
               isDark={isDark}
               busy={busy}

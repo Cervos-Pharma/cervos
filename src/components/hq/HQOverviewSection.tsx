@@ -7,12 +7,14 @@ import type {
   HqAuditEvent,
   HqFleetAccount,
   HqFleetSummary,
+  HqPeakTelemetry,
   HqTab,
   HqWholesaleOrderRecord,
 } from "./types";
 
 interface HQOverviewSectionProps {
   summary: HqFleetSummary;
+  peakTelemetry?: HqPeakTelemetry;
   accounts: HqFleetAccount[];
   wholesaleOrders: HqWholesaleOrderRecord[];
   auditLogs: HqAuditEvent[];
@@ -66,6 +68,7 @@ function resolveRegionCoords(region: string, seedIdx: number): { lat: number; ln
 
 export default function HQOverviewSection({
   summary,
+  peakTelemetry,
   accounts,
   wholesaleOrders,
   auditLogs,
@@ -299,6 +302,92 @@ export default function HQOverviewSection({
           </section>
         </div>
       </div>
+
+      {/* Peak HQ Data Intelligence: MRR, Regional Velocity & Top Dispensed Medicines */}
+      {peakTelemetry && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          <section className={`lg:col-span-7 rounded-xl border overflow-hidden ${cardCls}`}>
+            <div className="px-5 py-3.5 border-b border-slate-500/15 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">Regional Demand &amp; Expiry Recovery</h3>
+                <p className={`text-[11px] ${mutedCls}`}>
+                  Live sales velocity, stockout exposure, and capital near expiry across regions.
+                </p>
+              </div>
+              <div className="flex items-center gap-4 text-xs tabular-nums">
+                <div>
+                  <span className={mutedCls}>Est. MRR: </span>
+                  <strong className="text-emerald-500">{formatTzs(peakTelemetry.monthlyRecurringRevenueTzs)}</strong>
+                </div>
+                <div>
+                  <span className={mutedCls}>At Expiry Risk: </span>
+                  <strong className="text-amber-500">{formatTzs(peakTelemetry.expiryExposureTzs)}</strong>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className={`border-b border-slate-500/15 text-[10px] uppercase tracking-wider ${mutedCls}`}>
+                    <th className="py-2.5 px-4 font-semibold">Region</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Orgs / Branches</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">30d Sales</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Low Stock</th>
+                    <th className="py-2.5 px-4 font-semibold text-right">Expiry Exposure</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-500/10 tabular-nums">
+                  {peakTelemetry.regionDemand.map((row) => (
+                    <tr key={row.region}>
+                      <td className="py-2.5 px-4 font-semibold">{row.region}</td>
+                      <td className="py-2.5 px-3 text-right">{row.orgsCount} / {row.branchesCount}</td>
+                      <td className="py-2.5 px-3 text-right font-semibold">{formatTzs(row.revenue30dTzs)}</td>
+                      <td className="py-2.5 px-3 text-right">{row.lowStockCount}</td>
+                      <td className="py-2.5 px-4 text-right text-amber-600 dark:text-amber-300">
+                        {formatTzs(row.expiryExposureTzs)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className={`lg:col-span-5 rounded-xl border overflow-hidden ${cardCls}`}>
+            <div className="px-5 py-3.5 border-b border-slate-500/15">
+              <h3 className="text-sm font-semibold">Top Dispensed Products (Fleet)</h3>
+              <p className={`text-[11px] ${mutedCls}`}>Aggregated unit demand across active dispensaries.</p>
+            </div>
+            {peakTelemetry.topDispensedProducts.length === 0 ? (
+              <div className={`p-5 text-xs ${mutedCls}`}>No sales lines recorded yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className={`border-b border-slate-500/15 text-[10px] uppercase tracking-wider ${mutedCls}`}>
+                      <th className="py-2.5 px-4 font-semibold">Medicine</th>
+                      <th className="py-2.5 px-3 font-semibold text-right">Units</th>
+                      <th className="py-2.5 px-4 font-semibold text-right">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-500/10 tabular-nums">
+                    {peakTelemetry.topDispensedProducts.map((p) => (
+                      <tr key={p.brandName}>
+                        <td className="py-2.5 px-4">
+                          <div className="font-semibold">{p.brandName}</div>
+                          <div className={`text-[10px] ${mutedCls}`}>{p.genericName}</div>
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-mono">{p.unitsSold}</td>
+                        <td className="py-2.5 px-4 text-right font-semibold">{formatTzs(p.revenueTzs)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

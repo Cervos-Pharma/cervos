@@ -389,6 +389,27 @@ export interface PendingSubscriptionPayment {
   completedAt?: string;
 }
 
+export interface JournalArticleRecord {
+  id: string;
+  slug: string;
+  topic: "field" | "craft" | "supply";
+  titleEn: string;
+  titleSw: string;
+  deckEn: string;
+  deckSw: string;
+  quoteEn: string;
+  quoteSw: string;
+  paragraphsEn: string[];
+  paragraphsSw: string[];
+  author: string;
+  authorRoleEn: string;
+  authorRoleSw: string;
+  image: string;
+  status: "draft" | "published";
+  publishedAt: string;
+  updatedAt: string;
+}
+
 export interface WorkspaceDbSnapshot {
   accounts: WorkspaceAccount[];
   centres: WorkspaceCentre[];
@@ -407,6 +428,7 @@ export interface WorkspaceDbSnapshot {
   joinRequests?: WorkspaceJoinRequest[];
   hqUpdates?: HqUpdateItem[];
   hqMessages?: HqCustomMessage[];
+  journalArticles?: JournalArticleRecord[];
   savedCustomers?: SavedCustomerPreset[];
   shiftLogs?: WorkspaceShiftLog[];
 }
@@ -1120,6 +1142,15 @@ export function ensureAccountDomainData(
   const batches = (db.batches ??= []);
   const sales = (db.sales ??= []);
   const wholesaleOrders = (db.wholesaleOrders ??= []);
+  db.branchMessages ??= [];
+  db.notifications ??= [];
+  db.expenses ??= [];
+  db.shiftLogs ??= [];
+  db.savedCustomers ??= [];
+  db.auditLogs ??= [];
+  db.joinRequests ??= [];
+  db.hqMessages ??= [];
+  db.pendingSubscriptions ??= [];
   const isCleanStart = process.env.CERVOS_CLEAN_START === "true";
   const isDemoSeedAccount =
     !isCleanStart &&
@@ -2213,4 +2244,131 @@ export function upsertWorkspacePackage(
   }
   db.packages = list;
   return next;
+}
+
+export function getJournalArticles(db: WorkspaceDbSnapshot): JournalArticleRecord[] {
+  return Array.isArray(db.journalArticles) ? [...db.journalArticles] : [];
+}
+
+export function upsertJournalArticle(
+  db: WorkspaceDbSnapshot,
+  input: Partial<JournalArticleRecord> & { titleEn: string; deckEn: string }
+): JournalArticleRecord {
+  const list = (db.journalArticles ??= []);
+  const nowIso = new Date().toISOString();
+  const baseSlug = (input.slug || input.titleEn)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64) || `dispatch-${Date.now().toString(36)}`;
+
+  const existingIdx = input.id
+    ? list.findIndex((a) => a.id === input.id)
+    : list.findIndex((a) => a.slug === baseSlug);
+  const existing = existingIdx >= 0 ? list[existingIdx] : null;
+
+  const entry: JournalArticleRecord = {
+    id: existing?.id || input.id || newId("jrn"),
+    slug: existing?.slug || baseSlug,
+    topic: input.topic === "craft" || input.topic === "supply" ? input.topic : "field",
+    titleEn: input.titleEn.trim().slice(0, 180),
+    titleSw: (input.titleSw || input.titleEn).trim().slice(0, 180),
+    deckEn: input.deckEn.trim().slice(0, 320),
+    deckSw: (input.deckSw || input.deckEn).trim().slice(0, 320),
+    quoteEn: (input.quoteEn || input.deckEn).trim().slice(0, 260),
+    quoteSw: (input.quoteSw || input.quoteEn || input.deckEn).trim().slice(0, 260),
+    paragraphsEn: Array.isArray(input.paragraphsEn)
+      ? input.paragraphsEn.map((p) => String(p).trim()).filter(Boolean).slice(0, 20)
+      : [input.deckEn.trim()],
+    paragraphsSw: Array.isArray(input.paragraphsSw) && input.paragraphsSw.length > 0
+      ? input.paragraphsSw.map((p) => String(p).trim()).filter(Boolean).slice(0, 20)
+      : Array.isArray(input.paragraphsEn)
+        ? input.paragraphsEn.map((p) => String(p).trim()).filter(Boolean).slice(0, 20)
+        : [input.deckEn.trim()],
+    author: (input.author || "Cervos Field Desk").trim().slice(0, 80),
+    authorRoleEn: (input.authorRoleEn || "Cervos Editorial Desk").trim().slice(0, 80),
+    authorRoleSw: (input.authorRoleSw || "Dawati la Uhariri Cervos").trim().slice(0, 80),
+    image: input.image || "/cervos-people-counter.jpg",
+    status: input.status === "draft" ? "draft" : "published",
+    publishedAt: existing?.publishedAt || input.publishedAt || nowIso,
+    updatedAt: nowIso,
+  };
+
+  if (existingIdx >= 0) {
+    list[existingIdx] = entry;
+  } else {
+    list.unshift(entry);
+  }
+  return entry;
+}
+
+export interface PharmacyPlanQuotaResult {
+  allowed: boolean;
+  resource: "branch" | "operator";
+  used: number;
+  limit: number | null;
+  planName: string;
+  suggestedUpgradePlan: string | null;
+  reason: string;
+}
+
+/**
+ * Enforces HQ-configured plan ceilings (`maxBranches`, `maxOperators`) on pharmacy workspaces.
+ * Supplier-side quota enforcement is intentionally excluded (planned separately).
+ */
+export function checkPharmacyPlanQuota(
+  db: WorkspaceDbSnapshot,
+  account: WorkspaceAccount,
+  resource: "branch" | "operator"
+): PharmacyPlanQuotaResult {
+  const packages = getWorkspacePackages(db);
+  const pharmacyPkgs = packages
+    .filter((p) => p.audience === "pharmacy" || p.audience === "hospital")
+    .sort((a, b) => a.priceMonthlyTzs - b.priceMonthlyTzs);
+
+  const matchedPkg =
+    findWorkspacePackageMatch(packages, account.subscriptionPlan) ??
+    pharmacyPkgs.find((p) => p.id === "community_standard") ??
+    pharmacyPkgs[0];
+
+  const planName = matchedPkg?.name || account.subscriptionPlan || "Community Standard";
+  const used =
+    resource === "branch"
+      ? db.centres.filter((c) => c.accountId === account.id).length
+      : db.profiles.filter((p) => p.accountId === account.id).length;
+  const limit = resource === "branch" ? (matchedPkg?.maxBranches ?? null) : (matchedPkg?.maxOperators ?? null);
+
+  if (limit === null || used < limit) {
+    return {
+      allowed: true,
+      resource,
+      used,
+      limit,
+      planName,
+      suggestedUpgradePlan: null,
+      reason: "",
+    };
+  }
+
+  const nextTier =
+    pharmacyPkgs.find((p) => {
+      if (!matchedPkg || p.priceMonthlyTzs <= matchedPkg.priceMonthlyTzs) return false;
+      const cap = resource === "branch" ? p.maxBranches : p.maxOperators;
+      return cap === null || cap > used;
+    }) ?? null;
+
+  const label = resource === "branch" ? "branches" : "staff operators";
+  const upgradeHint = nextTier
+    ? ` Upgrade to ${nextTier.name} in Billing & Plans to unlock more.`
+    : " Upgrade your plan in Billing & Plans to unlock more capacity.";
+
+  return {
+    allowed: false,
+    resource,
+    used,
+    limit,
+    planName,
+    suggestedUpgradePlan: nextTier?.name ?? null,
+    reason: `${planName} allows up to ${limit} ${label} (${used}/${limit} in use).${upgradeHint}`,
+  };
 }

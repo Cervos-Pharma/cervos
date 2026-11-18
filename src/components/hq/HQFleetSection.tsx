@@ -262,8 +262,14 @@ export default function HQFleetSection({
                   </div>
 
                   <div className={`grid grid-cols-3 gap-2 mt-2.5 pt-2 border-t border-slate-500/10 text-[11px] ${mutedCls}`}>
-                    <span>{org.centresCount} br / {org.profilesCount} staff</span>
-                    <span className="font-mono tabular-nums text-current">{formatTzs(org.salesRevenueTzs)}</span>
+                    <span>
+                      {org.centresCount}/{org.planMaxBranches ?? "unlim"} br &middot;{" "}
+                      {org.profilesCount}/{org.planMaxOperators ?? "unlim"} st
+                    </span>
+                    <span className="font-mono tabular-nums text-current">
+                      {formatTzs(org.salesRevenueTzs)}
+                      {typeof org.subscriptionDaysLeft === "number" ? ` · ${org.subscriptionDaysLeft}d` : ""}
+                    </span>
                     <span className={org.expiredCount > 0 ? "text-red-500 font-semibold" : ""}>
                       {org.expiredCount} exp / {org.nearExpiryCount} near
                     </span>
