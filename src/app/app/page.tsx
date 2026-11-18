@@ -37,6 +37,7 @@ import { IconCheck, IconDownload, IconLock, IconShield } from "@/components/Land
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { usePwaInstall } from "@/lib/workspace/usePwaInstall";
 import { triggerBackgroundDownload } from "@/lib/workspace/download";
+import { matchesSearch } from "@/lib/search";
 import { useI18n } from "@/lib/i18n/context";
 
 interface AuditLogEntry {
@@ -499,14 +500,10 @@ export default function WorkspaceHomePage() {
   };
 
   const filteredLogs = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
     const list = data?.auditLogs ?? [];
-    if (!q) return list;
-    return list.filter(
-      (log) =>
-        log.action.toLowerCase().includes(q) ||
-        log.actor.toLowerCase().includes(q) ||
-        log.category.toLowerCase().includes(q)
+    if (!searchQuery.trim()) return list;
+    return list.filter((log) =>
+      matchesSearch(searchQuery, log.action, log.actor, log.category, log.createdAt)
     );
   }, [data?.auditLogs, searchQuery]);
 
@@ -1156,6 +1153,116 @@ export default function WorkspaceHomePage() {
             </div>
           </div>
         )}
+
+        {/* Global Quick-Jump Search Bar Panel (active whenever user searches in header) */}
+        {searchQuery.trim().length > 0 && (() => {
+          const matchedCentres = centres.filter((c) =>
+            matchesSearch(searchQuery, c.name, c.region, c.address)
+          );
+          const matchedBatches = (data.batches ?? [])
+            .filter((b) =>
+              matchesSearch(searchQuery, b.brandName, b.genericName, b.batchNumber, b.category)
+            )
+            .slice(0, 5);
+          const matchedSales = (data.sales ?? [])
+            .filter((s) =>
+              matchesSearch(
+                searchQuery,
+                s.receiptNumber,
+                s.id,
+                s.customerName,
+                s.actorName,
+                s.paymentMethod,
+                ...(s.lines ?? []).map((ln) => ln.brandName)
+              )
+            )
+            .slice(0, 4);
+          const matchedStaff = profiles
+            .filter((p) => matchesSearch(searchQuery, p.displayName, p.username, p.role))
+            .slice(0, 4);
+          const totalHits =
+            matchedCentres.length + matchedBatches.length + matchedSales.length + matchedStaff.length;
+          return (
+            <div className={`rounded-[22px] border p-4 space-y-3 animate-stage-pop ${cardSurface}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-semibold">
+                  {isSw
+                    ? `Matokeo ya utafutaji "${searchQuery}" (${totalHits})`
+                    : `Quick Search Results for "${searchQuery}" (${totalHits})`}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className={`text-[11px] font-semibold hover:underline cursor-pointer ${mutedText}`}
+                >
+                  {isSw ? "Futa utafutaji" : "Clear Search"} &times;
+                </button>
+              </div>
+              {totalHits === 0 ? (
+                <div className={`text-xs ${mutedText}`}>
+                  {isSw
+                    ? "Hakuna tawi, dawa, risiti au mfanyakazi anayelingana."
+                    : "No matching branches, batches, receipts, or staff found."}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {matchedCentres.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        void switchCentre(c.id);
+                      }}
+                      className="px-3 py-1.5 rounded-full border border-[#1039B9]/35 bg-blue-500/10 text-[#1039B9] dark:text-[#38BDF8] text-[11px] font-semibold cursor-pointer"
+                    >
+                      Branch: {c.name} ({c.region})
+                    </button>
+                  ))}
+                  {matchedBatches.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => {
+                        userChoseScopeRef.current = true;
+                        setOrgScope("branch");
+                        setTab("inventory");
+                      }}
+                      className="px-3 py-1.5 rounded-full border border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 text-[11px] font-semibold cursor-pointer"
+                    >
+                      Stock: {b.brandName} ({b.batchNumber}) &middot; {b.quantity} left
+                    </button>
+                  ))}
+                  {matchedSales.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        userChoseScopeRef.current = true;
+                        setOrgScope("branch");
+                        setTab("receipts");
+                      }}
+                      className="px-3 py-1.5 rounded-full border border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-300 text-[11px] font-semibold cursor-pointer"
+                    >
+                      Receipt: {s.receiptNumber || s.id} &middot; {s.customerName || "Walk-in"}
+                    </button>
+                  ))}
+                  {matchedStaff.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setTab("team")}
+                      className={`px-3 py-1.5 rounded-full border text-[11px] font-semibold cursor-pointer ${
+                        isDark ? "border-slate-700 bg-slate-800/70 text-slate-200" : "border-slate-200 bg-slate-100 text-slate-700"
+                      }`}
+                    >
+                      Staff: {p.displayName} ({p.role.replace(/_/g, " ")})
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Role-Tailored Workspace Sweep #1: Pharmacy & Standard Dashboard (std.jpg + @cervos/core Schema) */}
         {isPharmacyWorkspace ? (

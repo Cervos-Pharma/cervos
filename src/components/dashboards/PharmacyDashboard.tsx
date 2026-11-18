@@ -24,6 +24,7 @@ import {
   type ReportView,
 } from "@/lib/workspace/intelligence";
 import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
+import { combineSearchQueries, matchesSearch } from "@/lib/search";
 
 export type PharmacyTab =
   | "overview"
@@ -1133,56 +1134,92 @@ export default function PharmacyDashboard({
     }
   };
 
-  const q = searchQuery.trim().toLowerCase();
-  const posQ = (posSearch || searchQuery).trim().toLowerCase();
+  const q = searchQuery.trim();
+  const posQ = combineSearchQueries(posSearch, q);
   const visiblePosProducts = useMemo(() => {
     if (!posQ) return productsSummary;
-    return productsSummary.filter(
-      (p) =>
-        p.brandName.toLowerCase().includes(posQ) ||
-        p.genericName.toLowerCase().includes(posQ) ||
-        p.category.toLowerCase().includes(posQ) ||
-        (p.earliestBatch || "").toLowerCase().includes(posQ)
-    );
-  }, [productsSummary, posQ]);
+    return productsSummary.filter((p) => {
+      const matchingBatch = batches.some(
+        (b) =>
+          b.productId === p.productId &&
+          matchesSearch(posQ, b.batchNumber, b.brandName, b.genericName, b.category)
+      );
+      return (
+        matchingBatch ||
+        matchesSearch(posQ, p.brandName, p.genericName, p.category, p.earliestBatch)
+      );
+    });
+  }, [productsSummary, batches, posQ]);
 
+  const invCombinedQ = combineSearchQueries(invSearch, q);
   const visibleBatches = useMemo(() => {
     const cutoff30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
-    const localQ = (invSearch || q).trim().toLowerCase();
     const sorted = [...batches].sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
     return sorted.filter((b) => {
       if (invFilter === "expired" && b.expiryDate >= todayIso) return false;
       if (invFilter === "quarantined" && !b.quarantined) return false;
       if (invFilter === "low" && (b.quarantined || b.quantity > (b.lowStockThreshold ?? 25))) return false;
       if (invFilter === "expiring" && (b.quarantined || b.expiryDate < todayIso || b.expiryDate > cutoff30)) return false;
-      if (!localQ) return true;
-      return (
-        b.brandName.toLowerCase().includes(localQ) ||
-        b.genericName.toLowerCase().includes(localQ) ||
-        b.batchNumber.toLowerCase().includes(localQ) ||
-        b.category.toLowerCase().includes(localQ)
+      return matchesSearch(
+        invCombinedQ,
+        b.brandName,
+        b.genericName,
+        b.batchNumber,
+        b.category
       );
     });
-  }, [batches, q, invSearch, invFilter, todayIso]);
+  }, [batches, invCombinedQ, invFilter, todayIso]);
 
   const activeShift = useMemo(
     () => shiftLogs.find((s) => s.profileId === activeProfileId && !s.clockOutAt) ?? null,
     [shiftLogs, activeProfileId]
   );
 
+  const recCombinedQ = combineSearchQueries(receiptSearch, q);
   const visibleReceipts = useMemo(() => {
-    const rq = receiptSearch.trim().toLowerCase();
     const sorted = [...sales].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (!rq) return sorted;
-    return sorted.filter(
-      (s) =>
-        (s.receiptNumber || s.id).toLowerCase().includes(rq) ||
-        (s.customerName || "").toLowerCase().includes(rq) ||
-        (s.customerPhone || "").toLowerCase().includes(rq) ||
-        s.actorName.toLowerCase().includes(rq) ||
-        (s.lines ?? []).some((ln) => ln.brandName.toLowerCase().includes(rq))
+    if (!recCombinedQ) return sorted;
+    return sorted.filter((s) =>
+      matchesSearch(
+        recCombinedQ,
+        s.receiptNumber,
+        s.id,
+        s.customerName,
+        s.customerPhone,
+        s.actorName,
+        s.paymentMethod,
+        s.prescriptionRef,
+        ...(s.lines ?? []).flatMap((ln) => [ln.brandName, ln.category, ln.batchNumber])
+      )
     );
-  }, [sales, receiptSearch]);
+  }, [sales, recCombinedQ]);
+
+  const visibleProfiles = useMemo(
+    () =>
+      !q
+        ? profiles
+        : profiles.filter((p) => {
+            const br = centres.find((c) => c.id === p.centreId);
+            return matchesSearch(q, p.displayName, p.username, p.role, br?.name, br?.region);
+          }),
+    [profiles, centres, q]
+  );
+
+  const visibleCentres = useMemo(
+    () =>
+      !q
+        ? centres
+        : centres.filter((c) => matchesSearch(q, c.name, c.region, c.address)),
+    [centres, q]
+  );
+
+  const visibleExpenses = useMemo(
+    () =>
+      !q
+        ? expenses
+        : expenses.filter((ex) => matchesSearch(q, ex.category, ex.description, ex.amountTzs, ex.createdAt)),
+    [expenses, q]
+  );
 
   const validLotsCount = useMemo(
     () => batches.filter((b) => !b.quarantined && b.quantity > 0 && b.expiryDate >= todayIso).length,
@@ -2126,7 +2163,11 @@ export default function PharmacyDashboard({
               </div>
 
               <div className="space-y-2.5">
-                {profiles.map((p) => {
+                {visibleProfiles.length === 0 ? (
+                  <div className={`p-4 rounded-2xl border text-xs text-center ${chipCls} ${mutedCls}`}>
+                    {isSw ? "Hakuna mfanyakazi anayelingana na utafutaji." : `No staff profile matches "${q}".`}
+                  </div>
+                ) : visibleProfiles.map((p) => {
                   const br = centres.find((c) => c.id === p.centreId);
                   return (
                     <div
@@ -3450,7 +3491,7 @@ export default function PharmacyDashboard({
               </form>
 
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {expenses.map((ex) => (
+                {visibleExpenses.map((ex) => (
                   <button
                     key={ex.id}
                     type="button"

@@ -10,6 +10,7 @@ import { enrollPasskeyForAccount, isPasskeySupported } from "@/lib/security/clie
 import { IconCheck, IconLock } from "@/components/LandingIcons";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { useI18n } from "@/lib/i18n/context";
+import { matchesSearch } from "@/lib/search";
 
 interface SettingsState {
   authenticated: boolean;
@@ -910,9 +911,11 @@ function WorkspaceSettingsInner() {
 
             {/* Centres & Office Locations */}
             <section id="centres" className={`scroll-mt-8 rounded-[24px] border p-6 space-y-5 ${cardSurface}`}>
-              <h2 className="text-base font-semibold">Centres &amp; Office Locations ({state.centres.length})</h2>
+              <h2 className="text-base font-semibold">Centres &amp; Office Locations ({state.centres.filter((c) => matchesSearch(searchQuery, c.name, c.region, c.address, c.phone)).length})</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {state.centres.map((c) => (
+                {state.centres
+                  .filter((c) => matchesSearch(searchQuery, c.name, c.region, c.address, c.phone))
+                  .map((c) => (
                   <div
                     key={c.id}
                     className={`p-3.5 rounded-2xl border text-xs ${
@@ -966,9 +969,18 @@ function WorkspaceSettingsInner() {
 
             {/* Staff Profiles & Role PIN Provisioning */}
             <section id="staff" className={`scroll-mt-8 rounded-[24px] border p-6 space-y-5 ${cardSurface}`}>
-              <h2 className="text-base font-semibold">Staff Profiles &amp; Role PINs ({state.profiles.length})</h2>
+              <h2 className="text-base font-semibold">Staff Profiles &amp; Role PINs ({state.profiles.filter((p) => matchesSearch(searchQuery, p.displayName, p.role, state.centres.find((c) => c.id === p.centreId)?.name)).length})</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {state.profiles.map((p) => (
+                {state.profiles
+                  .filter((p) =>
+                    matchesSearch(
+                      searchQuery,
+                      p.displayName,
+                      p.role,
+                      state.centres.find((c) => c.id === p.centreId)?.name
+                    )
+                  )
+                  .map((p) => (
                   <div
                     key={p.id}
                     className={`p-3.5 rounded-2xl border text-xs flex justify-between items-center ${

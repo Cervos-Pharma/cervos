@@ -12,6 +12,7 @@ import { hashSecret, normalizeSecurityAnswer } from "@/lib/security/harness";
 import { createAccountCookieValue, createProfileCookieValue, WS_ACCOUNT_COOKIE, WS_PROFILE_COOKIE } from "@/lib/security/session";
 import { POST as statePost } from "@/app/api/workspace/state/route";
 import { GET as cronGet } from "@/app/api/cron/daily-summary/route";
+import { combineSearchQueries, matchesSearch } from "@/lib/search";
 
 function makeAccount(id: string, overrides: Partial<WorkspaceAccount> = {}): WorkspaceAccount {
   return {
@@ -233,5 +234,18 @@ describe("Plan Upgrades, Expiry Cutoff & Personalized Daily Summary Cron", () =>
       (n) => n.accountId === expiringSoonAcc.id && n.body.includes("Nadia")
     );
     expect(inAppDigest).toBeDefined();
+  });
+
+  it("matches case-insensitive, multi-word, and punctuation-tolerant search queries", () => {
+    expect(
+      matchesSearch("AMOX 500", "Amoxicillin Capsules", "amox-500-mg", "LOT-2026-A")
+    ).toBe(true);
+    expect(
+      matchesSearch("Eden Kinondoni", "Eden Care Branch", "Kinondoni St", "Dar es Salaam")
+    ).toBe(true);
+    expect(
+      matchesSearch("Eden Arusha", "Eden Care Branch", "Kinondoni St", "Dar es Salaam")
+    ).toBe(false);
+    expect(combineSearchQueries("  panadol ", " 500mg ")).toBe("panadol 500mg");
   });
 });

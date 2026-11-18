@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import { matchesSearch } from "@/lib/search";
 import type { AuditCategory, HqAuditEvent, HqFleetAccount } from "./types";
 
 interface HQEventExplorerProps {
@@ -68,17 +69,16 @@ export default function HQEventExplorer({
   const mutedCls = isDark ? "text-slate-400" : "text-[#64748B]";
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
     return auditLogs.filter((entry) => {
       if (catFilter !== "ALL" && entry.category !== catFilter) return false;
       if (orgFilter !== "ALL" && entry.accountId !== orgFilter) return false;
-      if (!q) return true;
-      return (
-        entry.action.toLowerCase().includes(q) ||
-        entry.actor.toLowerCase().includes(q) ||
-        entry.orgName.toLowerCase().includes(q) ||
-        entry.category.toLowerCase().includes(q) ||
-        entry.region.toLowerCase().includes(q)
+      return matchesSearch(
+        search,
+        entry.action,
+        entry.actor,
+        entry.orgName,
+        entry.category,
+        entry.region
       );
     });
   }, [auditLogs, catFilter, orgFilter, search]);

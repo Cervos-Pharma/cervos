@@ -14,6 +14,7 @@ import {
 } from "@/components/LandingIcons";
 import { detectClientPlatform, getDownloadBuilds, type PlatformBuildId } from "@/lib/landing-data";
 import { triggerBackgroundDownload } from "@/lib/workspace/download";
+import { matchesSearch } from "@/lib/search";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { usePwaInstall } from "@/lib/workspace/usePwaInstall";
 
@@ -256,7 +257,7 @@ export default function InAppDownloadPage() {
         {/* Device-Specific Native Downloads Inside Workspace */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {builds
-            .filter((b) => !searchQuery.trim() || b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+            .filter((b) => matchesSearch(searchQuery, b.title, b.eyebrow, b.desc, b.cta, b.id))
             .map((b) => {
               const isDetected = b.id === detected;
               const isApplePwa = b.id === "mac";

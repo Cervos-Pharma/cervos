@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { COMMERCIAL_PLAN_CATALOG, formatTzs } from "@cervos/core";
+import { matchesSearch } from "@/lib/search";
 import type { HqAuditEvent, HqFleetAccount, HqPackageRecord } from "./types";
 
 interface HQFleetSectionProps {
@@ -77,21 +78,23 @@ export default function HQFleetSection({
   const mutedCls = isDark ? "text-slate-400" : "text-slate-500";
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return accounts.filter((a) => {
       if (filter === "active" && (a.accessLock.locked || !a.subscriptionActive)) return false;
       if (filter === "trial" && (a.accessLock.locked || a.subscriptionActive)) return false;
       if (filter === "locked" && !a.accessLock.locked) return false;
       if (filter === "overdue" && !a.billingOverdue) return false;
       if (filter === "verified" && a.verificationStatus !== "verified") return false;
-      if (!q) return true;
-      return (
-        a.orgName.toLowerCase().includes(q) ||
-        a.fullName.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        (a.username ?? "").toLowerCase().includes(q) ||
-        a.region.toLowerCase().includes(q) ||
-        a.id.toLowerCase().includes(q)
+      return matchesSearch(
+        query,
+        a.orgName,
+        a.fullName,
+        a.email,
+        a.username,
+        a.region,
+        a.subscriptionPlan,
+        a.roleType,
+        a.id,
+        ...a.centres.map((c) => `${c.name} ${c.region}`)
       );
     });
   }, [accounts, filter, query]);
