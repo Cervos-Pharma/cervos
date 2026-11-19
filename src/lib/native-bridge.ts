@@ -30,6 +30,7 @@ export interface NativeToPwaEvent {
     | "native:open_menu"
     | "native:back_pressed"
     | "native:sync_requested";
+  eventId?: string;
   payload?: Record<string, unknown>;
 }
 
@@ -121,11 +122,25 @@ export function subscribeNativeBridgeEvents(
 ): () => void {
   if (typeof window === "undefined") return () => undefined;
 
+  const seenEventIds = new Set<string>();
+  const deliver = (ev: NativeToPwaEvent, eventId?: string) => {
+    if (eventId) {
+      if (seenEventIds.has(eventId)) return;
+      seenEventIds.add(eventId);
+      if (seenEventIds.size > 200) {
+        const oldest = seenEventIds.values().next().value;
+        if (oldest) seenEventIds.delete(oldest);
+      }
+    }
+    handler({ ...ev, eventId });
+  };
+
   const onMessage = (ev: MessageEvent) => {
     try {
       const data = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data;
       if (data && data.channel === "cervos-native-bridge" && typeof data.type === "string") {
-        handler({ type: data.type, payload: data.payload });
+        const eventId = typeof data.eventId === "string" ? data.eventId : undefined;
+        deliver({ type: data.type, payload: data.payload }, eventId);
       }
     } catch {
       // Ignore unrelated window messages
@@ -133,9 +148,10 @@ export function subscribeNativeBridgeEvents(
   };
 
   const onCustom = (ev: Event) => {
-    const detail = (ev as CustomEvent<NativeToPwaEvent>).detail;
+    const detail = (ev as CustomEvent<NativeToPwaEvent & { eventId?: string }>).detail;
     if (detail && typeof detail.type === "string") {
-      handler(detail);
+      const eventId = typeof detail.eventId === "string" ? detail.eventId : undefined;
+      deliver({ type: detail.type, payload: detail.payload }, eventId);
     }
   };
 

@@ -82,13 +82,13 @@ export function PwaShellHost() {
   const dispatchToPwa = useCallback((type: string, payload?: Record<string, unknown>) => {
     const serialized = JSON.stringify({
       channel: "cervos-native-bridge",
+      eventId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type,
       payload: payload ?? {},
     });
     const script = `
       (function() {
         try {
-          window.postMessage(${JSON.stringify(serialized)}, '*');
           window.dispatchEvent(new CustomEvent('cervos:native-bridge-event', { detail: ${serialized} }));
         } catch (e) {}
       })();

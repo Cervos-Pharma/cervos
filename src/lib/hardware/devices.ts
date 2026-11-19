@@ -5,6 +5,8 @@
  * user-facing troubleshooting helpers. Never reports hardware "Ready" unless verified.
  */
 
+import { isNativeShellContainer, requestNativePrint } from "@/lib/native-bridge";
+
 export type PrinterTransport = "none" | "web_serial" | "web_usb" | "bluetooth" | "system_print";
 export type ScannerTransport = "unverified" | "keyboard_wedge" | "camera";
 
@@ -106,10 +108,13 @@ export async function probeBrowserHardwareCapabilities(): Promise<BrowserHardwar
     bluetooth?: unknown;
   };
 
+  const inNativeShell = isNativeShellContainer();
   const supportsSerial = Boolean(nav.serial);
   const supportsUsb = Boolean(nav.usb);
   const supportsBluetooth = Boolean(nav.bluetooth);
-  const supportsCamera = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const supportsCamera = Boolean(
+    (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) || inNativeShell
+  );
 
   let authorizedSerialPorts = 0;
   let authorizedUsbDevices = 0;
@@ -140,6 +145,9 @@ export async function probeBrowserHardwareCapabilities(): Promise<BrowserHardwar
     } catch {
       cameraPermission = "unknown";
     }
+  }
+  if (cameraPermission === "unknown" && inNativeShell) {
+    cameraPermission = "granted";
   }
 
   return {
@@ -301,17 +309,8 @@ export async function printThermalTestSlip(opts: {
     }
   }
 
-  // Fallback to formatted thermal print window
-  const w = window.open("", "_blank", "width=420,height=640");
-  if (!w) {
-    return {
-      ok: false,
-      mode: "OS Print",
-      error: "Pop-up blocked. Allow pop-ups for cervos.online to print counter receipts.",
-    };
-  }
   const widthCss = opts.paperWidthMm === 58 ? "58mm" : "80mm";
-  w.document.write(`<!doctype html><html><head><title>Cervos Test Slip</title>
+  const slipHtml = `<!doctype html><html><head><title>Cervos Test Slip</title>
     <style>
       body{font-family:ui-monospace,Consolas,monospace;width:${widthCss};margin:12px auto;font-size:12px;color:#0f172a}
       h1{font-size:14px;margin:0 0 4px}
@@ -327,7 +326,22 @@ export async function printThermalTestSlip(opts: {
     <hr/>
     <div>If this slip prints sharply without cutoffs, counter printing is verified.</div>
     <script>window.onload=function(){window.print();}</script>
-  </body></html>`);
+  </body></html>`;
+
+  if (requestNativePrint(slipHtml, opts.paperWidthMm)) {
+    return { ok: true, mode: `Native Print (${opts.paperWidthMm}mm)` };
+  }
+
+  // Fallback to formatted thermal print window
+  const w = window.open("", "_blank", "width=420,height=640");
+  if (!w) {
+    return {
+      ok: false,
+      mode: "OS Print",
+      error: "Pop-up blocked. Allow pop-ups for cervos.online to print counter receipts.",
+    };
+  }
+  w.document.write(slipHtml);
   w.document.close();
   return { ok: true, mode: `OS Print (${opts.paperWidthMm}mm)` };
 }
