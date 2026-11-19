@@ -252,7 +252,7 @@ export function getOsmStationTileUrl(
   lat?: number,
   lng?: number,
   zoom = 15,
-  isDark = false
+  _isDark = false
 ) {
   const hasGeo =
     typeof lat === "number" &&
@@ -269,11 +269,8 @@ export function getOsmStationTileUrl(
     ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
   );
 
-  const sub = ["a", "b", "c", "d"][Math.abs(x + y) % 4];
-  const stylePath = isDark ? "dark_all" : "rastertiles/voyager";
-
   return {
-    url: `https://${sub}.basemaps.cartocdn.com/${stylePath}/${zoom}/${x}/${y}.png`,
+    url: `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`,
     lat: safeLat,
     lng: safeLng,
     zoom,

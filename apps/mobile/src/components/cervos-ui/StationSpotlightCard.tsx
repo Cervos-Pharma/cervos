@@ -171,7 +171,10 @@ export function StationSpotlightCard({
           {slide === 1 && (
             <View style={{ flex: 1 }}>
               <Image
-                source={{ uri: mapTile.url }}
+                source={{
+                  uri: mapTile.url,
+                  headers: { "User-Agent": "CervosPharmaMobile/1.0 (https://cervos.online)" },
+                }}
                 style={{ width: "100%", height: "100%" }}
                 contentFit="cover"
               />
@@ -396,7 +399,10 @@ export function StationSpotlightCard({
             }}
           >
             <Image
-              source={{ uri: modalTile.url }}
+              source={{
+                uri: modalTile.url,
+                headers: { "User-Agent": "CervosPharmaMobile/1.0 (https://cervos.online)" },
+              }}
               style={{ width: "100%", height: "100%" }}
               contentFit="cover"
             />

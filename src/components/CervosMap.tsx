@@ -72,25 +72,27 @@ const TILE_LAYERS: Record<
   { label: string; url: string; attribution: string; maxZoom: number; bg: string; className?: string }
 > = {
   street: {
-    label: "Voyager",
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    maxZoom: 20,
+    label: "OSM",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
     bg: "#e9ecef",
   },
   light: {
-    label: "Positron",
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    maxZoom: 20,
+    label: "OSM Light",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
     bg: "#eef2f9",
+    className: "saturate-75 brightness-105",
   },
   dark: {
-    label: "Dark Matter",
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-    maxZoom: 20,
+    label: "OSM Dark",
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
     bg: "#0e1320",
+    className: "invert hue-rotate-180 brightness-95 contrast-90",
   },
 };
 
