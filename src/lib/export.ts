@@ -1,3 +1,5 @@
+import { requestNativePrint } from "@/lib/native-bridge";
+
 /**
  * Converts an array of objects to a CSV string with proper escaping.
  */
@@ -304,6 +306,10 @@ export function exportCleanPdfReport(spec: CleanPdfReportSpec): void {
   </div>
 </body>
 </html>`;
+
+  if (requestNativePrint(html, 80)) {
+    return;
+  }
 
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
