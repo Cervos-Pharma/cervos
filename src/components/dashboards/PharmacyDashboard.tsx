@@ -42,6 +42,7 @@ import {
   isOfflineNetworkError,
   loadWebOfflineSnapshot,
 } from "@/lib/workspace/web-offline";
+import { requestNativeBarcodeScan, subscribeNativeBridgeEvents } from "@/lib/native-bridge";
 
 const DEFAULT_DRUG_CATEGORIES = [
   "Essential",
@@ -414,9 +415,19 @@ export default function PharmacyDashboard({
   const [autoClockOutNotice, setAutoClockOutNotice] = useState<string | null>(null);
   const autoClockCheckedRef = useRef(false);
 
+  const processScanRef = useRef<(raw: string) => void>(() => undefined);
+
   useEffect(() => {
     setHwConfig(loadHardwareConfig());
   }, [tab]);
+
+  useEffect(() => {
+    return subscribeNativeBridgeEvents((ev) => {
+      if (ev.type === "native:barcode_scanned" && typeof ev.payload?.code === "string") {
+        processScanRef.current(ev.payload.code);
+      }
+    });
+  }, []);
 
   // Reports subpage navigation
   const [reportView, setReportView] = useState<ExtendedReportView>("brief");
@@ -1405,6 +1416,7 @@ export default function PharmacyDashboard({
       text: `Scanned ${prodMatch.brandName}${parsed.batchNumber ? ` (GS1 Lot ${parsed.batchNumber})` : cloudHit ? ` (${cloudHit.segment})` : ""} +1 added.`,
     });
   };
+  processScanRef.current = processScannedCode;
 
   useEffect(() => {
     if (!scannerOpen) return;
@@ -2200,7 +2212,9 @@ export default function PharmacyDashboard({
                   />
                   <button
                     type="button"
-                    onClick={() => setScannerOpen(true)}
+                    onClick={() => {
+                      if (!requestNativeBarcodeScan("inventory")) setScannerOpen(true);
+                    }}
                     className={`px-3 py-2 rounded-full border text-[11px] font-semibold shrink-0 cursor-pointer ${chipCls}`}
                   >
                     {isSw ? "Skani" : "Scan"}
@@ -3268,7 +3282,11 @@ export default function PharmacyDashboard({
                   />
                   <button
                     type="button"
-                    onClick={() => setScannerOpen((v) => !v)}
+                    onClick={() => {
+                      if (scannerOpen || !requestNativeBarcodeScan("pos")) {
+                        setScannerOpen((v) => !v);
+                      }
+                    }}
                     title="Open Camera QR / Barcode Scanner"
                     className={`px-3 py-2 rounded-xl border text-[11px] font-semibold shrink-0 cursor-pointer ${scannerOpen ? "text-white border-transparent" : chipCls
                       }`}
@@ -3777,7 +3795,9 @@ export default function PharmacyDashboard({
                 />
                 <button
                   type="button"
-                  onClick={() => setScannerOpen(true)}
+                  onClick={() => {
+                    if (!requestNativeBarcodeScan("receipts")) setScannerOpen(true);
+                  }}
                   className={`px-3 py-2 rounded-full border text-[11px] font-semibold shrink-0 cursor-pointer ${chipCls}`}
                 >
                   {isSw ? "Skani QR" : "Verify QR"}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { COMMERCIAL_PLAN_CATALOG, formatTzs } from "@cervos/core";
+import WorkspaceShell, { type WorkspaceNavItem } from "@/components/WorkspaceShell";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 
 const MAX_FOREGROUND_POLLS = 12;
@@ -26,6 +27,11 @@ interface BillingAccountSummary {
   billingOverdue?: boolean;
   trialEndsAt?: string;
   accessLock?: { locked: boolean; source: "hq" | "billing" | null; reason: string };
+  customization?: {
+    brandLogoUrl?: string;
+    brandAccent?: string;
+    fontScale?: "compact" | "standard" | "large";
+  };
 }
 
 interface BillingPackageItem {
@@ -51,9 +57,16 @@ type BillingChannel =
 
 export default function DedicatedBillingPage() {
   const router = useRouter();
-  const { isDark } = useWorkspaceTheme();
+  const { theme, isDark, toggleTheme } = useWorkspaceTheme();
   const [account, setAccount] = useState<BillingAccountSummary | null>(null);
   const [branchCount, setBranchCount] = useState(1);
+  const [centreName, setCentreName] = useState("Primary Branch");
+  const [shellProfile, setShellProfile] = useState<{
+    id: string;
+    displayName: string;
+    role: string;
+  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [livePlans, setLivePlans] = useState<BillingPackageItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -103,6 +116,13 @@ export default function DedicatedBillingPage() {
     const data = await r.json();
     if (Array.isArray(data.centres)) {
       setBranchCount(Math.max(1, data.centres.length));
+      const activeCtr =
+        data.centres.find((c: { id: string; name: string }) => c.id === data.activeCentreId) ??
+        data.centres[0];
+      if (activeCtr?.name) setCentreName(activeCtr.name);
+    }
+    if (data.activeProfile) {
+      setShellProfile(data.activeProfile);
     }
     if (data.account) {
       setAccount(data.account);
@@ -373,9 +393,36 @@ export default function DedicatedBillingPage() {
   const daysLeft = account.subscriptionDaysLeft;
   const pollProgressPct = Math.min(100, Math.round((pollAttempts / MAX_FOREGROUND_POLLS) * 100));
 
-  return (
-    <div className={`min-h-screen px-4 py-6 sm:py-8 sm:px-8 ${isDark ? "bg-[#090C12] text-slate-100" : "bg-[#F8FAFC] text-[#111317]"}`}>
-      <div className="max-w-3xl mx-auto space-y-6">
+  const toggleLang = async () => {
+    const nextLang = account.lang === "SW" ? "EN" : "SW";
+    setAccount({ ...account, lang: nextLang });
+    await fetch("/api/workspace/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "update_lang", lang: nextLang }),
+    });
+  };
+
+  const lockProfile = async () => {
+    await fetch("/api/workspace/gate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "lock_profile" }),
+    });
+    router.replace("/app/gate?stage=profile");
+  };
+
+  const signOutOrg = async () => {
+    await fetch("/api/workspace/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "signout" }),
+    });
+    router.replace("/auth?mode=signin");
+  };
+
+  const billingContent = (
+    <div className="max-w-3xl mx-auto space-y-6 py-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
@@ -839,7 +886,44 @@ export default function DedicatedBillingPage() {
             </div>
           </div>
         )}
-      </div>
+    </div>
+  );
+
+  if (shellProfile && !account.accessLock?.locked) {
+    const navItems: WorkspaceNavItem[] = [
+      { id: "overview", label: isSw ? "Muhtasari" : "Overview", href: "/app" },
+      { id: "operations", label: isSw ? "Kaunta POS" : "Counter POS", href: "/app?tab=operations" },
+      { id: "billing", label: isSw ? "Malipo" : "Billing", active: true, href: "/app/billing" },
+      { id: "reports", label: isSw ? "Ripoti" : "Reports", href: "/app?tab=reports" },
+      { id: "user_settings", label: isSw ? "Mipangilio" : "Settings", href: "/app/settings" },
+    ];
+    return (
+      <WorkspaceShell
+        orgName={account.orgName}
+        centreName={centreName}
+        profileName={shellProfile.displayName}
+        profileRole={shellProfile.role}
+        brandLogoUrl={account.customization?.brandLogoUrl}
+        brandAccent={account.customization?.brandAccent || accent}
+        fontScale={account.customization?.fontScale}
+        lang={account.lang}
+        onToggleLang={() => void toggleLang()}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        navItems={navItems}
+        onLockProfile={() => void lockProfile()}
+        onSignOut={() => void signOutOrg()}
+      >
+        {billingContent}
+      </WorkspaceShell>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen px-4 py-6 sm:py-8 sm:px-8 ${isDark ? "bg-[#090C12] text-slate-100" : "bg-[#F8FAFC] text-[#111317]"}`}>
+      {billingContent}
     </div>
   );
 }

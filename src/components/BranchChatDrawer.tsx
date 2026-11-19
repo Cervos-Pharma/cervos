@@ -270,22 +270,46 @@ export default function BranchChatDrawer({
     >
       {/* Header */}
       <div
-        className={`px-5 py-3.5 border-b flex items-center justify-between gap-3 ${
-          isDark ? "border-slate-800" : "border-[#EAECF0]"
+        className={`px-4 sm:px-5 py-3 border-b flex items-center justify-between gap-3 shrink-0 ${
+          isDark ? "border-slate-800 bg-[#0D121B]" : "border-[#EAECF0] bg-[#FAFBFD]"
         }`}
       >
-        <div className="min-w-0">
-          <div className="text-[10px] font-bold uppercase tracking-[0.2em]" style={{ color: accent }}>
-            {isSw ? "MAWASILIANO YA TAWI TU" : "BRANCH GROUP CHAT"}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={isSw ? "Rudi" : "Back"}
+            className={`lg:hidden w-8 h-8 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${
+              isDark ? "border-slate-700 bg-slate-900 text-slate-200" : "border-[#E2E8F0] bg-white text-[#111317]"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] truncate" style={{ color: accent }}>
+                {isSw ? "MAWASILIANO YA TAWI" : "BRANCH MESSAGES"}
+              </span>
+            </div>
+            <div className="text-sm font-bold truncate">
+              {centreName}
+              {members.length > 0 && (
+                <span className={`ml-1.5 text-[10px] font-medium ${mutedCls}`}>
+                  ({members.length})
+                </span>
+              )}
+            </div>
           </div>
-          <div className="text-sm font-bold truncate">{centreName}</div>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close branch chat"
-          className={`w-8 h-8 rounded-full border flex items-center justify-center text-sm cursor-pointer ${
-            isDark ? "border-slate-700 hover:bg-slate-800" : "border-[#EAECF0] hover:bg-slate-50"
+          className={`w-8 h-8 rounded-full border flex items-center justify-center text-sm cursor-pointer shrink-0 ${
+            isDark ? "border-slate-700 hover:bg-slate-800" : "border-[#EAECF0] hover:bg-white"
           }`}
         >
           &times;
@@ -507,10 +531,33 @@ export default function BranchChatDrawer({
       {/* Composer with @Mention Tagging, Direct Reply & System Record Picker */}
       <form
         onSubmit={handleSend}
-        className={`shrink-0 p-3 sm:p-4 pb-[max(0.85rem,env(safe-area-inset-bottom))] border-t space-y-2 ${
-          isDark ? "border-slate-800 bg-[#0B0F17]" : "border-[#EAECF0] bg-[#F8FAFC]"
+        className={`shrink-0 p-3 sm:p-4 border-t space-y-2 ${
+          isDark ? "border-slate-800 bg-[#0D121B]" : "border-[#EAECF0] bg-[#F8FAFC]"
         }`}
       >
+        {/* Quick 1-Tap Teammate Chips on Mobile (easy thumb tagging without popover) */}
+        {members.filter((m) => m.id !== currentProfileId).length > 0 && (
+          <div className="lg:hidden flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+            <span className={`text-[9px] font-bold uppercase tracking-wider shrink-0 ${mutedCls}`}>
+              {isSw ? "Taja:" : "Tag:"}
+            </span>
+            {members
+              .filter((m) => m.id !== currentProfileId)
+              .slice(0, 6)
+              .map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => insertMention(m)}
+                  className={`px-2 py-1 rounded-full border text-[10px] font-semibold shrink-0 cursor-pointer ${
+                    isDark ? "bg-[#11161F] border-slate-700 text-sky-300" : "bg-white border-[#E2E8F0] text-[#1039B9]"
+                  }`}
+                >
+                  @{m.handle}
+                </button>
+              ))}
+          </div>
+        )}
         {(mentionPickerOpen || activeMentionQuery !== null) && filteredMembers.length > 0 && (
           <div
             className={`max-h-36 overflow-y-auto rounded-xl border p-1.5 space-y-1 ${

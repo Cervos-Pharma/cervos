@@ -108,6 +108,7 @@ export default function HQConsoleClient({
   const [quickSearch, setQuickSearch] = useState("");
   const [timelineFilter, setTimelineFilter] = useState("all");
   const [bellOpen, setBellOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -572,14 +573,15 @@ export default function HQConsoleClient({
         </div>
       </header>
 
-      {/* BODY: ADAPTIVE HORIZONTAL BAR ON MOBILE + SLIM STICKY RAIL ON DESKTOP */}
+      {/* BODY: SLIM DESKTOP RAIL + MAIN WORKSPACE (+ MOBILE SHELL MENU & BOTTOM DOCK) */}
       <div className="max-w-[1920px] w-full mx-auto px-3 sm:px-6 py-3 flex flex-col lg:flex-row gap-4 items-start">
+        {/* Desktop-only Sticky Rail */}
         <aside
-          className={`w-full shrink-0 transition-[width] duration-200 ${
+          className={`hidden lg:block shrink-0 transition-[width] duration-200 ${
             railExpanded ? "lg:w-52" : "lg:w-14"
           } lg:sticky lg:top-[64px]`}
         >
-          <nav className="flex lg:flex-col gap-1 overflow-x-auto pb-1 lg:pb-0 no-scrollbar">
+          <nav className="flex flex-col gap-1">
             {navItems.map((item) => {
               const active = activeTab === item.key;
               const lockedByRole =
@@ -592,7 +594,7 @@ export default function HQConsoleClient({
                   type="button"
                   title={lockedByRole ? `${item.label} (read-only)` : item.label}
                   onClick={() => setActiveTab(item.key)}
-                  className={`relative shrink-0 lg:w-full text-left rounded-xl px-2.5 py-2 transition-all flex items-center justify-between gap-2 cursor-pointer ${
+                  className={`relative lg:w-full text-left rounded-xl px-2.5 py-2 transition-all flex items-center justify-between gap-2 cursor-pointer ${
                     active
                       ? t.primaryBtnCls
                       : "hover:bg-slate-500/10 text-current"
@@ -602,7 +604,7 @@ export default function HQConsoleClient({
                     <RailNavSvg tab={item.key} />
                     {railExpanded && (
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold whitespace-nowrap lg:truncate">{item.label}</div>
+                        <div className="text-xs font-semibold truncate">{item.label}</div>
                       </div>
                     )}
                   </div>
@@ -625,8 +627,8 @@ export default function HQConsoleClient({
           </nav>
         </aside>
 
-        {/* Full-Bleed Open Workspace Canvas — Zero Repeated KPI Cards */}
-        <main className="flex-1 min-w-0 w-full space-y-3">
+        {/* Full-Bleed Open Workspace Canvas */}
+        <main className="flex-1 min-w-0 w-full space-y-3 pb-24 lg:pb-6">
           {banner && (
             <div
               className={`rounded-xl border px-4 py-2.5 text-xs font-semibold flex items-center justify-between gap-2 ${
@@ -850,6 +852,139 @@ export default function HQConsoleClient({
           )}
         </main>
       </div>
+
+      {/* HQ Mobile App-Shell Menu Sheet */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-x-0 top-0 bottom-[calc(62px+env(safe-area-inset-bottom))] z-[45] lg:hidden flex">
+          <button
+            type="button"
+            aria-label="Close HQ menu"
+            onClick={() => setMobileMenuOpen(false)}
+            className="fixed inset-x-0 top-0 bottom-[calc(62px+env(safe-area-inset-bottom))] bg-slate-950/50 backdrop-blur-xs cursor-pointer"
+          />
+          <aside
+            className={`relative z-10 w-[300px] max-w-[86vw] h-full p-4 flex flex-col border-r shadow-2xl ${
+              isDark ? "bg-[#0D1119] border-slate-800 text-slate-100" : "bg-white border-[#E2E8F0] text-[#111317]"
+            }`}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-500/15">
+              <div>
+                <div className="text-xs font-bold">{data?.operator || initialOperator}</div>
+                <div className={`text-[10px] font-mono ${t.mutedCls}`}>{roleMeta.shortTag}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`w-7 h-7 rounded-full border flex items-center justify-center text-sm cursor-pointer ${t.pillCls}`}
+              >
+                &times;
+              </button>
+            </div>
+            <nav className="flex-1 min-h-0 overflow-y-auto py-3 space-y-1">
+              {navItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(item.key);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer ${
+                    activeTab === item.key ? t.primaryBtnCls : "hover:bg-slate-500/10 text-current"
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <RailNavSvg tab={item.key} />
+                    <span className="truncate">{item.label}</span>
+                  </span>
+                  {typeof item.badge === "number" && item.badge > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-full font-mono text-[10px] font-bold bg-black/15">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </aside>
+        </div>
+      )}
+
+      {/* HQ Mobile App-Shell Bottom Dock */}
+      <nav
+        aria-label="HQ Mobile Navigation"
+        className={`lg:hidden fixed bottom-0 inset-x-0 z-50 border-t backdrop-blur-xl px-2 pt-1.5 pb-[max(0.55rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-1.5 ${
+          isDark
+            ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
+            : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.08)]"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false);
+            setActiveTab("overview");
+          }}
+          className={`flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold cursor-pointer ${
+            activeTab === "overview" && !mobileMenuOpen ? "text-[#1039B9] dark:text-sky-400 font-bold" : t.mutedCls
+          }`}
+        >
+          <RailNavSvg tab="overview" />
+          <span className="truncate max-w-full">Board</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false);
+            setActiveTab("intelligence");
+          }}
+          className={`flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold cursor-pointer ${
+            activeTab === "intelligence" && !mobileMenuOpen ? "text-[#1039B9] dark:text-sky-400 font-bold" : t.mutedCls
+          }`}
+        >
+          <RailNavSvg tab="intelligence" />
+          <span className="truncate max-w-full">Models</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false);
+            setActiveTab("decisions");
+          }}
+          className="shrink-0 -mt-3.5 h-11 px-4 rounded-full bg-[#1039B9] text-white shadow-lg flex items-center justify-center gap-1.5 text-[11px] font-bold cursor-pointer ring-4 ring-white/80 dark:ring-[#0B0F17]/90"
+        >
+          <RailNavSvg tab="decisions" />
+          <span>Inbox{pendingProposalsCount > 0 ? ` (${pendingProposalsCount})` : ""}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileMenuOpen(false);
+            setActiveTab("comms");
+          }}
+          className={`relative flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold cursor-pointer ${
+            activeTab === "comms" && !mobileMenuOpen ? "text-[#1039B9] dark:text-sky-400 font-bold" : t.mutedCls
+          }`}
+        >
+          <RailNavSvg tab="comms" />
+          <span className="truncate max-w-full">Comms</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((o) => !o)}
+          className={`flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold cursor-pointer ${
+            mobileMenuOpen ? "text-[#1039B9] dark:text-sky-400 font-bold" : t.mutedCls
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+          </svg>
+          <span className="truncate max-w-full">Menu</span>
+        </button>
+      </nav>
     </div>
   );
 }

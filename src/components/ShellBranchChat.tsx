@@ -119,6 +119,17 @@ export function useShellBranchChat() {
     return () => clearInterval(t);
   }, [open, load, state?.activeProfile]);
 
+  const openSheet = useCallback(() => {
+    userToggledRef.current = true;
+    setOpen(true);
+    try {
+      window.localStorage.setItem("cervos-chat-pinned", "1");
+    } catch {
+      // Ignore
+    }
+    void load();
+  }, [load]);
+
   const toggle = useCallback(() => {
     userToggledRef.current = true;
     setOpen((prev) => {
@@ -270,6 +281,7 @@ export function useShellBranchChat() {
     available: !!profile,
     open,
     loading,
+    openSheet,
     toggle,
     close,
     markInteracted,
@@ -305,6 +317,16 @@ export function BranchChatDockedAside({
   isSw,
   railPillCls,
 }: BranchChatDockedAsideProps) {
+  useEffect(() => {
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    if (!chat.open || window.innerWidth >= 1024) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [chat.open]);
+
   if (!chat.available || !chat.profile) return null;
 
   return (
@@ -377,18 +399,20 @@ export function BranchChatDockedAside({
         )}
       </aside>
 
-      {/* Mobile (< lg): Bounded strictly BELOW top bar (`top-[57px]`) so header controls stay accessible */}
+      {/* Mobile (< lg): App-shell Messages view fitted strictly between header (`57px`) and mobile bottom dock */}
       {chat.open && (
-        <div className="lg:hidden fixed top-[57px] inset-x-0 bottom-0 z-[28] h-[calc(100dvh-57px)] max-h-[calc(100dvh-57px)] flex justify-end">
+        <div
+          className="lg:hidden fixed inset-x-0 top-[57px] bottom-[calc(62px+env(safe-area-inset-bottom))] z-[42] flex justify-end animate-fade-in"
+        >
           <button
             type="button"
             aria-label="Close mobile branch chat backdrop"
             onClick={chat.close}
-            className="flex-1 bg-slate-950/45 backdrop-blur-xs cursor-pointer"
+            className="hidden sm:block flex-1 bg-slate-950/45 backdrop-blur-xs cursor-pointer"
           />
           <aside
-            className={`w-full max-w-md h-full max-h-[calc(100dvh-57px)] min-h-0 border-l flex flex-col shadow-2xl ${
-              isDark ? "bg-[#0E131C] border-slate-800" : "bg-white border-[#EAECF0]"
+            className={`w-full sm:max-w-md h-full min-h-0 sm:border-l flex flex-col shadow-2xl ${
+              isDark ? "bg-[#0B0F17] border-slate-800" : "bg-white border-[#EAECF0]"
             }`}
           >
             <BranchChatDrawer

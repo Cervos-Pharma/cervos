@@ -4,6 +4,8 @@
  * assets stored in `public/sounds/*.mp3` (no harsh synthetic oscillator tones).
  */
 
+import { playNativeSound, triggerNativeHaptic } from "@/lib/native-bridge";
+
 export type AppSoundKind =
   | "tap"
   | "scan"
@@ -70,8 +72,17 @@ export function setSoundVolume(volume: number): void {
 }
 
 export function playAppSound(kind: AppSoundKind): void {
-  if (typeof window === "undefined" || typeof Audio === "undefined") return;
+  if (typeof window === "undefined") return;
   if (isSoundMuted()) return;
+  const vol = getSoundVolume();
+  // Notify wrapping native container if running inside the Two-Tier PWA-Native shell
+  playNativeSound(kind, vol);
+  if (kind === "scan" || kind === "cart-add") {
+    triggerNativeHaptic("light");
+  } else if (kind === "sale-complete") {
+    triggerNativeHaptic("success");
+  }
+  if (typeof Audio === "undefined") return;
   try {
     const base = audioCache.get(kind) ?? new Audio(SOUND_FILES[kind]);
     if (!audioCache.has(kind)) {
@@ -79,7 +90,7 @@ export function playAppSound(kind: AppSoundKind): void {
       audioCache.set(kind, base);
     }
     const instance = base.cloneNode(true) as HTMLAudioElement;
-    instance.volume = getSoundVolume();
+    instance.volume = vol;
     void instance.play().catch(() => {
       // Autoplay restriction before first gesture; safely ignored
     });

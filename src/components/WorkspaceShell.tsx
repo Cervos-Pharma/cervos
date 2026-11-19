@@ -5,6 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { IconDownload, IconLock, IconShield } from "@/components/LandingIcons";
 import { BranchChatDockedAside, useShellBranchChat } from "@/components/ShellBranchChat";
+import {
+  postToNativeContainer,
+  subscribeNativeBridgeEvents,
+  triggerNativeHaptic,
+} from "@/lib/native-bridge";
 
 export interface WorkspaceNavItem {
   id: string;
@@ -121,24 +126,80 @@ function RailItemIcon({ id, active }: { id: string; active?: boolean }) {
   }
 }
 
-function resolvePrimaryMobileAction(navItems: WorkspaceNavItem[], profileRole: string): WorkspaceNavItem | undefined {
+function resolvePrimaryMobileAction(
+  navItems: WorkspaceNavItem[],
+  profileRole: string,
+  isSw: boolean
+): WorkspaceNavItem {
   const roleLower = (profileRole || "").toLowerCase();
   const findAny = (ids: string[]) => ids.map((id) => navItems.find((n) => n.id === id)).find(Boolean);
 
   if (roleLower.includes("accountant") || roleLower.includes("finance")) {
-    return findAny(["billing", "reports", "operations", "network"]) ?? navItems[1] ?? navItems[0];
+    return (
+      findAny(["billing", "reports", "operations", "network"]) ?? {
+        id: "billing",
+        label: isSw ? "Fedha" : "Finance",
+        href: "/app/billing",
+      }
+    );
   }
   if (roleLower.includes("warehouse") || roleLower.includes("dispatch") || roleLower.includes("store")) {
-    return findAny(["inventory", "operations", "network", "reports"]) ?? navItems[1] ?? navItems[0];
+    return (
+      findAny(["inventory", "operations", "network", "reports"]) ?? {
+        id: "inventory",
+        label: isSw ? "Stoo" : "Stock",
+        href: "/app?tab=inventory",
+      }
+    );
   }
   if (roleLower.includes("supplier") || roleLower.includes("wholesale")) {
-    return findAny(["network", "billing", "operations", "reports"]) ?? navItems[1] ?? navItems[0];
+    return (
+      findAny(["network", "billing", "operations", "reports"]) ?? {
+        id: "network",
+        label: isSw ? "Jumla" : "Wholesale",
+        href: "/app?tab=network",
+      }
+    );
   }
   if (roleLower.includes("research") || roleLower.includes("investor")) {
-    return findAny(["reports", "billing", "network"]) ?? navItems[1] ?? navItems[0];
+    return (
+      findAny(["reports", "billing", "network"]) ?? {
+        id: "reports",
+        label: isSw ? "Ripoti" : "Reports",
+        href: "/app?tab=reports",
+      }
+    );
   }
-  // Pharmacy owner / pharmacist / cashier primary daily station = POS (`operations`), falling back on org hub
-  return findAny(["operations", "billing", "reports", "inventory"]) ?? navItems[1] ?? navItems[0];
+  // Pharmacy owner / pharmacist / cashier primary daily station = Counter POS
+  return (
+    findAny(["operations", "inventory", "billing", "reports"]) ?? {
+      id: "operations",
+      label: isSw ? "Kaunta POS" : "Counter POS",
+      href: "/app?tab=operations",
+    }
+  );
+}
+
+function resolveSecondaryMobileAction(
+  navItems: WorkspaceNavItem[],
+  homeId: string | undefined,
+  primaryId: string | undefined,
+  isSw: boolean
+): WorkspaceNavItem {
+  const preferred = ["inventory", "receipts", "reports", "billing", "network", "team"];
+  for (const id of preferred) {
+    if (id === homeId || id === primaryId) continue;
+    const hit = navItems.find((n) => n.id === id);
+    if (hit) return hit;
+  }
+  const fallback = navItems.find((n) => n.id !== homeId && n.id !== primaryId);
+  return (
+    fallback ?? {
+      id: "inventory",
+      label: isSw ? "Stoo" : "Inventory",
+      href: "/app?tab=inventory",
+    }
+  );
 }
 
 export default function WorkspaceShell({
@@ -181,6 +242,22 @@ export default function WorkspaceShell({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [mesh, setMesh] = useState({ x: 60, y: 30, active: false });
   const branchChat = useShellBranchChat();
+  const bridgeStateRef = useRef({
+    chatOpen: false,
+    helpOpen: false,
+    sidebarOpen: false,
+    openChat: () => undefined as void,
+    closeChat: () => undefined as void,
+    onSyncNow: undefined as (() => void) | undefined,
+  });
+  bridgeStateRef.current = {
+    chatOpen: branchChat.open,
+    helpOpen,
+    sidebarOpen,
+    openChat: branchChat.openSheet,
+    closeChat: branchChat.close,
+    onSyncNow,
+  };
 
   useEffect(() => {
     let collapseTimer: ReturnType<typeof setTimeout> | undefined;
@@ -206,11 +283,39 @@ export default function WorkspaceShell({
       }
     };
     window.addEventListener("keydown", onKey);
+    const unsubscribeNative = subscribeNativeBridgeEvents((ev) => {
+      const cur = bridgeStateRef.current;
+      if (ev.type === "native:open_chat") {
+        setSidebarOpen(false);
+        cur.openChat();
+      } else if (ev.type === "native:open_menu") {
+        cur.closeChat();
+        setSidebarOpen(true);
+      } else if (ev.type === "native:sync_requested") {
+        cur.onSyncNow?.();
+      } else if (ev.type === "native:back_pressed") {
+        if (cur.helpOpen) setHelpOpen(false);
+        else if (cur.chatOpen) cur.closeChat();
+        else if (cur.sidebarOpen) setSidebarOpen(false);
+      }
+    });
     return () => {
       if (collapseTimer) clearTimeout(collapseTimer);
       window.removeEventListener("keydown", onKey);
+      unsubscribeNative();
     };
   }, []);
+
+  // Prevent background page scroll while mobile Menu sheet is open
+  useEffect(() => {
+    if (typeof document === "undefined" || typeof window === "undefined") return;
+    if (!sidebarOpen || window.innerWidth >= 1024) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [sidebarOpen]);
 
   const toggleRailExpanded = () => {
     userToggledRef.current = true;
@@ -294,84 +399,121 @@ export default function WorkspaceShell({
         }}
       />
 
-      {/* Mobile Drawer Navigation */}
+      {/* Mobile App-Shell Menu Sheet (sits cleanly above persistent bottom dock) */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-xs" onClick={() => setSidebarOpen(false)} />
-          <div
-            className={`relative z-10 w-68 max-w-[82vw] h-full p-5 flex flex-col justify-between border-r ${isDark ? "bg-[#0D1119] border-slate-800 text-slate-100" : "bg-white border-[#E2E8F0] text-[#111317]"
-              }`}
+        <div className="fixed inset-x-0 top-0 bottom-[calc(62px+env(safe-area-inset-bottom))] z-[45] lg:hidden flex animate-fade-in">
+          <button
+            type="button"
+            aria-label={isSw ? "Funga menyu" : "Close navigation menu"}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-x-0 top-0 bottom-[calc(62px+env(safe-area-inset-bottom))] bg-slate-950/50 backdrop-blur-xs cursor-pointer"
+          />
+          <aside
+            aria-label={isSw ? "Menyu ya Kituo" : "Mobile App Menu"}
+            className={`relative z-10 w-[308px] max-w-[86vw] h-full p-4 flex flex-col border-r shadow-2xl ${
+              isDark
+                ? "bg-[#0D1119] border-slate-800 text-slate-100"
+                : "bg-white border-[#E2E8F0] text-[#111317]"
+            }`}
           >
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-slate-200 bg-white shrink-0">
-                    <Image
-                      src={brandLogoUrl || "/cervos-company-logo-circular.svg"}
-                      alt={orgName}
-                      fill
-                      className="object-contain p-0.5"
-                      unoptimized={Boolean(brandLogoUrl)}
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold truncate">{orgName}</div>
-                    <div className="text-[10px] text-slate-400 truncate">{centreName}</div>
+            {/* Operator + Org Identity Header Card */}
+            <div
+              className={`shrink-0 p-3 rounded-2xl border flex items-center justify-between gap-2.5 ${
+                isDark ? "bg-[#11161F] border-slate-800" : "bg-[#F8FAFC] border-[#E2E8F0]"
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="relative w-9 h-9 rounded-full overflow-hidden ring-1 ring-slate-200 bg-white shrink-0">
+                  <Image
+                    src={brandLogoUrl || "/cervos-company-logo-circular.svg"}
+                    alt={orgName}
+                    fill
+                    className="object-contain p-0.5"
+                    unoptimized={Boolean(brandLogoUrl)}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold truncate">{profileName}</div>
+                  <div className="text-[10px] text-slate-400 truncate">
+                    {orgName} &middot; {centreName}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(false)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 cursor-pointer"
-                >
-                  &times;
-                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Close menu"
+                className={`w-7 h-7 rounded-full border flex items-center justify-center text-sm cursor-pointer shrink-0 ${railPillCls}`}
+              >
+                &times;
+              </button>
+            </div>
 
-              <nav className="space-y-1.5">
-                {navItems.map((item) => {
-                  const cls = `w-full flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${item.active
+            {/* Scrollable Icon-Paired App Navigation List */}
+            <nav className="flex-1 min-h-0 overflow-y-auto py-3 space-y-1 pr-0.5">
+              {navItems.map((item) => {
+                const cls = `w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                  item.active
                     ? isDark
-                      ? "bg-white text-[#111317]"
-                      : "bg-[#111317] text-white"
+                      ? "bg-white text-[#111317] shadow-sm"
+                      : "text-white shadow-sm"
                     : isDark
                       ? "text-slate-300 hover:bg-white/5"
-                      : "text-slate-600 hover:bg-slate-100"
-                    }`;
-                  if (item.href) {
-                    return (
-                      <Link key={item.id} href={item.href} onClick={() => setSidebarOpen(false)} className={cls}>
-                        <span>{item.label}</span>
-                        {item.locked && <IconLock className="w-3.5 h-3.5 text-amber-500" />}
-                      </Link>
-                    );
-                  }
+                      : "text-slate-700 hover:bg-slate-100"
+                }`;
+                const style = item.active && !isDark ? { backgroundColor: brandAccent } : undefined;
+                const inner = (
+                  <>
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <RailItemIcon id={item.id} active={item.active} />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    {item.locked && <IconLock className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                  </>
+                );
+                if (item.href) {
                   return (
-                    <button
+                    <Link
                       key={item.id}
-                      type="button"
+                      href={item.href}
                       onClick={() => {
-                        item.onClick?.();
+                        triggerNativeHaptic("selection");
                         setSidebarOpen(false);
                       }}
                       className={cls}
+                      style={style}
                     >
-                      <span>{item.label}</span>
-                      {item.locked && <IconLock className="w-3.5 h-3.5 text-amber-500" />}
-                    </button>
+                      {inner}
+                    </Link>
                   );
-                })}
-              </nav>
-            </div>
+                }
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      triggerNativeHaptic("selection");
+                      item.onClick?.();
+                      setSidebarOpen(false);
+                    }}
+                    className={cls}
+                    style={style}
+                  >
+                    {inner}
+                  </button>
+                );
+              })}
+            </nav>
 
-            <div className="space-y-2 pt-4 border-t border-slate-200/20">
-              <div className="grid grid-cols-3 gap-1.5 pb-1">
+            {/* Compact App Controls Footer */}
+            <div className="shrink-0 space-y-2 pt-3 border-t border-slate-500/15">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
                   onClick={onToggleTheme}
                   className={`py-2 px-2 rounded-xl border text-[11px] font-semibold cursor-pointer ${railPillCls}`}
                 >
-                  {isDark ? (isSw ? "Mwanga" : "Light") : (isSw ? "Giza" : "Dark")}
+                  {isDark ? (isSw ? "Mwanga" : "Light") : isSw ? "Giza" : "Dark"}
                 </button>
                 <button
                   type="button"
@@ -391,43 +533,64 @@ export default function WorkspaceShell({
                   {isSw ? "Mwongozo" : "Guide"}
                 </button>
               </div>
-              <Link
-                href="/app/download"
-                onClick={() => setSidebarOpen(false)}
-                className={`block w-full py-2 px-3.5 rounded-full border text-xs font-semibold text-center ${railPillCls}`}
-              >
-                {isSw ? "Pakua Programu" : "Get Offline App"}
-              </Link>
-              {onSyncNow && (
+              <div className="grid grid-cols-2 gap-1.5">
+                <Link
+                  href="/app/download"
+                  onClick={() => setSidebarOpen(false)}
+                  className={`py-2 px-2.5 rounded-xl border text-[11px] font-semibold text-center truncate ${railPillCls}`}
+                >
+                  {isSw ? "Pakua App" : "Offline App"}
+                </Link>
+                {onSyncNow ? (
+                  <button
+                    type="button"
+                    disabled={syncing}
+                    onClick={() => {
+                      onSyncNow();
+                      setSidebarOpen(false);
+                    }}
+                    className={`py-2 px-2.5 rounded-xl border text-[11px] font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${railPillCls}`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${syncing ? "bg-amber-400 animate-pulse" : "bg-emerald-500"}`} />
+                    <span>{syncing ? "Sync..." : isSw ? "Sawazisha" : "Sync Now"}</span>
+                  </button>
+                ) : (
+                  <Link
+                    href="/app/settings?tab=user"
+                    onClick={() => setSidebarOpen(false)}
+                    className={`py-2 px-2.5 rounded-xl border text-[11px] font-semibold text-center truncate ${railPillCls}`}
+                  >
+                    {isSw ? "Mipangilio" : "Settings"}
+                  </Link>
+                )}
+              </div>
+              <div className="flex items-center gap-2 pt-0.5">
                 <button
                   type="button"
-                  disabled={syncing}
                   onClick={() => {
-                    onSyncNow();
+                    postToNativeContainer("auth:profile_locked");
                     setSidebarOpen(false);
+                    onLockProfile();
                   }}
-                  className={`w-full py-2 px-3.5 rounded-full border text-xs font-semibold cursor-pointer disabled:opacity-50 ${railPillCls}`}
+                  className="flex-1 py-2.5 px-3 rounded-full text-xs font-semibold text-white cursor-pointer"
+                  style={{ backgroundColor: brandAccent }}
                 >
-                  {syncing ? (isSw ? "Inasawazisha..." : "Syncing...") : (isSw ? "Sawazisha Sasa (Auto-Sync)" : "Sync Now (Auto-Sync On)")}
+                  {isSw ? "Badili PIN" : "Switch PIN"}
                 </button>
-              )}
-              <button
-                type="button"
-                onClick={onLockProfile}
-                className="w-full py-2.5 px-3.5 rounded-full text-xs font-semibold text-white cursor-pointer"
-                style={{ backgroundColor: brandAccent }}
-              >
-                {isSw ? "Funga / Badili Wasifu" : "Switch Profile"}
-              </button>
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="w-full py-2 text-xs font-semibold text-rose-500 cursor-pointer"
-              >
-                {isSw ? "Ondoka Akaunti" : "Sign Out Org"}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    postToNativeContainer("auth:org_signed_out");
+                    setSidebarOpen(false);
+                    onSignOut();
+                  }}
+                  className="px-3.5 py-2.5 rounded-full border border-rose-500/30 text-xs font-semibold text-rose-500 cursor-pointer"
+                >
+                  {isSw ? "Ondoka" : "Sign Out"}
+                </button>
+              </div>
             </div>
-          </div>
+          </aside>
         </div>
       )}
 
@@ -518,12 +681,18 @@ export default function WorkspaceShell({
           <button
             type="button"
             onClick={() => {
-              setSidebarOpen(true);
+              branchChat.close();
+              setSidebarOpen((o) => !o);
               setProfileMenuOpen(false);
               setBellOpen(false);
             }}
             aria-label={isSw ? "Fungua menyu" : "Open menu"}
-            className={`lg:hidden relative w-9 h-9 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${railPillCls}`}
+            className={`lg:hidden relative w-9 h-9 rounded-full border flex items-center justify-center shrink-0 cursor-pointer ${
+              sidebarOpen
+                ? "text-white border-transparent"
+                : railPillCls
+            }`}
+            style={sidebarOpen ? { backgroundColor: brandAccent } : undefined}
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M12 17.25h8.25" />
@@ -885,89 +1054,124 @@ export default function WorkspaceShell({
         )}
       </div>
 
-      {/* Role-First 3-Button Mobile Dock (< 1024px): Home | Big Primary Action | Messages */}
-      {!branchChat.open && !sidebarOpen && (() => {
+      {/* Persistent App-Shell 5-Stop Mobile Bottom Dock (< 1024px): Home | Stock/Reports | [Primary CTA] | Messages | Menu */}
+      {(() => {
         const homeItem = navItems.find((n) => n.id === "overview" || n.id === "home") ?? navItems[0];
-        const primaryItem = resolvePrimaryMobileAction(navItems, profileRole);
+        const primaryItem = resolvePrimaryMobileAction(navItems, profileRole, isSw);
+        const secondaryItem = resolveSecondaryMobileAction(navItems, homeItem?.id, primaryItem.id, isSw);
         const msgCount =
           showBranchChat && branchChat.available
             ? branchChat.badge
             : notifications.filter((n) => !n.read).length;
 
+        const dismissSheets = () => {
+          triggerNativeHaptic("selection");
+          branchChat.close();
+          setSidebarOpen(false);
+        };
+
+        const renderDockItem = (item: WorkspaceNavItem) => {
+          const isCurrent = Boolean(item.active && !branchChat.open && !sidebarOpen);
+          const itemCls = `flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
+            isCurrent ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
+          }`;
+          const itemStyle = isCurrent ? { color: isDark ? "#38BDF8" : brandAccent } : undefined;
+          if (item.href) {
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                onClick={dismissSheets}
+                className={itemCls}
+                style={itemStyle}
+              >
+                <RailItemIcon id={item.id} active={isCurrent} />
+                <span className="truncate max-w-full">{item.label}</span>
+              </Link>
+            );
+          }
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                dismissSheets();
+                item.onClick?.();
+              }}
+              className={itemCls}
+              style={itemStyle}
+            >
+              <RailItemIcon id={item.id} active={isCurrent} />
+              <span className="truncate max-w-full">{item.label}</span>
+            </button>
+          );
+        };
+
         return (
           <nav
             aria-label={isSw ? "Menyu ya Simu" : "Mobile Bottom Navigation"}
-            className={`lg:hidden fixed bottom-0 inset-x-0 z-40 border-t backdrop-blur-xl px-4 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-3 ${isDark
-              ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
-              : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.06)]"
-              }`}
+            className={`lg:hidden fixed bottom-0 inset-x-0 z-50 border-t backdrop-blur-xl px-2 sm:px-4 pt-1.5 pb-[max(0.55rem,env(safe-area-inset-bottom))] flex items-end justify-between gap-1.5 ${
+              isDark
+                ? "bg-[#0B0F17]/95 border-slate-800/90 text-slate-200"
+                : "bg-white/95 border-[#E2E8F0] text-[#111317] shadow-[0_-6px_24px_rgba(15,23,42,0.08)]"
+            }`}
           >
-            {/* Left: Home / Dashboard */}
-            {homeItem && (
-              homeItem.href ? (
-                <Link
-                  href={homeItem.href}
-                  className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors ${homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
-                    }`}
-                  style={homeItem.active ? { color: brandAccent } : undefined}
-                >
-                  <RailItemIcon id={homeItem.id} active={homeItem.active} />
-                  <span className="truncate max-w-[78px]">{homeItem.label}</span>
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={homeItem.onClick}
-                  className={`flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${homeItem.active ? "font-bold" : isDark ? "text-slate-400" : "text-slate-600"
-                    }`}
-                  style={homeItem.active ? { color: brandAccent } : undefined}
-                >
-                  <RailItemIcon id={homeItem.id} active={homeItem.active} />
-                  <span className="truncate max-w-[78px]">{homeItem.label}</span>
-                </button>
-              )
+            {/* 1. Home / Overview */}
+            {homeItem && renderDockItem(homeItem)}
+
+            {/* 2. Stock / Secondary Quick Station */}
+            {secondaryItem && renderDockItem(secondaryItem)}
+
+            {/* 3. Center: Elevated Role-Primary Action Pill (Always anchored cleanly above dock) */}
+            {primaryItem.href ? (
+              <Link
+                href={primaryItem.href}
+                onClick={dismissSheets}
+                className="shrink-0 -mt-3.5 h-11 px-3.5 sm:px-4 rounded-full text-white shadow-lg flex items-center justify-center gap-1.5 text-[11px] font-bold tracking-tight active:scale-95 transition-transform ring-4 ring-white/80 dark:ring-[#0B0F17]/90"
+                style={{ backgroundColor: brandAccent }}
+              >
+                <RailItemIcon id={primaryItem.id} active />
+                <span className="truncate max-w-[92px]">{primaryItem.label}</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  dismissSheets();
+                  primaryItem.onClick?.();
+                }}
+                className="shrink-0 -mt-3.5 h-11 px-3.5 sm:px-4 rounded-full text-white shadow-lg flex items-center justify-center gap-1.5 text-[11px] font-bold tracking-tight active:scale-95 transition-transform cursor-pointer ring-4 ring-white/80 dark:ring-[#0B0F17]/90"
+                style={{ backgroundColor: brandAccent }}
+              >
+                <RailItemIcon id={primaryItem.id} active />
+                <span className="truncate max-w-[92px]">{primaryItem.label}</span>
+              </button>
             )}
 
-            {/* Center: Elevated Large Role-Primary CTA */}
-            {primaryItem && (
-              primaryItem.href ? (
-                <Link
-                  href={primaryItem.href}
-                  className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform"
-                  style={{ backgroundColor: brandAccent }}
-                >
-                  <RailItemIcon id={primaryItem.id} active />
-                  <span className="truncate max-w-[125px]">{primaryItem.label}</span>
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={primaryItem.onClick}
-                  className="shrink-0 -mt-3 h-12 px-5 rounded-full text-white shadow-lg flex items-center justify-center gap-2 text-xs font-bold tracking-tight active:scale-95 transition-transform cursor-pointer"
-                  style={{ backgroundColor: brandAccent }}
-                >
-                  <RailItemIcon id={primaryItem.id} active />
-                  <span className="truncate max-w-[125px]">{primaryItem.label}</span>
-                </button>
-              )
-            )}
-
-            {/* Right: Messages / Branch Chat */}
+            {/* 4. Messages / Branch Chat */}
             <button
               type="button"
               onClick={() => {
+                triggerNativeHaptic("selection");
+                setSidebarOpen(false);
                 if (showBranchChat && branchChat.available) {
                   branchChat.toggle();
                 } else {
                   if (onMarkNotificationsRead) onMarkNotificationsRead();
-                  setSidebarOpen(true);
+                  setBellOpen((b) => !b);
                 }
               }}
-              className={`relative flex-1 min-h-[46px] px-2 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${isDark ? "text-slate-400" : "text-slate-600"
-                }`}
+              className={`relative flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
+                branchChat.open
+                  ? "font-bold"
+                  : isDark
+                    ? "text-slate-400"
+                    : "text-slate-600"
+              }`}
+              style={branchChat.open ? { color: isDark ? "#38BDF8" : brandAccent } : undefined}
             >
               <span className="relative">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.85}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={branchChat.open ? 2.2 : 1.85}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
                 </svg>
                 {msgCount > 0 && (
@@ -976,7 +1180,30 @@ export default function WorkspaceShell({
                   </span>
                 )}
               </span>
-              <span>{isSw ? "Ujumbe" : "Messages"}</span>
+              <span className="truncate max-w-full">{isSw ? "Ujumbe" : "Messages"}</span>
+            </button>
+
+            {/* 5. Menu Drawer Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                triggerNativeHaptic("selection");
+                branchChat.close();
+                setSidebarOpen((o) => !o);
+              }}
+              className={`relative flex-1 min-w-0 min-h-[46px] px-1 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors cursor-pointer ${
+                sidebarOpen
+                  ? "font-bold"
+                  : isDark
+                    ? "text-slate-400"
+                    : "text-slate-600"
+              }`}
+              style={sidebarOpen ? { color: isDark ? "#38BDF8" : brandAccent } : undefined}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={sidebarOpen ? 2.2 : 1.85}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+              <span className="truncate max-w-full">{isSw ? "Menyu" : "Menu"}</span>
             </button>
           </nav>
         );
