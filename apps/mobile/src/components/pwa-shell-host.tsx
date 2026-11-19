@@ -15,9 +15,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Print from "expo-print";
-import WebView, { type WebViewMessageEvent, type WebViewNavigation } from "react-native-webview";
+import WebView, {
+  type WebViewMessageEvent,
+  type WebViewNavigation,
+  type WebViewProps,
+} from "react-native-webview";
 import { playSoundCue, triggerHaptic, type AppSoundName } from "@/services/sounds";
-import { colors, radius } from "@/theme";
+import { STATIC_BRAND_LIGHT, radius } from "@/theme";
+
+// react-native-webview@14 declares `WebView<P = undefined>`, which intersects
+// `WebViewProps & undefined` to `never` under strictNullChecks; instantiate `P = object`.
+type CervosWebViewHandle = WebView<object>;
+const CervosWebView = WebView as unknown as new (props: WebViewProps) => CervosWebViewHandle;
 
 const API_BASE = (process.env.EXPO_PUBLIC_API_URL || "https://cervos.online").replace(/\/$/, "");
 const START_URL = `${API_BASE}/app`;
@@ -55,7 +64,7 @@ true;
 `;
 
 export function PwaShellHost() {
-  const webViewRef = useRef<WebView>(null);
+  const webViewRef = useRef<CervosWebViewHandle>(null);
   const [canGoBack, setCanGoBack] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(START_URL);
   const [isOnline, setIsOnline] = useState(true);
@@ -229,7 +238,7 @@ export function PwaShellHost() {
 
   return (
     <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5F6F8" />
+      <StatusBar barStyle="dark-content" />
 
       {!isOnline && (
         <View style={styles.offlineBar}>
@@ -241,13 +250,13 @@ export function PwaShellHost() {
         </View>
       )}
 
-      <WebView
+      <CervosWebView
         ref={webViewRef}
         source={{ uri: START_URL }}
         style={styles.webview}
         applicationNameForUserAgent="CervosNativeShell/1.0"
         injectedJavaScriptBeforeContentLoaded={PRE_LOAD_BRIDGE_JS}
-        onMessage={(ev) => void handleBridgeMessage(ev)}
+        onMessage={(ev: WebViewMessageEvent) => void handleBridgeMessage(ev)}
         onNavigationStateChange={handleNavChange}
         onShouldStartLoadWithRequest={handleShouldStartLoad}
         onLoadStart={() => {
@@ -256,7 +265,7 @@ export function PwaShellHost() {
         onLoadEnd={() => {
           setLoading(false);
         }}
-        onError={(syntheticEvent) => {
+        onError={(syntheticEvent: { nativeEvent?: { description?: string } }) => {
           setLoading(false);
           setLoadError(syntheticEvent.nativeEvent?.description || "Unable to connect to Cervos server.");
         }}
@@ -277,7 +286,7 @@ export function PwaShellHost() {
       {loading && (
         <View style={styles.overlay}>
           <View style={styles.loaderBadge}>
-            <ActivityIndicator color={colors.cervosRoyal} size="large" />
+            <ActivityIndicator color={STATIC_BRAND_LIGHT} size="large" />
             <Text style={styles.loaderTitle}>Opening Cervos Workspace...</Text>
             <Text style={styles.loaderSub}>Syncing encrypted counter shell</Text>
           </View>
@@ -387,7 +396,11 @@ const styles = StyleSheet.create({
     color: "#1039B9",
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: "#F5F6F8",
     alignItems: "center",
     justifyContent: "center",
