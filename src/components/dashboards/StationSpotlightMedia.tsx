@@ -75,9 +75,7 @@ export default function StationSpotlightMedia({
   // Center the exact branch lat/lng pixel at 50% / 50% of the 3x3 tile canvas
   const shiftX = tileSize + offsetX;
   const shiftY = tileSize + offsetY;
-  const osmFilterCls = isDark
-    ? "invert hue-rotate-180 brightness-95 contrast-90"
-    : "saturate-75 brightness-105";
+  const tileStylePath = isDark ? "dark_all" : "rastertiles/voyager";
 
   const firstName = (profileName || "").split(" ")[0] || orgName;
   const hour = new Date().getHours();
@@ -200,26 +198,21 @@ export default function StationSpotlightMedia({
           >
             {[-1, 0, 1].flatMap((dy) =>
               [-1, 0, 1].map((dx) => {
-                const sub = ["a", "b", "c"][Math.abs(dx + dy * 3) % 3];
+                const sub = ["a", "b", "c", "d"][Math.abs(dx + dy * 3) % 4];
                 const tx = tileX + dx;
                 const ty = tileY + dy;
                 return (
                   <img
                     key={`${dx}_${dy}`}
-                    src={`https://${sub}.tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`}
+                    src={`https://${sub}.basemaps.cartocdn.com/${tileStylePath}/${zoom}/${tx}/${ty}.png`}
                     alt=""
                     width={tileSize}
                     height={tileSize}
                     loading="lazy"
-                    referrerPolicy="no-referrer"
                     onError={(e) => {
-                      const el = e.currentTarget;
-                      if (!el.dataset.osmFallback) {
-                        el.dataset.osmFallback = "1";
-                        el.src = `https://tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
-                      }
+                      e.currentTarget.style.opacity = "0";
                     }}
-                    className={`w-[256px] h-[256px] block opacity-95 ${osmFilterCls}`}
+                    className="w-[256px] h-[256px] block opacity-95"
                   />
                 );
               })

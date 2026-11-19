@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
 import {
   allocateFefoBatches,
+  inferCatalogSegment,
   parseGs1Barcode,
+  parseScanIntent,
   reconcileCashShift,
 } from "@cervos/core";
 import { branchComparison } from "@/lib/workspace/intelligence";
@@ -41,6 +43,7 @@ import {
   computePlanCheckoutQuote,
   createWorkspaceSupportTicket,
   ensureAccountDomainData,
+  ensureCloudCatalog,
   flushWorkspaceDb,
   getHqUpdates,
   getWorkspaceDb,
@@ -50,6 +53,7 @@ import {
   publicAccountSummary,
   publicJoinRequestSummary,
   publicProfileSummary,
+  recordCloudCatalogProduct,
   pushHqMessage,
   recordCustomDrugCategory,
   sanitizeCertificateProof,
@@ -346,6 +350,7 @@ export async function GET(request: NextRequest) {
     joinRequests,
     hqUpdates: getHqUpdates(db),
     supplierCatalog: SUPPLIER_CATALOG_SEED,
+    cloudCatalog: ensureCloudCatalog(db),
     stockAlerts: { nearExpiryCount, expiredCount, lowStockCount },
     activeCentreId,
     activeProfile,
@@ -1195,6 +1200,14 @@ export async function POST(request: NextRequest) {
       const scanned = typeof body.gs1Barcode === "string" && body.gs1Barcode.trim()
         ? parseGs1Barcode(body.gs1Barcode)
         : null;
+      const scanIntent = typeof body.barcode === "string" && body.barcode.trim()
+        ? parseScanIntent(body.barcode)
+        : null;
+      const resolvedBarcode = sanitizeText(
+        scanned?.gtin ||
+          (scanIntent?.kind === "gs1" ? scanIntent.gtin : scanIntent?.kind === "barcode" ? scanIntent.code : body.barcode),
+        64
+      );
       const batchNumber = scanned?.batchNumber || sanitizeText(body.batchNumber, 40) || `LOT-${Date.now().toString().slice(-4)}`;
       const expiryDate =
         scanned?.expiryDate ||
@@ -1216,11 +1229,24 @@ export async function POST(request: NextRequest) {
       }
       const resolvedCategory = sanitizeText(body.category, 40) || "Essential";
       recordCustomDrugCategory(account, resolvedCategory);
+      const segment = inferCatalogSegment(`${resolvedCategory} ${genericName} ${brandName}`);
+      const catalogEntry = recordCloudCatalogProduct(db, {
+        barcode: resolvedBarcode || undefined,
+        brandName,
+        genericName,
+        category: resolvedCategory,
+        costPriceTzs,
+        salePriceTzs,
+        lowStockThreshold,
+        requiresPrescription: Boolean(body.requiresPrescription),
+      });
       db.batches!.unshift({
         id: newId("bat"),
         accountId: account.id,
         centreId: effectiveCentreId,
-        productId: sanitizeText(body.productId, 40) || newId("prod"),
+        productId: sanitizeText(body.productId, 40) || catalogEntry?.masterId || catalogEntry?.id || newId("prod"),
+        ...(resolvedBarcode ? { barcode: resolvedBarcode } : {}),
+        segment,
         genericName,
         brandName,
         category: resolvedCategory,
@@ -1282,6 +1308,10 @@ export async function POST(request: NextRequest) {
       }
       if (typeof body.requiresPrescription === "boolean") {
         batch.requiresPrescription = body.requiresPrescription;
+      }
+      if (typeof body.barcode === "string") {
+        const cleanBarcode = sanitizeText(body.barcode, 80);
+        batch.barcode = cleanBarcode || undefined;
       }
       appendAuditLog(db, {
         accountId: account.id,

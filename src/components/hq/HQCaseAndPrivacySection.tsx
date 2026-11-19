@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { hqSurfaceTokens } from "./hqSurface";
+import { downloadCertificateProof } from "./downloadProof";
 import ComplianceProofViewerModal from "./ComplianceProofViewerModal";
 import type {
   HqFleetAccount,
@@ -271,13 +272,23 @@ export default function HQCaseAndPrivacySection({
                                   </div>
                                 )}
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => setInspectedProof({ org, cert })}
-                                className={`px-3 py-1 rounded-full text-[11px] font-semibold cursor-pointer shrink-0 ${t.primaryBtnCls}`}
-                              >
-                                View / Read Proof
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => void downloadCertificateProof(org, cert)}
+                                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${t.pillCls}`}
+                                  title={cert.fileDataUrl ? `Download ${cert.fileName}` : "Download inspection sheet"}
+                                >
+                                  Download
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectedProof({ org, cert })}
+                                  className={`px-3 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${t.primaryBtnCls}`}
+                                >
+                                  View / Read Proof
+                                </button>
+                              </div>
                             </div>
                           );
                         })}

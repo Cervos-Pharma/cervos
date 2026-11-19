@@ -14,6 +14,40 @@ interface CertificateDropzoneProps {
 
 const MAX_INLINE_PROOF_BYTES = 2 * 1024 * 1024;
 
+async function compressImageDataUrl(file: File): Promise<{ dataUrl: string; mimeType: string } | null> {
+  if (!file.type.startsWith("image/") || typeof document === "undefined") return null;
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Image load failed"));
+      el.src = objectUrl;
+    });
+    const maxDim = 1800;
+    const scale = Math.min(1, maxDim / Math.max(img.width || 1, img.height || 1));
+    const width = Math.max(1, Math.round((img.width || 1) * scale));
+    const height = Math.max(1, Math.round((img.height || 1) * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, width, height);
+    for (const q of [0.85, 0.72, 0.56]) {
+      const out = canvas.toDataURL("image/jpeg", q);
+      if (out.length <= 2_600_000) {
+        return { dataUrl: out, mimeType: "image/jpeg" };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
 /**
  * Refined drag-and-drop upload zone for pharmacy/supplier regulatory certificates.
  * Replaces generic native file inputs across Onboarding and Workspace Settings.
@@ -29,9 +63,11 @@ export default function CertificateDropzone({
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [fileSizeLabel, setFileSizeLabel] = useState<string>("");
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   const handleFile = (file: File | undefined) => {
     if (!file) return;
+    setSizeError(null);
     onFileSelect(file.name);
     const kb = file.size / 1024;
     setFileSizeLabel(kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`);
@@ -44,8 +80,26 @@ export default function CertificateDropzone({
           }
         };
         reader.readAsDataURL(file);
+      } else if (file.type.startsWith("image/")) {
+        void compressImageDataUrl(file).then((compressed) => {
+          if (compressed) {
+            onFileDataSelect(compressed.dataUrl, compressed.mimeType);
+          } else {
+            onFileDataSelect("", file.type || "");
+            setSizeError(
+              isSw
+                ? "Picha ni kubwa sana (>2 MB) — chagua picha ndogo zaidi."
+                : "Image exceeds 2 MB even after compression — choose a smaller scan."
+            );
+          }
+        });
       } else {
         onFileDataSelect("", file.type || "");
+        setSizeError(
+          isSw
+            ? "PDF inazidi MB 2 — pakia PDF ndogo au picha ya JPG/PNG ili HQ iweze kuipakua."
+            : "PDF exceeds 2 MB — please upload a smaller PDF or JPG/PNG scan so HQ can preview and download it."
+        );
       }
     }
   };
@@ -95,10 +149,11 @@ export default function CertificateDropzone({
             </button>
             <button
               type="button"
-              onClick={() => {
+            onClick={() => {
                 onFileSelect("");
                 onFileDataSelect?.("", "");
                 setFileSizeLabel("");
+                setSizeError(null);
                 if (inputRef.current) inputRef.current.value = "";
               }}
               aria-label="Clear file"
@@ -169,7 +224,12 @@ export default function CertificateDropzone({
           >
             {isSw ? "Chagua Faili" : "Browse"}
           </span>
-        </div>
+            </div>
+          )}
+      {sizeError && (
+        <p className="mt-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+          {sizeError}
+        </p>
       )}
     </div>
   );

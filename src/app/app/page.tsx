@@ -8,6 +8,7 @@ import WorkspaceShell, {
   type WorkspaceNavItem,
   type WorkspaceNotificationItem,
 } from "@/components/WorkspaceShell";
+import type { CloudCatalogProduct } from "@cervos/core";
 
 const CervosMap = dynamic(() => import("@/components/CervosMap"), { ssr: false });
 import PwaLaunchSplash from "@/components/PwaLaunchSplash";
@@ -114,6 +115,7 @@ interface AppWorkspaceData {
     turnover: number;
   }>;
   notificationEnv?: NotificationEnvInfo;
+  cloudCatalog?: CloudCatalogProduct[];
   stockAlerts?: { nearExpiryCount: number; expiredCount: number; lowStockCount: number };
   notifications?: WorkspaceNotificationItem[];
   activeCentreId: string | null;
@@ -131,6 +133,13 @@ interface AppWorkspaceData {
     };
   } | null;
 }
+
+import {
+  flushWebOfflineQueue,
+  loadWebOfflineSnapshot,
+  saveWebOfflineSnapshot,
+  WEB_OFFLINE_EVENT,
+} from "@/lib/workspace/web-offline";
 
 type AppTab = PharmacyTab;
 
@@ -213,6 +222,7 @@ export default function WorkspaceHomePage() {
   const fetchState = async () => {
     setSyncing(true);
     try {
+      await flushWebOfflineQueue();
       const r = await fetch("/api/workspace/state", { cache: "no-store" });
       if (r.status === 401) {
         setSessionLockedOut(true);
@@ -258,6 +268,13 @@ export default function WorkspaceHomePage() {
       setI18nLang(res.account.lang);
       setData(res);
       setLastSyncedAt(new Date().toISOString());
+      saveWebOfflineSnapshot(res);
+    } catch {
+      const cached = loadWebOfflineSnapshot<AppWorkspaceData>();
+      if (cached?.account && cached?.activeProfile) {
+        setI18nLang(cached.account.lang);
+        setData(cached);
+      }
     } finally {
       setSyncing(false);
     }
@@ -333,15 +350,23 @@ export default function WorkspaceHomePage() {
       }
     }, 25000);
     const onOnline = () => void fetchState();
+    const onOfflineUpdate = () => {
+      const cached = loadWebOfflineSnapshot<AppWorkspaceData>();
+      if (cached?.account && cached?.activeProfile) {
+        setData(cached);
+      }
+    };
     const onVisible = () => {
       if (document.visibilityState === "visible") void fetchState();
     };
     window.addEventListener("online", onOnline);
+    window.addEventListener(WEB_OFFLINE_EVENT, onOfflineUpdate);
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
       clearInterval(syncInterval);
       window.removeEventListener("online", onOnline);
+      window.removeEventListener(WEB_OFFLINE_EVENT, onOfflineUpdate);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener(WORKSPACE_REFRESH_EVENT, onRefresh);
       window.removeEventListener("pageshow", onPageShow);
@@ -1331,6 +1356,7 @@ export default function WorkspaceHomePage() {
             sales={data.sales ?? []}
             wholesaleOrders={data.wholesaleOrders ?? []}
             supplierCatalog={data.supplierCatalog ?? []}
+            cloudCatalog={data.cloudCatalog ?? []}
             expenses={data.expenses ?? []}
             paymentSettings={data.paymentSettings ?? null}
             joinRequests={data.joinRequests ?? []}

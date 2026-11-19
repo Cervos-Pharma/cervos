@@ -76,16 +76,18 @@ export default function PinPad({
     ? "bg-slate-900/50 hover:bg-slate-800 border-slate-800 text-slate-300"
     : "bg-[#F8FAFC] hover:bg-slate-100 border-[#E2E8F0] text-slate-600";
 
+  const slotCount = Math.max(4, Math.min(maxLength, value.length));
+
   return (
-    <div className="space-y-3 select-none">
-      {/* PIN Dot Display */}
+    <div className="space-y-2.5 select-none">
+      {/* Adaptive 4-6 PIN Dot Display (fills 4 cleanly without trailing blank boxes) */}
       <div
-        className={`flex items-center justify-center gap-3 py-3.5 px-4 rounded-xl border ${
+        className={`flex items-center justify-center gap-3.5 py-2.5 px-4 rounded-xl border ${
           isDark ? "bg-slate-900/70 border-slate-800" : "bg-[#F8FAFC] border-[#E2E8F0]"
         }`}
         aria-label={isSw ? "Tarakimu za PIN" : "PIN digits entered"}
       >
-        {Array.from({ length: maxLength }).map((_, idx) => {
+        {Array.from({ length: slotCount }).map((_, idx) => {
           const filled = idx < value.length;
           return (
             <span
@@ -112,7 +114,7 @@ export default function PinPad({
             type="button"
             disabled={busy}
             onClick={() => appendDigit(digit)}
-            className={`min-h-[52px] rounded-xl border text-lg font-bold transition-all cursor-pointer active:scale-[0.97] ${keyCls}`}
+            className={`min-h-[46px] rounded-xl border text-lg font-bold transition-all cursor-pointer active:scale-[0.97] ${keyCls}`}
           >
             {digit}
           </button>
@@ -122,7 +124,7 @@ export default function PinPad({
           type="button"
           disabled={busy || value.length === 0}
           onClick={clear}
-          className={`min-h-[52px] rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-45 ${utilCls}`}
+          className={`min-h-[46px] rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-45 ${utilCls}`}
         >
           {isSw ? "Futa" : "Clear"}
         </button>
@@ -131,7 +133,7 @@ export default function PinPad({
           type="button"
           disabled={busy}
           onClick={() => appendDigit("0")}
-          className={`min-h-[52px] rounded-xl border text-lg font-bold transition-all cursor-pointer active:scale-[0.97] ${keyCls}`}
+          className={`min-h-[46px] rounded-xl border text-lg font-bold transition-all cursor-pointer active:scale-[0.97] ${keyCls}`}
         >
           0
         </button>
@@ -141,7 +143,7 @@ export default function PinPad({
           disabled={busy || value.length === 0}
           onClick={backspace}
           aria-label="Backspace"
-          className={`min-h-[52px] rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-45 ${utilCls}`}
+          className={`min-h-[46px] rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-45 ${utilCls}`}
         >
           {isSw ? "Nyuma" : "Del"}
         </button>

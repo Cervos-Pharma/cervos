@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Platform, useColorScheme } from "react-native";
+import { Platform } from "react-native";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "expo-router/react-navigation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
@@ -7,7 +7,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { MobileSessionProvider, useMobileSession } from "@/context/session-context";
-import { colors } from "@/theme";
+import { useBrandColors } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -22,8 +22,8 @@ const queryClient = new QueryClient({
 
 function RootNavigator() {
   const { hydrated } = useMobileSession();
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
+  const brand = useBrandColors();
+  const isDark = brand.isDark;
 
   useEffect(() => {
     if (hydrated) {
@@ -36,7 +36,9 @@ function RootNavigator() {
       <Stack
         screenOptions={{
           headerBackButtonDisplayMode: "minimal",
-          contentStyle: { backgroundColor: colors.groupedBackground },
+          headerStyle: { backgroundColor: brand.cardBg },
+          headerTintColor: brand.textPrimary,
+          contentStyle: { backgroundColor: brand.canvasBg },
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -72,6 +74,10 @@ function RootNavigator() {
         />
         <Stack.Screen name="branch-chat" options={{ title: "Branch Chat" }} />
         <Stack.Screen name="wholesale" options={{ title: "Wholesale & Kasri" }} />
+        <Stack.Screen name="batch-detail" options={{ title: "Batch Inspector & QR" }} />
+        <Stack.Screen name="shift-close" options={{ title: "Shift Close & Expenses" }} />
+        <Stack.Screen name="billing" options={{ title: "Billing & Plans" }} />
+        <Stack.Screen name="team" options={{ title: "Team & Branches" }} />
         <Stack.Screen
           name="reports"
           options={{

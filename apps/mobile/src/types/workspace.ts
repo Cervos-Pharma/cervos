@@ -1,3 +1,4 @@
+import type { CloudCatalogProduct } from "@cervos/core";
 import type { ProfileCapabilities, WorkspaceProfileRole } from "@/utils/permissions";
 
 export type AppLang = "EN" | "SW";
@@ -11,6 +12,9 @@ export interface WorkspaceCentre {
   lat?: number;
   lng?: number;
   isPrimary?: boolean;
+  status?: string;
+  pausedReason?: string;
+  excludedFromRollup?: boolean;
 }
 
 export interface WorkspaceProfileSummary {
@@ -32,6 +36,8 @@ export interface WorkspaceBatch {
   id: string;
   centreId?: string;
   productId: string;
+  barcode?: string;
+  segment?: string;
   genericName: string;
   brandName: string;
   category: string;
@@ -169,6 +175,15 @@ export interface WorkspaceExpense {
   createdAt: string;
 }
 
+export interface WorkspaceNotificationItem {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  read: boolean;
+  createdAt: string;
+}
+
 export interface WorkspaceHqMessage {
   id: string;
   title: string;
@@ -199,6 +214,37 @@ export interface WorkspaceJoinRequest {
   createdAt: string;
 }
 
+export interface WorkspaceCertificate {
+  id: string;
+  docType: string;
+  licenseNumber: string;
+  fileName: string;
+  uploadedAt: string;
+  mimeType?: string;
+  status: string;
+}
+
+export interface WorkspaceAuditLog {
+  id: string;
+  actor: string;
+  category: string;
+  action: string;
+  createdAt: string;
+}
+
+export interface WorkspaceBranchComparisonItem {
+  centreId: string;
+  name: string;
+  region: string;
+  status: string;
+  excludedFromRollup?: boolean;
+  revenue30dTzs: number;
+  grossProfit30dTzs: number;
+  txCount30d: number;
+  stockRetailValueTzs: number;
+  stockUnits: number;
+}
+
 export interface WorkspaceStateResponse {
   authenticated: boolean;
   loungeOnly?: boolean;
@@ -223,6 +269,7 @@ export interface WorkspaceStateResponse {
     requireSecurityEveryTime?: boolean;
     securityQuestion?: string;
     customCategories?: string[];
+    certificates?: WorkspaceCertificate[];
     accessLock?: { locked: boolean; source: "hq" | "billing" | null; reason: string };
     customization?: {
       brandLogoUrl?: string;
@@ -245,7 +292,11 @@ export interface WorkspaceStateResponse {
   supplierCatalog?: WorkspaceCatalogItem[];
   expenses?: WorkspaceExpense[];
   hqMessages?: WorkspaceHqMessage[];
+  notifications?: WorkspaceNotificationItem[];
   joinRequests?: WorkspaceJoinRequest[];
+  auditLogs?: WorkspaceAuditLog[];
+  orgBranchComparison?: WorkspaceBranchComparisonItem[];
+  cloudCatalog?: CloudCatalogProduct[];
   stockAlerts?: { nearExpiryCount: number; expiredCount: number; lowStockCount: number };
   pendingSubscription?: {
     reference: string;

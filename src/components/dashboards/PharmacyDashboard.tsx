@@ -4,7 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { COMMERCIAL_PLAN_CATALOG, formatTzs, parseGs1Barcode } from "@cervos/core";
+import {
+  COMMERCIAL_PLAN_CATALOG,
+  DEFAULT_CLOUD_CATALOG,
+  formatTzs,
+  matchCatalogByBarcode,
+  parseGs1Barcode,
+  parseScanIntent,
+  type CloudCatalogProduct,
+} from "@cervos/core";
 import { IconCheck, IconLock, IconShield } from "@/components/LandingIcons";
 import StationSpotlightMedia from "@/components/dashboards/StationSpotlightMedia";
 import ReportsIntelligenceView, { type ExtendedReportView } from "@/components/dashboards/ReportsIntelligenceView";
@@ -27,9 +35,13 @@ import { arrayToCSV, downloadCSV, exportCleanPdfReport } from "@/lib/export";
 import { combineSearchQueries, matchesSearch } from "@/lib/search";
 import WebpPhotoInput from "@/components/WebpPhotoInput";
 import WorkspaceTour from "@/components/WorkspaceTour";
-import { StationChecklist } from "@/components/onboarding";
 import { loadHardwareConfig, type HardwareConfigState } from "@/lib/hardware/devices";
 import { playAppSound } from "@/lib/sounds";
+import {
+  enqueueWebOfflineMutation,
+  isOfflineNetworkError,
+  loadWebOfflineSnapshot,
+} from "@/lib/workspace/web-offline";
 
 const DEFAULT_DRUG_CATEGORIES = [
   "Essential",
@@ -69,6 +81,8 @@ export interface DashboardBatch {
   id: string;
   centreId?: string;
   productId: string;
+  barcode?: string;
+  segment?: string;
   genericName: string;
   brandName: string;
   category: string;
@@ -304,6 +318,7 @@ export interface PharmacyDashboardProps {
   sales: DashboardSale[];
   wholesaleOrders: DashboardWholesaleOrder[];
   supplierCatalog: DashboardCatalogItem[];
+  cloudCatalog?: CloudCatalogProduct[];
   expenses?: DashboardExpenseRecord[];
   paymentSettings?: DashboardPaymentSettings | null;
   joinRequests?: DashboardJoinRequest[];
@@ -342,6 +357,7 @@ export default function PharmacyDashboard({
   sales,
   wholesaleOrders,
   supplierCatalog,
+  cloudCatalog = DEFAULT_CLOUD_CATALOG,
   expenses = [],
   paymentSettings = null,
   joinRequests = [],
@@ -383,29 +399,24 @@ export default function PharmacyDashboard({
     [resolvedCapabilities, activeProfileRole, canManageAdmin]
   );
 
-  // Hardware & Audio state + First-launch Guided Tour + Auto Clock-Out guard
+  // Hardware & Audio state + Auto Clock-Out guard
   const [hwConfig, setHwConfig] = useState<HardwareConfigState>(() => loadHardwareConfig());
   const [tourOpen, setTourOpen] = useState(false);
-  const [shiftPromptDismissed, setShiftPromptDismissed] = useState(false);
+  const [shiftPromptDismissed, setShiftPromptDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const todayKey = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+      return window.localStorage.getItem(`cervos-shift-dismissed-${todayKey}`) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [autoClockOutNotice, setAutoClockOutNotice] = useState<string | null>(null);
   const autoClockCheckedRef = useRef(false);
 
   useEffect(() => {
     setHwConfig(loadHardwareConfig());
   }, [tab]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !activeProfileId) return;
-    const key = `cervos-tour-done-${activeProfileId}`;
-    try {
-      if (!window.localStorage.getItem(key)) {
-        const timer = setTimeout(() => setTourOpen(true), 650);
-        return () => clearTimeout(timer);
-      }
-    } catch {
-      // Ignore storage error
-    }
-  }, [activeProfileId]);
 
   // Reports subpage navigation
   const [reportView, setReportView] = useState<ExtendedReportView>("brief");
@@ -540,10 +551,12 @@ export default function PharmacyDashboard({
   const [newImageUrl, setNewImageUrl] = useState("");
   const [newDateEntered, setNewDateEntered] = useState(() => new Date().toISOString().slice(0, 10));
   const [newRequiresRx, setNewRequiresRx] = useState(false);
+  const [autofillDismissedQuery, setAutofillDismissedQuery] = useState<string>("");
 
   const restockPresets = useMemo(() => {
     const qBrand = newBrand.trim().toLowerCase();
-    if (!qBrand) return [];
+    if (qBrand.length < 2) return [];
+    if (autofillDismissedQuery && autofillDismissedQuery === qBrand) return [];
     const byBrand = new Map<string, DashboardBatch>();
     for (const b of batches) {
       const key = b.brandName.trim().toLowerCase();
@@ -562,8 +575,8 @@ export default function PharmacyDashboard({
           b.genericName.toLowerCase().includes(qBrand) ||
           b.category.toLowerCase().includes(qBrand)
       )
-      .slice(0, 6);
-  }, [batches, newBrand]);
+      .slice(0, 4);
+  }, [batches, newBrand, autofillDismissedQuery]);
 
   // POS Customer, Split Checkout Preview & Receipt Animation
   const [customerSearch, setCustomerSearch] = useState("");
@@ -843,6 +856,30 @@ export default function PharmacyDashboard({
   const handleShiftClock = async (clockType: "in" | "out") => {
     setShiftBusy(true);
     setShiftResultMsg(null);
+    const offlineFallback = async () => {
+      enqueueWebOfflineMutation(loadWebOfflineSnapshot(), "shift_clock", {
+        clockType,
+        centreId: activeCentre?.id,
+        role: activeProfileRole,
+      });
+      playAppSound("shift-clock");
+      setShiftPromptDismissed(false);
+      setAutoClockOutNotice(null);
+      setShiftResultMsg(
+        clockType === "in"
+          ? isSw
+            ? "Zamu imeanza nje ya mtandao (imehifadhiwa kusawazishwa)."
+            : "Clocked IN offline (queued for automatic sync)."
+          : isSw
+            ? "Zamu imefungwa nje ya mtandao (imehifadhiwa kusawazishwa)."
+            : "Clocked OUT offline (queued for automatic sync)."
+      );
+    };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      await offlineFallback();
+      setShiftBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/workspace/state", {
         method: "POST",
@@ -873,8 +910,12 @@ export default function PharmacyDashboard({
             : `Clocked OUT cleanly (${out.shift?.durationMinutes ?? 1} min logged).`
       );
       await onRefreshState();
-    } catch {
-      setShiftResultMsg("Network error while updating shift clock.");
+    } catch (err) {
+      if (isOfflineNetworkError(err)) {
+        await offlineFallback();
+      } else {
+        setShiftResultMsg("Network error while updating shift clock.");
+      }
     } finally {
       setShiftBusy(false);
     }
@@ -964,13 +1005,47 @@ export default function PharmacyDashboard({
     if (cartEntries.length === 0) return;
     setPosBusy(true);
     setPosMsg(null);
+    const items = cartEntries.map(([productId, qty]) => ({ productId, qty }));
+    const offlineFallback = () => {
+      const { updatedSnapshot } = enqueueWebOfflineMutation(
+        loadWebOfflineSnapshot<import("@cervos/core").OfflineSnapshotPatchable>(),
+        "sale",
+        {
+          items,
+          paymentMethod,
+          prescriptionRef: prescriptionRef.trim() || undefined,
+          customerName: posCustomerName.trim() || undefined,
+          customerPhone: posCustomerPhone.trim() || undefined,
+          centreId: activeCentre?.id,
+        }
+      );
+      const offlineSale = (updatedSnapshot?.sales?.[0] as DashboardSale | undefined) ?? null;
+      playAppSound("sale-complete");
+      setCart({});
+      setPrescriptionRef("");
+      setCheckoutPreviewOpen(false);
+      setLatestPrintedReceipt(offlineSale);
+      setPrintingAnim(true);
+      setTimeout(() => setPrintingAnim(false), 2600);
+      setPosMsg({
+        ok: true,
+        text: isSw
+          ? `Mauzo yamehifadhiwa nje ya mtandao (TZS ${(offlineSale?.totalTzs || cartTotalTzs).toLocaleString("en-US")}). Yatasawazishwa mtandao ukirudi.`
+          : `Saved offline sale (TZS ${(offlineSale?.totalTzs || cartTotalTzs).toLocaleString("en-US")}). Queued for automatic sync.`,
+      });
+    };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      offlineFallback();
+      setPosBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/workspace/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "dispense_pos",
-          items: cartEntries.map(([productId, qty]) => ({ productId, qty })),
+          items,
           paymentMethod,
           prescriptionRef: prescriptionRef.trim() || undefined,
           customerName: posCustomerName.trim() || undefined,
@@ -1002,6 +1077,13 @@ export default function PharmacyDashboard({
         text: `Sold (TZS ${(out.totalTzs || 0).toLocaleString("en-US")}): ${(out.allocated || []).join(", ")}`,
       });
       await onRefreshState();
+    } catch (err) {
+      if (isOfflineNetworkError(err)) {
+        offlineFallback();
+      } else {
+        playAppSound("alert");
+        setPosMsg({ ok: false, text: "Network error while completing sale." });
+      }
     } finally {
       setPosBusy(false);
     }
@@ -1010,16 +1092,33 @@ export default function PharmacyDashboard({
   const submitShiftClose = async () => {
     setReconcileBusy(true);
     setShiftResultMsg(null);
+    const recPayload = {
+      openingCashTzs: Number(openingCash) || 0,
+      cashSalesTzs,
+      mobileMoneySalesTzs: mobileSalesTzs,
+      declaredCashTzs: Number(declaredCash) || 0,
+      centreId: activeCentre?.id,
+    };
+    const offlineFallback = () => {
+      enqueueWebOfflineMutation(loadWebOfflineSnapshot(), "shift_reconcile", recPayload);
+      setShiftResultMsg(
+        isSw
+          ? "Hesabu ya zamu imehifadhiwa nje ya mtandao na itatumwa kiotomatiki."
+          : "Shift reconciliation saved offline and queued for automatic sync."
+      );
+    };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      offlineFallback();
+      setReconcileBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/workspace/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "reconcile_shift",
-          openingCashTzs: Number(openingCash) || 0,
-          cashSalesTzs,
-          mobileMoneySalesTzs: mobileSalesTzs,
-          declaredCashTzs: Number(declaredCash) || 0,
+          ...recPayload,
         }),
       });
       const out = (await res.json()) as {
@@ -1031,6 +1130,10 @@ export default function PharmacyDashboard({
           `Shift reconciled (${out.reconciliation.status.toUpperCase()}): Expected TZS ${out.reconciliation.expectedCashTzs.toLocaleString("en-US")}, Variance TZS ${out.reconciliation.varianceTzs.toLocaleString("en-US")}`
         );
         await onRefreshState();
+      }
+    } catch (err) {
+      if (isOfflineNetworkError(err)) {
+        offlineFallback();
       }
     } finally {
       setReconcileBusy(false);
@@ -1086,6 +1189,27 @@ export default function PharmacyDashboard({
     const key = busyKey || String(payload.subAction ?? "batch");
     setInvBusyKey(key);
     setInvNotice(null);
+    const sub = String(payload.subAction ?? "");
+    const offlineSubType =
+      sub === "add_batch" || sub === "edit_batch" || sub === "adjust_qty" || sub === "toggle_quarantine"
+        ? sub
+        : null;
+    const offlineFallback = () => {
+      if (!offlineSubType) return false;
+      enqueueWebOfflineMutation(loadWebOfflineSnapshot(), offlineSubType, {
+        ...payload,
+        centreId: activeCentre?.id,
+      });
+      setInvNotice(`${msg} (Saved offline — queued to sync)`);
+      return true;
+    };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      if (!offlineFallback()) {
+        setInvNotice("Internet connection required for this stock action.");
+      }
+      setInvBusyKey(null);
+      return;
+    }
     try {
       const res = await fetch("/api/workspace/state", {
         method: "POST",
@@ -1099,6 +1223,10 @@ export default function PharmacyDashboard({
       }
       setInvNotice(msg);
       await onRefreshState();
+    } catch (err) {
+      if (!isOfflineNetworkError(err) || !offlineFallback()) {
+        setInvNotice("Network error while updating batch.");
+      }
     } finally {
       setInvBusyKey(null);
     }
@@ -1138,14 +1266,71 @@ export default function PharmacyDashboard({
     }
   };
 
+  const applyBarcodeOrGs1Draft = (raw: string) => {
+    setNewLotGs1(raw);
+    const trimmed = raw.trim();
+    if (trimmed.length < 3) return;
+    const intent = parseScanIntent(trimmed);
+    if (intent.kind === "gs1") {
+      if (intent.expiryDate) setNewExpiry(intent.expiryDate);
+    }
+    const cloudHit = matchCatalogByBarcode(cloudCatalog, trimmed);
+    if (cloudHit) {
+      if (!newBrand.trim()) setNewBrand(cloudHit.brandName);
+      if (!newGeneric.trim()) setNewGeneric(cloudHit.inn);
+      setNewCategory(cloudHit.category);
+      setCustomCatMode(false);
+      setNewCostPrice(String(cloudHit.defaultCostTzs));
+      setNewPrice(String(cloudHit.defaultSaleTzs));
+      setNewThreshold(String(cloudHit.defaultThreshold));
+      setNewRequiresRx(Boolean(cloudHit.requiresPrescription));
+      setAutofillDismissedQuery(cloudHit.brandName.trim().toLowerCase());
+      setInvNotice(`Cloud Catalog resolved ${cloudHit.brandName} (${cloudHit.segment})`);
+    }
+  };
+
   const processScannedCode = (rawInput: string) => {
     const clean = rawInput.trim();
     if (!clean) return;
+    const intent = parseScanIntent(clean);
+
+    // 1. Receipt Verification QR (`CERVOS:RCP:RCP-...` or bare `RCP-...`)
+    if (intent.kind === "receipt") {
+      const targetRcp = sales.find(
+        (s) =>
+          (intent.saleId && s.id === intent.saleId) ||
+          (s.receiptNumber && s.receiptNumber.toUpperCase() === intent.receiptNumber.toUpperCase())
+      );
+      setScanCode("");
+      setScannerOpen(false);
+      if (targetRcp) {
+        playAppSound("scan");
+        setTab("receipts");
+        setReceiptSearch(targetRcp.receiptNumber || intent.receiptNumber);
+        setFocusedReceipt(targetRcp);
+        setPosMsg({ ok: true, text: `Verified receipt ${targetRcp.receiptNumber || intent.receiptNumber}.` });
+      } else {
+        playAppSound("alert");
+        setPosMsg({ ok: false, text: `Receipt ${intent.receiptNumber} not found in this branch vault.` });
+      }
+      return;
+    }
+
     const parsed = parseGs1Barcode(clean);
     const lower = clean.toLowerCase();
+    const gtin = intent.kind === "gs1" ? intent.gtin : intent.kind === "barcode" ? intent.code : null;
+    const cloudHit = matchCatalogByBarcode(cloudCatalog, clean);
+
     const batchMatch = batches.find(
       (b) =>
+        (intent.kind === "lot" && b.batchNumber.toLowerCase() === intent.batchNumber.toLowerCase()) ||
         (parsed.batchNumber && b.batchNumber.toLowerCase() === parsed.batchNumber.toLowerCase()) ||
+        (gtin && b.barcode && b.barcode.toUpperCase() === gtin.toUpperCase()) ||
+        (cloudHit &&
+          (b.productId === cloudHit.masterId ||
+            b.productId === cloudHit.id ||
+            b.brandName.toLowerCase() === cloudHit.brandName.toLowerCase() ||
+            b.genericName.toLowerCase() === cloudHit.inn.toLowerCase())) ||
         b.batchNumber.toLowerCase() === lower ||
         b.productId.toLowerCase() === lower ||
         b.brandName.toLowerCase() === lower ||
@@ -1154,15 +1339,48 @@ export default function PharmacyDashboard({
     const prodMatch = batchMatch
       ? productsSummary.find((p) => p.productId === batchMatch.productId)
       : productsSummary.find(
-        (p) =>
-          p.brandName.toLowerCase().includes(lower) ||
-          p.genericName.toLowerCase().includes(lower) ||
-          p.productId.toLowerCase() === lower
-      );
+          (p) =>
+            (cloudHit &&
+              (p.productId === cloudHit.masterId ||
+                p.brandName.toLowerCase() === cloudHit.brandName.toLowerCase() ||
+                p.genericName.toLowerCase() === cloudHit.inn.toLowerCase())) ||
+            p.brandName.toLowerCase().includes(lower) ||
+            p.genericName.toLowerCase().includes(lower) ||
+            p.productId.toLowerCase() === lower
+        );
+
+    // 2. When scanning from Inventory, focus/filter lot or preload Add Stock from Cloud Catalog
+    if (tab === "inventory") {
+      setScanCode("");
+      setScannerOpen(false);
+      if (batchMatch) {
+        playAppSound("scan");
+        setInvSearch(batchMatch.batchNumber);
+        openBatchInspector(batchMatch);
+        return;
+      }
+      if (cloudHit) {
+        playAppSound("scan");
+        applyBarcodeOrGs1Draft(clean);
+        return;
+      }
+      setNewLotGs1(clean);
+      playAppSound("notify");
+      setInvNotice(`Unregistered barcode "${clean}" prefilled on Add Remote Stock Lot.`);
+      return;
+    }
 
     if (!prodMatch) {
       playAppSound("alert");
-      setPosMsg({ ok: false, text: `No matching stock found for "${clean}".` });
+      if (cloudHit) {
+        applyBarcodeOrGs1Draft(clean);
+        setPosMsg({
+          ok: false,
+          text: `Cloud Catalog matched ${cloudHit.brandName} (${cloudHit.segment}), but 0 stock on shelf. Switch to Inventory to receive a lot.`,
+        });
+      } else {
+        setPosMsg({ ok: false, text: `No matching stock or Cloud Catalog barcode for "${clean}".` });
+      }
       return;
     }
     if (batchMatch && (batchMatch.quarantined || batchMatch.expiryDate < todayIso)) {
@@ -1184,7 +1402,7 @@ export default function PharmacyDashboard({
     setScannerOpen(false);
     setPosMsg({
       ok: true,
-      text: `Scanned ${prodMatch.brandName}${parsed.batchNumber ? ` (GS1 Lot ${parsed.batchNumber})` : ""} +1 added.`,
+      text: `Scanned ${prodMatch.brandName}${parsed.batchNumber ? ` (GS1 Lot ${parsed.batchNumber})` : cloudHit ? ` (${cloudHit.segment})` : ""} +1 added.`,
     });
   };
 
@@ -1249,15 +1467,30 @@ export default function PharmacyDashboard({
     e.preventDefault();
     setBillingNotice(null);
     setExpenseBusy(true);
+    const expPayload = {
+      category: expCategory,
+      description: expDesc,
+      amountTzs: Number(expAmount) || 0,
+      centreId: activeCentre?.id,
+    };
+    const offlineFallback = () => {
+      enqueueWebOfflineMutation(loadWebOfflineSnapshot(), "log_expense", expPayload);
+      setExpDesc("");
+      setExpAmount("");
+      setBillingNotice("Expense saved offline and queued for 30-day P&L sync.");
+    };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      offlineFallback();
+      setExpenseBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/workspace/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "log_expense",
-          category: expCategory,
-          description: expDesc,
-          amountTzs: Number(expAmount) || 0,
+          ...expPayload,
         }),
       });
       const out = (await res.json()) as { ok?: boolean; error?: string };
@@ -1269,6 +1502,12 @@ export default function PharmacyDashboard({
       setExpAmount("");
       setBillingNotice("Operating expense recorded into 30-day P&L.");
       await onRefreshState();
+    } catch (err) {
+      if (isOfflineNetworkError(err)) {
+        offlineFallback();
+      } else {
+        setBillingNotice("Network error while recording expense.");
+      }
     } finally {
       setExpenseBusy(false);
     }
@@ -1951,13 +2190,22 @@ export default function PharmacyDashboard({
                       : "Click any product batch for its individual Focus Card, dispense chart & editable fields."}
                   </p>
                 </div>
-                <input
-                  type="search"
-                  value={invSearch}
-                  onChange={(e) => setInvSearch(e.target.value)}
-                  placeholder={isSw ? "Tafuta dawa, kisayansi, batch..." : "Search brand, generic, batch, category..."}
-                  className={`w-full sm:w-64 px-3.5 py-2 rounded-full border text-xs focus:outline-none ${inputCls}`}
-                />
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <input
+                    type="search"
+                    value={invSearch}
+                    onChange={(e) => setInvSearch(e.target.value)}
+                    placeholder={isSw ? "Tafuta dawa, kisayansi, barcode, batch..." : "Search brand, barcode, batch, category..."}
+                    className={`w-full sm:w-64 px-3.5 py-2 rounded-full border text-xs focus:outline-none ${inputCls}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    className={`px-3 py-2 rounded-full border text-[11px] font-semibold shrink-0 cursor-pointer ${chipCls}`}
+                  >
+                    {isSw ? "Skani" : "Scan"}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-1.5">
@@ -2356,8 +2604,17 @@ export default function PharmacyDashboard({
                     />
                     {restockPresets.length > 0 && (
                       <div className={`mt-1.5 rounded-xl border p-1.5 space-y-1 ${isDark ? "border-slate-700 bg-slate-900/90" : "border-slate-200 bg-slate-50"}`}>
-                        <div className={`px-1.5 text-[9px] font-bold uppercase tracking-wider ${mutedCls}`}>
-                          Quick Restock Autofill (click to preload)
+                        <div className="flex items-center justify-between px-1.5">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider ${mutedCls}`}>
+                            Matching Catalog Items
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setAutofillDismissedQuery(newBrand.trim().toLowerCase())}
+                            className={`text-[10px] font-semibold cursor-pointer ${mutedCls}`}
+                          >
+                            Dismiss
+                          </button>
                         </div>
                         {restockPresets.map((preset) => (
                           <button
@@ -2373,6 +2630,7 @@ export default function PharmacyDashboard({
                               setNewThreshold(String(preset.lowStockThreshold ?? 25));
                               setNewRequiresRx(Boolean(preset.requiresPrescription));
                               if (preset.imageUrl) setNewImageUrl(preset.imageUrl);
+                              setAutofillDismissedQuery(preset.brandName.trim().toLowerCase());
                             }}
                             className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] flex items-center justify-between gap-2 transition cursor-pointer ${isDark ? "hover:bg-slate-800" : "hover:bg-white"}`}
                           >
@@ -2527,13 +2785,13 @@ export default function PharmacyDashboard({
                   </label>
                   <div>
                     <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
-                      GS1 Scan (Optional)
+                      Barcode / GS1 / QR (Cloud Lookup)
                     </label>
                     <input
                       type="text"
                       value={newLotGs1}
-                      onChange={(e) => setNewLotGs1(e.target.value)}
-                      placeholder="(01)...(17)271231(10)LOT99"
+                      onChange={(e) => applyBarcodeOrGs1Draft(e.target.value)}
+                      placeholder="EAN-13 (e.g. 629100100102) or (01)...(17)...(10)..."
                       className={`w-full px-3 py-2 rounded-xl border font-mono text-[11px] ${inputCls}`}
                     />
                   </div>
@@ -2556,6 +2814,7 @@ export default function PharmacyDashboard({
                           imageUrl: newImageUrl.trim() || undefined,
                           requiresPrescription: newRequiresRx,
                           expiryDate: newExpiry,
+                          barcode: newLotGs1,
                           gs1Barcode: newLotGs1,
                         },
                         `Added remote stock batch for ${newBrand}`,
@@ -3508,13 +3767,22 @@ export default function PharmacyDashboard({
                     : "Search by receipt number, customer name, medicine, or cashier. Click any card to inspect or reprint."}
                 </p>
               </div>
-              <input
-                type="search"
-                value={receiptSearch}
-                onChange={(e) => setReceiptSearch(e.target.value)}
-                placeholder={isSw ? "Tafuta risiti au mteja..." : "Search receipt #, customer name, drug..."}
-                className={`w-full sm:w-72 px-4 py-2 rounded-full border text-xs focus:outline-none ${inputCls}`}
-              />
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="search"
+                  value={receiptSearch}
+                  onChange={(e) => setReceiptSearch(e.target.value)}
+                  placeholder={isSw ? "Tafuta au skani QR ya risiti..." : "Search receipt #, QR payload, customer, drug..."}
+                  className={`w-full sm:w-72 px-4 py-2 rounded-full border text-xs focus:outline-none ${inputCls}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className={`px-3 py-2 rounded-full border text-[11px] font-semibold shrink-0 cursor-pointer ${chipCls}`}
+                >
+                  {isSw ? "Skani QR" : "Verify QR"}
+                </button>
+              </div>
             </div>
 
             {focusedReceipt && typeof document !== "undefined" && createPortal(
@@ -4189,19 +4457,6 @@ export default function PharmacyDashboard({
       {/* ================================================================ */}
       {tab === "overview" && (
         <>
-          <StationChecklist
-            profileId={activeProfileId || ""}
-            orgName={account.orgName}
-            branchName={activeCentre?.name || account.region}
-            isDark={isDark}
-            isSw={isSw}
-            accent={accent}
-            hasActiveShift={Boolean(activeShift)}
-            batchCount={batches.length}
-            saleCount={sales.length}
-            onJumpTab={(nextTab) => setTab(nextTab)}
-            onStartTour={() => setTourOpen(true)}
-          />
           {/* Home Launch Shift Attendance Check (Immediate Visibility on App Home + Auto Clock-Out Alert) */}
           {autoClockOutNotice && (
             <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-xs font-semibold text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2 mb-4">
@@ -4268,7 +4523,15 @@ export default function PharmacyDashboard({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShiftPromptDismissed(true)}
+                      onClick={() => {
+                        setShiftPromptDismissed(true);
+                        try {
+                          const todayKey = new Date(Date.now() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+                          window.localStorage.setItem(`cervos-shift-dismissed-${todayKey}`, "1");
+                        } catch {
+                          // Ignore
+                        }
+                      }}
                       className={`px-3.5 py-2 rounded-full border text-xs font-semibold cursor-pointer ${chipCls}`}
                     >
                       {isSw ? "Sipo Zamu" : "Not on Shift"}

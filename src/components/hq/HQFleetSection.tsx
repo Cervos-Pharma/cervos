@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { COMMERCIAL_PLAN_CATALOG, formatTzs } from "@cervos/core";
 import { matchesSearch } from "@/lib/search";
 import { hqSurfaceTokens } from "./hqSurface";
+import { downloadCertificateProof } from "./downloadProof";
 import ComplianceProofViewerModal from "./ComplianceProofViewerModal";
 import type { HqAuditEvent, HqFleetAccount, HqPackageRecord } from "./types";
 
@@ -578,13 +579,23 @@ export default function HQFleetSection({
                                   {cert.licenseNumber} &middot; {cert.fileName} &middot; {cert.uploadedAt.slice(0, 10)}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => setInspectedProof({ org: selectedOrg, cert })}
-                                className="px-2.5 py-1 rounded-lg bg-[#1039B9] text-white text-[11px] font-semibold cursor-pointer shrink-0"
-                              >
-                                View / Read Proof
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => void downloadCertificateProof(selectedOrg, cert)}
+                                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${chipCls}`}
+                                  title={cert.fileDataUrl ? `Download ${cert.fileName}` : "Download inspection sheet"}
+                                >
+                                  Download
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setInspectedProof({ org: selectedOrg, cert })}
+                                  className="px-2.5 py-1 rounded-lg bg-[#1039B9] text-white text-[11px] font-semibold cursor-pointer"
+                                >
+                                  View / Read Proof
+                                </button>
+                              </div>
                             </div>
                           );
                         })}

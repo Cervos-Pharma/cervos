@@ -1,14 +1,21 @@
 import crypto from "crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  DEFAULT_CLOUD_CATALOG,
   allocateFefoBatches,
+  buildLotQrPayload,
+  buildReceiptQrPayload,
   clampDiscount,
   deduplicateSalesRevenue,
   formatTzs,
+  matchCatalogByBarcode,
   parseGs1Barcode,
+  parseScanIntent,
   reconcileCashShift,
   resolvePermissions,
 } from "@cervos/core";
+import { composeEveningMessage } from "@/lib/workspace/owner-messages";
+import { calendarNudge } from "@/lib/workspace/tz-calendar";
 import {
   buildAnonymizedTelemetryVector,
   computeInventoryIntelligence,
@@ -375,5 +382,72 @@ describe("PayMe webhook cryptographic and replay hardening", () => {
     expect(verifyWebhookSignature(payload, String(nowSec), "forged==")).toBe(false);
     expect(verifyWebhookSignature(payload, String(nowSec + 180), sign(nowSec + 180))).toBe(false);
     expect(verifyWebhookSignature(payload, String(nowSec - 600), sign(nowSec - 600))).toBe(false);
+  });
+});
+
+describe("Universal Cloud Barcode Catalog & Natural Owner Evening SMS", () => {
+  it("classifies receipt QRs, lot QRs, GS1 codes, and resolves padded barcodes against Cloud Catalog", () => {
+    const rcpQr = buildReceiptQrPayload("RCP-9A4B", "sale_1");
+    expect(parseScanIntent(rcpQr)).toEqual({
+      kind: "receipt",
+      raw: "CERVOS:RCP:RCP-9A4B|sale_1",
+      receiptNumber: "RCP-9A4B",
+      saleId: "sale_1",
+    });
+
+    expect(parseScanIntent(buildLotQrPayload("LOT-2026-A"))).toEqual({
+      kind: "lot",
+      raw: "CERVOS:LOT:LOT-2026-A",
+      batchNumber: "LOT-2026-A",
+    });
+
+    // 14-digit zero-padded GS1 GTIN matches 12-digit catalog barcode for Amoxicillin 500mg
+    const gs1Hit = matchCatalogByBarcode(
+      DEFAULT_CLOUD_CATALOG,
+      "(01)00629100100102(17)271231(10)AMX-90"
+    );
+    expect(gs1Hit?.brandName).toContain("Amoxil");
+    expect(gs1Hit?.segment).toBe("Antibiotic");
+  });
+
+  it("composes natural owner evening SMS without Nama in the body and surfaces TZ holiday & billing nudges", () => {
+    const msg = composeEveningMessage({
+      lang: "EN",
+      accountId: "acc_test_1",
+      firstName: "Amina",
+      orgName: "Baraka Pharmacy",
+      eatDate: "2026-12-08", // Eve of Independence Day (Dec 9)
+      branches: [
+        {
+          name: "Sinza Main",
+          salesCount: 14,
+          revenueTzs: 215000,
+          yesterdayRevenueTzs: 180000,
+          lowStockCount: 2,
+          lowStockTop: "Amoxil 500mg",
+          expiredCount: 0,
+          expiringSoonCount: 0,
+          topSeller: { name: "Coartem 20/120mg", qty: 6 },
+        },
+      ],
+      billing: {
+        planName: "Community Standard",
+        daysLeft: 3,
+        isInGraceDay: false,
+        branchesUsed: 1,
+        maxBranches: 1,
+        operatorsUsed: 2,
+        maxOperators: 6,
+      },
+    });
+
+    expect(msg.sms).not.toContain("Nama");
+    expect(msg.sms).toContain("Amina");
+    expect(msg.sms).toContain("3 days left");
+    expect(msg.sms).toContain("Independence Day");
+    expect(msg.sms.length).toBeLessThanOrEqual(459);
+
+    const swHoliday = calendarNudge("2026-07-06", "SW", { lowStockCount: 0 });
+    expect(swHoliday).toContain("Saba Saba");
   });
 });

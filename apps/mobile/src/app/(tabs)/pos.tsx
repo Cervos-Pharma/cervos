@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { BottomSheet, Column, Host, Switch, Text as UiText } from "@expo/ui";
-import { formatTzs, parseGs1Barcode } from "@cervos/core";
+import {
+  formatTzs,
+  matchCatalogByBarcode,
+  mineBasketAffinities,
+  normalizeBarcode,
+  parseScanIntent,
+} from "@cervos/core";
 import { PlatformIcon } from "@/components/platform-icon";
 import { PrimaryButton } from "@/components/primary-button";
 import { EmptyStateCard } from "@/components/state-views";
-import { ContextualHint } from "@/components/onboarding";
 import { useMobileSession } from "@/context/session-context";
 import { postWorkspaceAction } from "@/services/api";
-import { enqueueOfflineMutation } from "@/services/offline-db";
 import { printReceiptNative, shareReceiptPdf } from "@/services/receipts";
 import { playSoundCue, triggerHaptic } from "@/services/sounds";
 import { colors, radius, spacing, typography, useBrandColors } from "@/theme";
@@ -30,16 +34,20 @@ export default function CounterPosScreen() {
   const router = useRouter();
   const {
     workspace,
+    cloudCatalog,
     lang,
     isOnline,
     activeCentre,
     scopedBatches,
+    scopedSales,
     scopedCustomers,
     prefs,
     pendingScannedCode,
     setPendingScannedCode,
+    pendingScanContext,
+    setPendingScanContext,
+    queueAndApplyOffline,
     refreshState,
-    syncNow,
   } = useMobileSession();
 
   const accentHex = workspace?.account?.customization?.brandAccent;
@@ -48,6 +56,7 @@ export default function CounterPosScreen() {
   const todayIso = todayIsoDay();
 
   const [search, setSearch] = useState("");
+  const [catFilter, setCatFilter] = useState<string>("all");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] =
@@ -65,47 +74,95 @@ export default function CounterPosScreen() {
     [scopedBatches, todayIso]
   );
 
+  const categoriesInStock = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      if (p.category) set.add(p.category);
+    }
+    return Array.from(set).slice(0, 8);
+  }, [products]);
+
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
+    return products.filter((p) => {
+      if (catFilter === "rx" && !p.requiresPrescription) return false;
+      if (catFilter !== "all" && catFilter !== "rx" && p.category !== catFilter) return false;
+      if (!q) return true;
+      return (
         p.brandName.toLowerCase().includes(q) ||
         p.genericName.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q) ||
         p.earliestBatch.toLowerCase().includes(q)
-    );
-  }, [products, search]);
-
-  const adjustCart = (productId: string, delta: number) => {
-    const prod = products.find((p) => p.productId === productId);
-    if (!prod) return;
-    setCart((prev) => {
-      const next = Math.max(0, Math.min(prod.validQty, (prev[productId] || 0) + delta));
-      const copy = { ...prev };
-      if (next === 0) delete copy[productId];
-      else copy[productId] = next;
-      return copy;
+      );
     });
-    if (delta > 0) {
-      void playSoundCue("cart-add");
-      void triggerHaptic("light");
-    } else {
-      void triggerHaptic("selection");
-    }
-  };
+  }, [products, search, catFilter]);
 
-  // Handle scanned barcode returned from /scanner-modal
+  const adjustCart = useCallback(
+    (productId: string, delta: number) => {
+      const prod = products.find((p) => p.productId === productId);
+      if (!prod) return;
+      setCart((prev) => {
+        const next = Math.max(0, Math.min(prod.validQty, (prev[productId] || 0) + delta));
+        const copy = { ...prev };
+        if (next === 0) delete copy[productId];
+        else copy[productId] = next;
+        return copy;
+      });
+      if (delta > 0) {
+        void playSoundCue("cart-add");
+        void triggerHaptic("light");
+      } else {
+        void triggerHaptic("selection");
+      }
+    },
+    [products]
+  );
+
+  // Handle scanned barcode / GS1 / Lot QR / Receipt QR returned from /scanner-modal
   useEffect(() => {
     if (!pendingScannedCode) return;
+    if (pendingScanContext && pendingScanContext !== "pos") return;
     const code = pendingScannedCode;
     setPendingScannedCode(null);
+    setPendingScanContext(null);
 
-    const parsed = parseGs1Barcode(code);
+    const intent = parseScanIntent(code);
+
+    if (intent.kind === "receipt") {
+      const allSales = workspace?.sales ?? scopedSales;
+      const targetRcp = allSales.find(
+        (s) =>
+          (intent.saleId && s.id === intent.saleId) ||
+          (s.receiptNumber && s.receiptNumber.toUpperCase() === intent.receiptNumber.toUpperCase())
+      );
+      void playSoundCue("scan");
+      void triggerHaptic("success");
+      if (targetRcp) {
+        router.push(`/receipt-sheet?saleId=${encodeURIComponent(targetRcp.id)}`);
+      } else {
+        router.push("/(tabs)/receipts");
+      }
+      return;
+    }
+
+    const cloudHit = matchCatalogByBarcode(cloudCatalog, code);
+    const gtin =
+      intent.kind === "gs1" ? intent.gtin : intent.kind === "barcode" ? intent.code : null;
+    const normGtin = gtin ? normalizeBarcode(gtin) : null;
     const lower = code.trim().toLowerCase();
+
     const batchMatch = scopedBatches.find(
       (b) =>
-        (parsed.batchNumber && b.batchNumber.toLowerCase() === parsed.batchNumber.toLowerCase()) ||
+        (intent.kind === "lot" && b.batchNumber.toLowerCase() === intent.batchNumber.toLowerCase()) ||
+        (intent.kind === "gs1" &&
+          intent.batchNumber &&
+          b.batchNumber.toLowerCase() === intent.batchNumber.toLowerCase()) ||
+        (normGtin && b.barcode && normalizeBarcode(b.barcode) === normGtin) ||
+        (cloudHit &&
+          (b.productId === cloudHit.masterId ||
+            b.productId === cloudHit.id ||
+            b.brandName.toLowerCase() === cloudHit.brandName.toLowerCase() ||
+            b.genericName.toLowerCase() === cloudHit.inn.toLowerCase())) ||
         b.batchNumber.toLowerCase() === lower ||
         b.productId.toLowerCase() === lower ||
         b.brandName.toLowerCase() === lower
@@ -115,6 +172,11 @@ export default function CounterPosScreen() {
       ? products.find((p) => p.productId === batchMatch.productId)
       : products.find(
           (p) =>
+            (cloudHit &&
+              (p.productId === cloudHit.masterId ||
+                p.productId === cloudHit.id ||
+                p.brandName.toLowerCase() === cloudHit.brandName.toLowerCase() ||
+                p.genericName.toLowerCase() === cloudHit.inn.toLowerCase())) ||
             p.brandName.toLowerCase().includes(lower) ||
             p.genericName.toLowerCase().includes(lower) ||
             p.productId.toLowerCase() === lower
@@ -123,7 +185,16 @@ export default function CounterPosScreen() {
     if (!prodMatch) {
       void playSoundCue("alert");
       void triggerHaptic("error");
-      setFeedback({ ok: false, text: `No matching shelf item found for "${code}".` });
+      if (cloudHit) {
+        setFeedback({
+          ok: false,
+          text: isSw
+            ? `Cloud Catalog imetambua ${cloudHit.brandName} (${cloudHit.segment}), lakini stoo ni 0.`
+            : `Cloud Catalog matched ${cloudHit.brandName} (${cloudHit.segment}), but 0 stock on shelf.`,
+        });
+      } else {
+        setFeedback({ ok: false, text: `No matching shelf item found for "${code}".` });
+      }
       return;
     }
 
@@ -146,7 +217,53 @@ export default function CounterPosScreen() {
     adjustCart(prodMatch.productId, 1);
     void playSoundCue("scan");
     setFeedback({ ok: true, text: `Added ${prodMatch.brandName} to basket.` });
-  }, [pendingScannedCode, setPendingScannedCode, scopedBatches, products, todayIso, cart]);
+  }, [
+    pendingScannedCode,
+    pendingScanContext,
+    setPendingScannedCode,
+    setPendingScanContext,
+    cloudCatalog,
+    scopedBatches,
+    scopedSales,
+    workspace?.sales,
+    products,
+    todayIso,
+    cart,
+    adjustCart,
+    isSw,
+    router,
+  ]);
+
+  const affinities = useMemo(() => mineBasketAffinities(scopedSales, 2), [scopedSales]);
+  const crossSellSuggestions = useMemo(() => {
+    const inCartIds = Object.keys(cart).filter((id) => (cart[id] || 0) > 0);
+    if (inCartIds.length === 0 || affinities.length === 0) return [];
+    const inCartSet = new Set(inCartIds);
+    const seenIds = new Set<string>();
+    const out: Array<{
+      product: (typeof products)[number];
+      confidencePct: number;
+      pairedWith: string;
+    }> = [];
+    for (const aff of affinities) {
+      let compId: string | null = null;
+      let pairedWith = "";
+      if (inCartSet.has(aff.aId) && !inCartSet.has(aff.bId)) {
+        compId = aff.bId;
+        pairedWith = aff.aName;
+      } else if (inCartSet.has(aff.bId) && !inCartSet.has(aff.aId)) {
+        compId = aff.aId;
+        pairedWith = aff.bName;
+      }
+      if (!compId || seenIds.has(compId)) continue;
+      const prod = products.find((p) => p.productId === compId && p.validQty > 0);
+      if (!prod) continue;
+      seenIds.add(compId);
+      out.push({ product: prod, confidencePct: aff.confidencePct, pairedWith });
+      if (out.length >= 3) break;
+    }
+    return out;
+  }, [cart, affinities, products]);
 
   const cartEntries = Object.entries(cart).filter(([, qty]) => qty > 0);
   const cartTotalTzs = cartEntries.reduce((sum, [pid, qty]) => {
@@ -168,74 +285,82 @@ export default function CounterPosScreen() {
 
     setBusy(true);
     setFeedback(null);
-    const lines = cartEntries.map(([productId, qty]) => ({ productId, qty }));
+    const items = cartEntries.map(([productId, qty]) => ({ productId, qty }));
+    const salePayload = {
+      items,
+      paymentMethod,
+      prescriptionRef: prescriptionRef.trim() || undefined,
+      customerName: customerName.trim() || undefined,
+      customerPhone: customerPhone.trim() || undefined,
+      saveCustomerPreset: saveRepeat && customerName.trim().length >= 2,
+      centreId: activeCentre?.id,
+    };
 
-    try {
-      if (!isOnline) {
-        await enqueueOfflineMutation("sale", {
-          lines,
-          paymentMethod,
-          prescriptionRef: prescriptionRef.trim() || undefined,
-          customerName: customerName.trim() || undefined,
-          customerPhone: customerPhone.trim() || undefined,
-          centreId: activeCentre?.id,
-        });
-        setCart({});
-        setCheckoutOpen(false);
-        await playSoundCue("sale-complete");
-        await triggerHaptic("success");
-        setFeedback({
-          ok: true,
-          text: `Saved offline sale (${formatTzs(cartTotalTzs)}). Will sync automatically.`,
-        });
-        void syncNow();
-        return;
-      }
-
-      const res = await postWorkspaceAction<{ totalTzs?: number; receipt?: WorkspaceSale }>({
-        action: "dispense_pos",
-        lines,
-        paymentMethod,
-        prescriptionRef: prescriptionRef.trim() || undefined,
-        customerName: customerName.trim() || undefined,
-        customerPhone: customerPhone.trim() || undefined,
-        saveCustomerPreset: saveRepeat && customerName.trim().length >= 2,
-      });
-
-      if (!res.ok) {
-        await playSoundCue("alert");
-        await triggerHaptic("error");
-        setFeedback({ ok: false, text: res.data?.error || "Sale could not be completed." });
-        return;
-      }
-
+    const handleOfflineFallback = async () => {
+      const offlineOut = await queueAndApplyOffline("sale", salePayload);
+      const localSale = offlineOut.nextSnapshot?.sales?.[0] ?? null;
       setCart({});
-      setPrescriptionRef("");
       setCheckoutOpen(false);
-      setLastReceipt(res.data.receipt ?? null);
+      setLastReceipt(localSale);
       await playSoundCue("sale-complete");
       await triggerHaptic("success");
       setFeedback({
         ok: true,
-        text: `Sale completed · ${formatTzs(res.data.totalTzs || cartTotalTzs)}`,
+        text: isSw
+          ? `Mauzo yamehifadhiwa nje ya mtandao (${formatTzs(cartTotalTzs)}). Yatatuma mtandao ukirudi.`
+          : `Saved offline sale (${formatTzs(cartTotalTzs)}). Queued to sync automatically.`,
       });
-      await refreshState();
+    };
+
+    try {
+      if (!isOnline) {
+        await handleOfflineFallback();
+        return;
+      }
+
+      try {
+        const res = await postWorkspaceAction<{ totalTzs?: number; receipt?: WorkspaceSale }>({
+          action: "dispense_pos",
+          ...salePayload,
+        });
+
+        if (!res.ok) {
+          await playSoundCue("alert");
+          await triggerHaptic("error");
+          setFeedback({ ok: false, text: res.data?.error || "Sale could not be completed." });
+          return;
+        }
+
+        setCart({});
+        setPrescriptionRef("");
+        setCheckoutOpen(false);
+        setLastReceipt(res.data.receipt ?? null);
+        await playSoundCue("sale-complete");
+        await triggerHaptic("success");
+        setFeedback({
+          ok: true,
+          text: `Sale completed · ${formatTzs(res.data.totalTzs || cartTotalTzs)}`,
+        });
+        await refreshState();
+      } catch {
+        await handleOfflineFallback();
+      }
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.groupedBackground }}>
+    <View style={{ flex: 1, backgroundColor: brand.canvasBg }}>
       {/* Focused POS Header + Settings Shortcut (POS is ONLY POS) */}
       <View
         style={{
           paddingTop: 54,
           paddingHorizontal: spacing.md,
           paddingBottom: spacing.sm,
-          backgroundColor: colors.secondaryGroupedBackground,
+          backgroundColor: brand.cardBg,
           borderBottomWidth: 1,
-          borderBottomColor: colors.separator,
+          borderBottomColor: brand.borderColor,
           gap: spacing.sm,
         }}
       >
@@ -247,7 +372,10 @@ export default function CounterPosScreen() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
             <Pressable
               accessibilityLabel="Scan Barcode"
-              onPress={() => router.push("/scanner-modal")}
+              onPress={() => {
+                setPendingScanContext("pos");
+                router.push("/scanner-modal?target=pos");
+              }}
               style={{
                 width: 40,
                 height: 40,
@@ -284,27 +412,49 @@ export default function CounterPosScreen() {
           value={search}
           onChangeText={setSearch}
           placeholder={isSw ? "Tafuta dawa, jenarik au batch..." : "Search medicine, generic or batch..."}
-          placeholderTextColor={colors.tertiaryLabel as string}
+          placeholderTextColor={brand.textMuted}
           style={{
             minHeight: 42,
             borderRadius: radius.md,
             borderCurve: "continuous",
-            backgroundColor: colors.tertiaryBackground,
+            backgroundColor: brand.inputBg,
             paddingHorizontal: spacing.md,
-            color: colors.label,
+            color: brand.textPrimary,
             fontSize: 14,
           }}
         />
-        <ContextualHint
-          id="pos-focus-v1"
-          text={
-            isSw
-              ? "Kaunta ni kwa ajili ya mauzo pekee — mipangilio ya printa na sauti iko kwenye alama ya gia."
-              : "Counter stays focused on checkout — tap the gear icon anytime for printer width & sound cues."
-          }
-          accentColor={brand.accent}
-          tintBackground={brand.accentSoft}
-        />
+
+        {/* Web-Parity Category & Rx Filter Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs }}>
+          {[
+            { id: "all", label: isSw ? "Zote" : "All Shelf" },
+            { id: "rx", label: "Rx Only" },
+            ...categoriesInStock.map((c) => ({ id: c, label: c })),
+          ].map((c) => {
+            const active = catFilter === c.id;
+            return (
+              <Pressable
+                key={c.id}
+                onPress={() => {
+                  setCatFilter(c.id);
+                  void triggerHaptic("selection");
+                }}
+                style={{
+                  paddingHorizontal: 11,
+                  paddingVertical: 6,
+                  borderRadius: radius.full,
+                  backgroundColor: active ? brand.accent : brand.cardSubtleBg,
+                  borderWidth: 1,
+                  borderColor: active ? brand.accent : brand.borderColor,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#FFFFFF" : brand.textSecondary }}>
+                  {c.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         {scopedCustomers.length > 0 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs }}>
@@ -337,6 +487,36 @@ export default function CounterPosScreen() {
               </Pressable>
             ))}
           </ScrollView>
+        )}
+
+        {crossSellSuggestions.length > 0 && (
+          <View style={{ gap: 4 }}>
+            <Text style={[typography.overline, { color: brand.accent }]}>
+              {isSw ? "NYONGEZA YA KIKAPU (EDGE ML)" : "BASKET COMPANION ADD-ONS"}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs }}>
+              {crossSellSuggestions.map(({ product, confidencePct }) => (
+                <Pressable
+                  key={product.productId}
+                  onPress={() => adjustCart(product.productId, 1)}
+                  style={{
+                    paddingHorizontal: 11,
+                    paddingVertical: 6,
+                    borderRadius: radius.full,
+                    backgroundColor: brand.accentSoft,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <PlatformIcon sf="plus.circle.fill" md="add-circle" color={brand.accent} size={14} />
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: brand.accent }}>
+                    {product.brandName} · {confidencePct}%
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
         )}
 
         {feedback && (

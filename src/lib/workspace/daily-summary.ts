@@ -1,4 +1,5 @@
 import { sendTextifySms } from "@/lib/workspace/env";
+import { composeEveningMessage, type BranchDay } from "@/lib/workspace/owner-messages";
 import {
   appendAuditLog,
   findWorkspacePackageMatch,
@@ -12,79 +13,7 @@ import {
   warmDbFromSupabase,
 } from "@/lib/workspace/store";
 
-export function buildPersonalizedBillingReminder(params: {
-  lang: "EN" | "SW";
-  ownerFirstName: string;
-  orgName: string;
-  planName: string;
-  daysLeft: number | null;
-  isInGraceDay: boolean;
-  branchesUsed: number;
-  maxBranches: number | null;
-  operatorsUsed: number;
-  maxOperators: number | null;
-}): string | null {
-  const parts: string[] = [];
-  const {
-    lang,
-    ownerFirstName,
-    orgName,
-    planName,
-    daysLeft,
-    isInGraceDay,
-    branchesUsed,
-    maxBranches,
-    operatorsUsed,
-    maxOperators,
-  } = params;
-
-  if (isInGraceDay) {
-    parts.push(
-      lang === "SW"
-        ? `${ownerFirstName}, kifurushi chako (${planName}) kimeisha leo - lipa usiku huu kupitia cervos.online/app/billing ili huduma na ripoti za ${orgName} zisikatike kesho.`
-        : `Hi ${ownerFirstName}, your ${planName} plan expired today - renew tonight at cervos.online/app/billing so ${orgName} counters & evening updates don't pause tomorrow.`
-    );
-  } else if (daysLeft !== null && daysLeft <= 7) {
-    parts.push(
-      lang === "SW"
-        ? `${ownerFirstName}, zimebaki siku ${daysLeft} kwenye kifurushi chako (${planName}) cha ${orgName} - lipia mapema kupitia cervos.online/app/billing.`
-        : `Hi ${ownerFirstName}, ${daysLeft} day${daysLeft === 1 ? "" : "s"} left on your ${planName} plan for ${orgName} - renew anytime at cervos.online/app/billing.`
-    );
-  }
-
-  const nearBranchCap = maxBranches !== null && branchesUsed >= Math.max(1, maxBranches - 1);
-  const nearOpCap = maxOperators !== null && operatorsUsed >= Math.ceil(maxOperators * 0.8);
-  if (nearBranchCap || nearOpCap) {
-    const limitNote =
-      lang === "SW"
-        ? `Matumizi ya ${orgName}: matawi ${branchesUsed}/${maxBranches ?? "bila ukomo"}, wafanyakazi ${operatorsUsed}/${maxOperators ?? "bila ukomo"} - pandisha kifurushi kupitia cervos.online/app/billing.`
-        : `${orgName} capacity at ${branchesUsed}/${maxBranches ?? "unlimited"} branches, ${operatorsUsed}/${maxOperators ?? "unlimited"} staff - upgrade cleanly at cervos.online/app/billing.`;
-    parts.push(limitNote);
-  }
-
-  if (parts.length === 0) return null;
-  return parts.join(" ");
-}
-
-export function buildBranchDigestSms(params: {
-  lang: "EN" | "SW";
-  orgName: string;
-  branchName: string;
-  dateLabel: string;
-  salesCount: number;
-  revenueTzs: number;
-  nearExpiryCount: number;
-  lowStockCount: number;
-  personalReminder?: string | null;
-}): string {
-  const revFmt = Math.round(params.revenueTzs).toLocaleString("en-US");
-  const base =
-    params.lang === "SW"
-      ? `Nama (${params.branchName} · ${params.dateLabel}): Mauzo ${params.salesCount} (TZS ${revFmt}). Zinazokaribia kuisha: ${params.nearExpiryCount}, chini ya kiwango: ${params.lowStockCount}. ${params.orgName}`
-      : `Nama (${params.branchName} · ${params.dateLabel}): ${params.salesCount} sales totaling TZS ${revFmt}. Near-expiry lots: ${params.nearExpiryCount}, low stock: ${params.lowStockCount}. ${params.orgName}`;
-  if (!params.personalReminder) return base;
-  return `${base} | ${params.personalReminder}`.slice(0, 480);
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function runDailyOwnerDigest(options?: {
   force?: boolean;
@@ -97,7 +26,6 @@ export async function runDailyOwnerDigest(options?: {
   const nowMs = now.getTime();
   const eatDate = new Date(nowMs + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const dayStartMs = Date.parse(`${eatDate}T00:00:00.000+03:00`);
-  const nearCutoffMs = nowMs + 90 * 24 * 60 * 60 * 1000;
   const senderName = (process.env.TEXTIFY_SENDER_NAME || "Nama").trim() || "Nama";
   const force = Boolean(options?.force);
   const targetAccountId = options?.targetAccountId?.trim() || "";
@@ -151,7 +79,7 @@ export async function runDailyOwnerDigest(options?: {
         });
         appendAuditLog(db, {
           accountId: acc.id,
-          actor: "Nama Daily Cron (18:00 EAT)",
+          actor: "Cervos Evening Update (18:00 EAT)",
           category: "BILLING",
           action: `Evening updates and counter access paused after expiration cutoff (${acc.subscriptionPlan}).`,
         });
@@ -193,18 +121,6 @@ export async function runDailyOwnerDigest(options?: {
     const profiles = db.profiles.filter((p) => p.accountId === acc.id);
     const matchedPkg = findWorkspacePackageMatch(packages, acc.subscriptionPlan);
     const ownerFirstName = (acc.fullName || acc.orgName).trim().split(/\s+/)[0] || acc.orgName;
-    const personalReminder = buildPersonalizedBillingReminder({
-      lang: acc.lang,
-      ownerFirstName,
-      orgName: acc.orgName,
-      planName: acc.subscriptionPlan,
-      daysLeft: expiryInfo.daysLeft,
-      isInGraceDay: expiryInfo.isInGraceDay,
-      branchesUsed: allCentres.filter((c) => c.status !== "archived").length,
-      maxBranches: matchedPkg?.maxBranches ?? null,
-      operatorsUsed: profiles.length,
-      maxOperators: matchedPkg?.maxOperators ?? null,
-    });
 
     const ownerPhone =
       acc.ownerPhone?.trim() ||
@@ -214,109 +130,121 @@ export async function runDailyOwnerDigest(options?: {
       acc.ownerPhone = ownerPhone;
     }
 
-    const branchLinesForInApp: string[] = [];
-
-    for (let idx = 0; idx < centres.length; idx++) {
-      const ctr = centres[idx];
-      const branchSales = (db.sales ?? []).filter(
-        (s) =>
-          s.accountId === acc.id &&
-          s.centreId === ctr.id &&
-          Date.parse(s.createdAt) >= dayStartMs
-      );
-      const revenueTzs = branchSales.reduce((sum, s) => sum + s.totalTzs, 0);
-
-      const branchBatches = (db.batches ?? []).filter(
-        (b) => b.accountId === acc.id && b.centreId === ctr.id
-      );
-      const nearExpiryCount = branchBatches.filter((b) => {
-        const ms = Date.parse(b.expiryDate);
-        return Number.isFinite(ms) && ms <= nearCutoffMs && b.quantity > 0;
-      }).length;
-      const lowStockCount = branchBatches.filter(
-        (b) => b.quantity <= (b.lowStockThreshold ?? 15)
-      ).length;
-
-      branchLinesForInApp.push(
-        acc.lang === "SW"
-          ? `${ctr.name}: Mauzo ${branchSales.length} (TZS ${Math.round(revenueTzs).toLocaleString("en-US")}), karibu kuisha ${nearExpiryCount}, chini ya kiwango ${lowStockCount}`
-          : `${ctr.name}: ${branchSales.length} sales (TZS ${Math.round(revenueTzs).toLocaleString("en-US")}), near-expiry ${nearExpiryCount}, low stock ${lowStockCount}`
-      );
-
-      if (!ownerPhone) continue;
-
-      const msg = buildBranchDigestSms({
-        lang: acc.lang,
-        orgName: acc.orgName,
-        branchName: ctr.name,
-        dateLabel: eatDate,
-        salesCount: branchSales.length,
-        revenueTzs,
-        nearExpiryCount,
-        lowStockCount,
-        personalReminder: idx === 0 ? personalReminder : null,
+    const branchDays: BranchDay[] = centres.map((ctr) => {
+      const centreSales = (db.sales ?? []).filter((s) => s.accountId === acc.id && s.centreId === ctr.id);
+      const todaySales = centreSales.filter((s) => Date.parse(s.createdAt) >= dayStartMs);
+      const yesterdaySales = centreSales.filter((s) => {
+        const ms = Date.parse(s.createdAt);
+        return ms >= dayStartMs - DAY_MS && ms < dayStartMs;
       });
 
-      const res = await sendTextifySms({
-        to: ownerPhone,
-        message: msg,
-        sender: senderName,
-      });
+      const sellerQty = new Map<string, number>();
+      for (const sale of todaySales) {
+        for (const line of sale.lines ?? []) {
+          if (!line.brandName) continue;
+          sellerQty.set(line.brandName, (sellerQty.get(line.brandName) ?? 0) + line.qty);
+        }
+      }
+      const topEntry = [...sellerQty.entries()].sort((a, b) => b[1] - a[1])[0];
 
+      const batches = (db.batches ?? []).filter(
+        (b) => b.accountId === acc.id && b.centreId === ctr.id && !b.quarantined
+      );
+      const inStock = batches.filter((b) => b.quantity > 0);
+      const expired = inStock
+        .filter((b) => Number.isFinite(Date.parse(b.expiryDate)) && Date.parse(b.expiryDate) < nowMs)
+        .sort((a, b) => Date.parse(a.expiryDate) - Date.parse(b.expiryDate));
+      const expiringSoon = inStock
+        .filter((b) => {
+          const ms = Date.parse(b.expiryDate);
+          return Number.isFinite(ms) && ms >= nowMs && ms <= nowMs + 30 * DAY_MS;
+        })
+        .sort((a, b) => Date.parse(a.expiryDate) - Date.parse(b.expiryDate));
+      const low = batches
+        .filter((b) => b.quantity <= (b.lowStockThreshold ?? 15))
+        .sort((a, b) => a.quantity - b.quantity);
+
+      const day: BranchDay = {
+        name: ctr.name,
+        salesCount: todaySales.length,
+        revenueTzs: todaySales.reduce((sum, s) => sum + s.totalTzs, 0),
+        yesterdayRevenueTzs: yesterdaySales.reduce((sum, s) => sum + s.totalTzs, 0),
+        lowStockCount: low.length,
+        expiredCount: expired.length,
+        expiringSoonCount: expiringSoon.length,
+      };
+      if (low[0]) day.lowStockTop = low[0].brandName || low[0].genericName;
+      if (expired[0]) day.expiredTop = expired[0].brandName || expired[0].genericName;
+      if (expiringSoon[0]) {
+        day.expiringSoon = {
+          name: expiringSoon[0].brandName || expiringSoon[0].genericName,
+          days: Math.max(1, Math.ceil((Date.parse(expiringSoon[0].expiryDate) - nowMs) / DAY_MS)),
+        };
+      }
+      if (topEntry) day.topSeller = { name: topEntry[0], qty: topEntry[1] };
+      return day;
+    });
+
+    if (branchDays.length === 0) {
+      skippedAccounts.push({ accountId: acc.id, orgName: acc.orgName, reason: "No active branches" });
+      continue;
+    }
+
+    const message = composeEveningMessage({
+      lang: acc.lang,
+      accountId: acc.id,
+      firstName: ownerFirstName,
+      orgName: acc.orgName,
+      eatDate,
+      branches: branchDays,
+      billing: {
+        planName: acc.subscriptionPlan,
+        daysLeft: expiryInfo.daysLeft,
+        isInGraceDay: expiryInfo.isInGraceDay,
+        branchesUsed: allCentres.filter((c) => c.status !== "archived").length,
+        maxBranches: matchedPkg?.maxBranches ?? null,
+        operatorsUsed: profiles.length,
+        maxOperators: matchedPkg?.maxOperators ?? null,
+      },
+    });
+
+    if (ownerPhone) {
+      const res = await sendTextifySms({ to: ownerPhone, message: message.sms, sender: senderName });
       dispatches.push({
         accountId: acc.id,
         orgName: acc.orgName,
-        branchId: ctr.id,
-        branchName: ctr.name,
+        branchId: centres.length === 1 ? centres[0].id : "all",
+        branchName: centres.length === 1 ? centres[0].name : `${centres.length} branches`,
         lang: acc.lang,
         to: ownerPhone,
         sender: res.sender,
         channel: res.channel,
         delivered: res.delivered,
-        message: msg,
+        message: message.sms,
         ...(res.error ? { error: res.error } : {}),
       });
     }
 
     if (force || acc.lastExpiryReminderEatDate !== eatDate) {
       db.notifications ??= [];
-      if (branchLinesForInApp.length > 0) {
-        db.notifications.unshift({
-          id: newId("ntf"),
-          accountId: acc.id,
-          centreId: "",
-          kind: "system",
-          title:
-            acc.lang === "SW"
-              ? `Muhtasari wa Jioni (${eatDate})`
-              : `Evening Update (${eatDate})`,
-          body: `${branchLinesForInApp.join(" · ")}${personalReminder ? ` - ${personalReminder}` : ""}`,
-          read: false,
-          createdAt: now.toISOString(),
-        });
-      } else if (personalReminder) {
-        db.notifications.unshift({
-          id: newId("ntf"),
-          accountId: acc.id,
-          centreId: "",
-          kind: "approval",
-          title:
-            acc.lang === "SW"
-              ? `Ukumbusho wa Kifurushi (${acc.subscriptionPlan})`
-              : `Personal Renewal Reminder (${acc.subscriptionPlan})`,
-          body: personalReminder,
-          read: false,
-          createdAt: now.toISOString(),
-        });
-      }
+      db.notifications.unshift({
+        id: newId("ntf"),
+        accountId: acc.id,
+        centreId: "",
+        kind: message.billingNote ? "approval" : "system",
+        title: message.inAppTitle,
+        body: message.inAppBody,
+        read: false,
+        createdAt: now.toISOString(),
+      });
       acc.lastExpiryReminderEatDate = eatDate;
     }
 
     appendAuditLog(db, {
       accountId: acc.id,
-      actor: "Nama Daily Cron (18:00 EAT)",
+      actor: "Cervos Evening Update (18:00 EAT)",
       category: "BILLING",
-      action: `Dispatched ${centres.length} daily branch summary update(s) in ${acc.lang}${personalReminder ? " with personalized billing reminder" : ""}`,
+      action: `Sent evening update for ${centres.length} branch(es) in ${acc.lang}${message.billingNote ? " with plan reminder" : ""}${ownerPhone ? "" : " (in-app only, no owner phone)"}`,
     });
   }
 

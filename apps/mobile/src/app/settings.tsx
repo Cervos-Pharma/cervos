@@ -10,18 +10,30 @@ import { printReceiptNative } from "@/services/receipts";
 import { playSoundCue } from "@/services/sounds";
 import { colors, radius, spacing, typography, useBrandColors } from "@/theme";
 
-type SettingsScope = "profile" | "hardware" | "support";
+type SettingsScope = "profile" | "hardware" | "compliance" | "support";
 
 export default function SettingsScreen() {
   const { scope } = useLocalSearchParams<{ scope?: string }>();
   const initialScope: SettingsScope =
-    scope === "hardware" ? "hardware" : scope === "support" ? "support" : "profile";
+    scope === "hardware"
+      ? "hardware"
+      : scope === "compliance"
+        ? "compliance"
+        : scope === "support"
+          ? "support"
+          : "profile";
   const [activeScope, setActiveScope] = useState<SettingsScope>(initialScope);
 
-  const { workspace, activeCentre, lang, prefs, updatePrefs, toggleLanguage, refreshState } =
+  const { workspace, activeCentre, capabilities, lang, prefs, updatePrefs, toggleLanguage, refreshState } =
     useMobileSession();
   const brand = useBrandColors(workspace?.account?.customization?.brandAccent);
   const isSw = lang === "SW";
+
+  // Compliance permit state
+  const [certDocType, setCertDocType] = useState("Pharmacy Council Operating Permit");
+  const [certLicense, setCertLicense] = useState("");
+  const [certFileName, setCertFileName] = useState("");
+  const [certBusy, setCertBusy] = useState(false);
 
   // Support Desk Ticket state
   const [ticketSub, setTicketSub] = useState("");
@@ -68,7 +80,7 @@ export default function SettingsScreen() {
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
-      style={{ flex: 1, backgroundColor: colors.groupedBackground }}
+      style={{ flex: 1, backgroundColor: brand.canvasBg }}
       contentContainerStyle={{ padding: spacing.md, gap: spacing.md, paddingBottom: 48 }}
     >
       {/* Scope Pill Switcher */}
@@ -83,9 +95,10 @@ export default function SettingsScreen() {
       >
         {(
           [
-            { id: "profile", label: isSw ? "Wasifu & Sauti" : "Profile & Audio" },
-            { id: "hardware", label: isSw ? "Printa & POS" : "POS Hardware" },
-            { id: "support", label: isSw ? "Msaada HQ" : "HQ Support" },
+            { id: "profile", label: isSw ? "Wasifu" : "Profile" },
+            { id: "hardware", label: isSw ? "Printa" : "POS" },
+            { id: "compliance", label: isSw ? "Vibali" : "Permits" },
+            { id: "support", label: isSw ? "Msaada" : "Support" },
           ] as const
         ).map((tab) => {
           const active = activeScope === tab.id;
@@ -132,7 +145,93 @@ export default function SettingsScreen() {
       )}
 
       {activeScope === "profile" && (
-        <Host matchContents seedColor={brand.accent}>
+        <View style={{ gap: spacing.md }}>
+          <View
+            style={{
+              padding: spacing.md,
+              borderRadius: radius.xl,
+              borderCurve: "continuous",
+              backgroundColor: brand.cardBg,
+              borderWidth: 1,
+              borderColor: brand.borderColor,
+              gap: spacing.sm,
+            }}
+          >
+            <Text style={{ fontSize: 10, fontWeight: "800", letterSpacing: 1, color: brand.accent }}>
+              {isSw ? "MUONEKANO & MAANDISHI" : "APPEARANCE & TEXT SCALE"}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {(
+                [
+                  { id: "light", label: "Light" },
+                  { id: "dark", label: "Dark" },
+                  { id: "system", label: "Auto" },
+                ] as const
+              ).map((m) => {
+                const active = prefs.themePref === m.id;
+                return (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => {
+                      updatePrefs({ themePref: m.id });
+                      void postWorkspaceAction({ action: "update_profile_settings", themePref: m.id }).catch(() => undefined);
+                    }}
+                    style={{
+                      flex: 1,
+                      minHeight: 38,
+                      borderRadius: radius.full,
+                      backgroundColor: active ? brand.accent : brand.cardSubtleBg,
+                      borderWidth: 1,
+                      borderColor: active ? brand.accent : brand.borderColor,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#FFFFFF" : brand.textPrimary }}>
+                      {m.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              {(
+                [
+                  { id: "compact", label: "Compact" },
+                  { id: "standard", label: "Standard" },
+                  { id: "large", label: "Large" },
+                ] as const
+              ).map((fs) => {
+                const active = prefs.fontScale === fs.id;
+                return (
+                  <Pressable
+                    key={fs.id}
+                    onPress={() => {
+                      updatePrefs({ fontScale: fs.id });
+                      void postWorkspaceAction({ action: "update_profile_settings", fontScale: fs.id }).catch(() => undefined);
+                    }}
+                    style={{
+                      flex: 1,
+                      minHeight: 38,
+                      borderRadius: radius.full,
+                      backgroundColor: active ? brand.teal : brand.cardSubtleBg,
+                      borderWidth: 1,
+                      borderColor: active ? brand.teal : brand.borderColor,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: active ? "#FFFFFF" : brand.textPrimary }}>
+                      {fs.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <Host matchContents seedColor={brand.accent}>
           <FieldGroup>
             <FieldGroup.Section title={isSw ? "Lugha & Mhudumu" : "Identity & Language"}>
               <ListItem supportingText={workspace?.account?.orgName}>
@@ -169,6 +268,7 @@ export default function SettingsScreen() {
             </FieldGroup.Section>
           </FieldGroup>
         </Host>
+        </View>
       )}
 
       {activeScope === "hardware" && (
@@ -265,6 +365,159 @@ export default function SettingsScreen() {
             <Text style={typography.subhead}>
               3. Plan status: {workspace?.account?.subscriptionPlan?.toUpperCase()} ({formatTzs(0)} local fees).
             </Text>
+          </View>
+        </View>
+      )}
+
+      {activeScope === "compliance" && (
+        <View style={{ gap: spacing.md }}>
+          <View
+            style={{
+              padding: spacing.md,
+              borderRadius: radius.xl,
+              borderCurve: "continuous",
+              backgroundColor: colors.secondaryGroupedBackground,
+              gap: spacing.sm,
+            }}
+          >
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={typography.overline}>OPERATING PERMITS & NETWORK ACCESS</Text>
+              <View
+                style={{
+                  paddingHorizontal: 9,
+                  paddingVertical: 3,
+                  borderRadius: radius.full,
+                  backgroundColor: workspace?.account?.networkUnlocked ? brand.successSoft : brand.warningSoft,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: workspace?.account?.networkUnlocked ? brand.success : brand.warning,
+                  }}
+                >
+                  {workspace?.account?.networkUnlocked ? "VERIFIED" : "PENDING PERMIT"}
+                </Text>
+              </View>
+            </View>
+
+            {(workspace?.account?.certificates ?? []).length === 0 ? (
+              <Text style={typography.caption}>
+                {isSw
+                  ? "Hakuna kibali kilichopakiwa bado. Pakia hapa kufungua mtandao wa jumla."
+                  : "No operating permit submitted yet. Register your Pharmacy Council or TMDA license to unlock wholesale."}
+              </Text>
+            ) : (
+              (workspace?.account?.certificates ?? []).map((cert) => (
+                <View
+                  key={cert.id}
+                  style={{
+                    padding: spacing.sm,
+                    borderRadius: radius.md,
+                    backgroundColor: colors.tertiaryBackground,
+                    gap: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.label }}>{cert.docType}</Text>
+                  <Text style={typography.caption}>
+                    License {cert.licenseNumber} · {cert.fileName} · {cert.status.toUpperCase()}
+                  </Text>
+                </View>
+              ))
+            )}
+
+            {capabilities.canManageTeam && (
+              <View style={{ gap: spacing.xs, paddingTop: 4 }}>
+                <TextInput
+                  value={certDocType}
+                  onChangeText={setCertDocType}
+                  placeholder="Permit Type (e.g. Pharmacy Council Permit)"
+                  placeholderTextColor={colors.tertiaryLabel as string}
+                  style={inputStyle}
+                />
+                <TextInput
+                  value={certLicense}
+                  onChangeText={setCertLicense}
+                  placeholder="License Number (e.g. PC-TZ-4821)"
+                  placeholderTextColor={colors.tertiaryLabel as string}
+                  style={inputStyle}
+                />
+                <TextInput
+                  value={certFileName}
+                  onChangeText={setCertFileName}
+                  placeholder="Document Reference / Filename (e.g. permit-2026.pdf)"
+                  placeholderTextColor={colors.tertiaryLabel as string}
+                  style={inputStyle}
+                />
+                <PrimaryButton
+                  title={certBusy ? "..." : isSw ? "Wasilisha Kibali" : "Submit Operating Permit"}
+                  loading={certBusy}
+                  onPress={async () => {
+                    if (certLicense.trim().length < 3 || certFileName.trim().length < 3) {
+                      setNotice("Enter valid license number and document reference.");
+                      return;
+                    }
+                    setCertBusy(true);
+                    setNotice(null);
+                    try {
+                      const res = await postWorkspaceAction({
+                        action: "upload_certificates",
+                        docType: certDocType.trim() || "Operating Permit",
+                        licenseNumber: certLicense.trim(),
+                        fileName: certFileName.trim(),
+                      });
+                      if (!res.ok) {
+                        setNotice(res.data?.error || "Could not submit certificate.");
+                        return;
+                      }
+                      setCertLicense("");
+                      setCertFileName("");
+                      await playSoundCue("sale-complete");
+                      setNotice("Operating permit registered & verified.");
+                      await refreshState();
+                    } finally {
+                      setCertBusy(false);
+                    }
+                  }}
+                />
+              </View>
+            )}
+          </View>
+
+          <View
+            style={{
+              padding: spacing.md,
+              borderRadius: radius.xl,
+              borderCurve: "continuous",
+              backgroundColor: colors.secondaryGroupedBackground,
+              gap: spacing.xs,
+            }}
+          >
+            <Text style={typography.overline}>ORGANIZATION AUDIT TRAIL</Text>
+            {(workspace?.auditLogs ?? []).length === 0 ? (
+              <Text style={typography.caption}>
+                {isSw ? "Rekodi za ukaguzi huonekana kwa akaunti ya mmiliki." : "Audit logs are visible in active owner sessions."}
+              </Text>
+            ) : (
+              (workspace?.auditLogs ?? []).slice(0, 12).map((log) => (
+                <View
+                  key={log.id}
+                  style={{
+                    paddingVertical: 6,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.separator,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.label }}>
+                    [{log.category}] {log.action}
+                  </Text>
+                  <Text style={typography.caption}>
+                    {log.actor} · {log.createdAt.slice(0, 16).replace("T", " ")}
+                  </Text>
+                </View>
+              ))
+            )}
           </View>
         </View>
       )}

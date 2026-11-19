@@ -1,29 +1,120 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { formatTzs } from "@cervos/core";
+import { formatTzs, matchCatalogByBarcode, normalizeBarcode, parseScanIntent } from "@cervos/core";
 import { PlatformIcon } from "@/components/platform-icon";
 import { EmptyStateCard } from "@/components/state-views";
-import { ContextualHint } from "@/components/onboarding";
 import { useMobileSession } from "@/context/session-context";
-import { postWorkspaceAction } from "@/services/api";
 import { playSoundCue, triggerHaptic } from "@/services/sounds";
 import { colors, radius, spacing, typography, useBrandColors } from "@/theme";
-import { todayIsoDay } from "@/utils/intelligence";
+import type { WorkspaceBatch } from "@/types/workspace";
+import { computeStockHealth, todayIsoDay } from "@/utils/intelligence";
 
 type StockFilter = "all" | "expiring" | "low" | "blocked";
 
 export default function InventoryScreen() {
   const router = useRouter();
-  const { workspace, lang, capabilities, scopedBatches, refreshState } = useMobileSession();
+  const {
+    workspace,
+    cloudCatalog,
+    lang,
+    capabilities,
+    scopedBatches,
+    scopedSales,
+    pendingScannedCode,
+    setPendingScannedCode,
+    pendingScanContext,
+    setPendingScanContext,
+    runOnlineOrQueue,
+  } = useMobileSession();
   const brand = useBrandColors(workspace?.account?.customization?.brandAccent);
   const isSw = lang === "SW";
   const todayIso = todayIsoDay();
   const in30Iso = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  const listRef = useRef<FlatList<WorkspaceBatch>>(null);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StockFilter>("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [highlightedBatchId, setHighlightedBatchId] = useState<string | null>(null);
+  const [scanBanner, setScanBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingScannedCode || pendingScanContext !== "inventory") return;
+    const code = pendingScannedCode;
+    setPendingScannedCode(null);
+    setPendingScanContext(null);
+
+    const intent = parseScanIntent(code);
+    if (intent.kind === "receipt") {
+      const targetSale = (workspace?.sales ?? scopedSales).find(
+        (s) =>
+          (intent.saleId && s.id === intent.saleId) ||
+          (s.receiptNumber && s.receiptNumber.toUpperCase() === intent.receiptNumber.toUpperCase())
+      );
+      if (targetSale) {
+        router.push(`/receipt-sheet?saleId=${encodeURIComponent(targetSale.id)}`);
+      } else {
+        router.push("/(tabs)/receipts");
+      }
+      return;
+    }
+
+    const cloudHit = matchCatalogByBarcode(cloudCatalog, code);
+    const gtin =
+      intent.kind === "gs1" ? intent.gtin : intent.kind === "barcode" ? intent.code : null;
+    const normGtin = gtin ? normalizeBarcode(gtin) : null;
+    const lower = code.trim().toLowerCase();
+
+    const batchMatch = scopedBatches.find(
+      (b) =>
+        (intent.kind === "lot" && b.batchNumber.toLowerCase() === intent.batchNumber.toLowerCase()) ||
+        (intent.kind === "gs1" &&
+          intent.batchNumber &&
+          b.batchNumber.toLowerCase() === intent.batchNumber.toLowerCase()) ||
+        (normGtin && b.barcode && normalizeBarcode(b.barcode) === normGtin) ||
+        (cloudHit &&
+          (b.productId === cloudHit.masterId ||
+            b.productId === cloudHit.id ||
+            b.brandName.toLowerCase() === cloudHit.brandName.toLowerCase() ||
+            b.genericName.toLowerCase() === cloudHit.inn.toLowerCase())) ||
+        b.batchNumber.toLowerCase() === lower ||
+        b.productId.toLowerCase() === lower
+    );
+
+    if (batchMatch) {
+      setFilter("all");
+      setSearch(batchMatch.batchNumber);
+      setHighlightedBatchId(batchMatch.id);
+      setScanBanner(
+        isSw
+          ? `Kundi limepatikana: ${batchMatch.brandName} (${batchMatch.batchNumber})`
+          : `Located ${batchMatch.brandName} · Lot ${batchMatch.batchNumber}`
+      );
+      void playSoundCue("scan");
+      void triggerHaptic("success");
+      requestAnimationFrame(() => {
+        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
+      return;
+    }
+
+    // Not stocked in this branch yet -> prefill new batch intake from Cloud Catalog / GS1
+    void playSoundCue("notify");
+    void triggerHaptic("light");
+    router.push(`/batch-sheet?barcode=${encodeURIComponent(code)}`);
+  }, [
+    pendingScannedCode,
+    pendingScanContext,
+    setPendingScannedCode,
+    setPendingScanContext,
+    cloudCatalog,
+    scopedBatches,
+    scopedSales,
+    workspace?.sales,
+    isSw,
+    router,
+  ]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -33,7 +124,8 @@ export default function InventoryScreen() {
           b.brandName.toLowerCase().includes(q) ||
           b.genericName.toLowerCase().includes(q) ||
           b.batchNumber.toLowerCase().includes(q) ||
-          b.category.toLowerCase().includes(q);
+          b.category.toLowerCase().includes(q) ||
+          (b.barcode || "").toLowerCase().includes(q);
         if (!hit) return false;
       }
       if (filter === "expiring") return !b.quarantined && b.expiryDate >= todayIso && b.expiryDate <= in30Iso;
@@ -46,16 +138,15 @@ export default function InventoryScreen() {
   const adjustQty = async (batchId: string, delta: number) => {
     setBusyId(batchId);
     try {
-      const res = await postWorkspaceAction({
-        action: "manage_batch",
-        subAction: "adjust_qty",
-        batchId,
-        delta,
-      });
-      if (res.ok) {
+      const out = await runOnlineOrQueue(
+        { action: "manage_batch", subAction: "adjust_qty", batchId, delta },
+        { type: "adjust_qty", payload: { batchId, delta } }
+      );
+      if (out.ok) {
         void playSoundCue("tap");
         void triggerHaptic("light");
-        await refreshState();
+      } else {
+        void playSoundCue("alert");
       }
     } finally {
       setBusyId(null);
@@ -65,31 +156,33 @@ export default function InventoryScreen() {
   const toggleQuarantine = async (batchId: string) => {
     setBusyId(batchId);
     try {
-      const res = await postWorkspaceAction({
-        action: "manage_batch",
-        subAction: "toggle_quarantine",
-        batchId,
-      });
-      if (res.ok) {
+      const out = await runOnlineOrQueue(
+        { action: "manage_batch", subAction: "toggle_quarantine", batchId },
+        { type: "toggle_quarantine", payload: { batchId } }
+      );
+      if (out.ok) {
         void playSoundCue("switch");
         void triggerHaptic("medium");
-        await refreshState();
+      } else {
+        void playSoundCue("alert");
       }
     } finally {
       setBusyId(null);
     }
   };
 
+  const stockVal = useMemo(() => computeStockHealth(scopedBatches, todayIso), [scopedBatches, todayIso]);
+
   return (
-    <View style={{ flex: 1, backgroundColor: colors.groupedBackground }}>
+    <View style={{ flex: 1, backgroundColor: brand.canvasBg }}>
       <View
         style={{
           paddingTop: 54,
           paddingHorizontal: spacing.md,
           paddingBottom: spacing.sm,
-          backgroundColor: colors.secondaryGroupedBackground,
+          backgroundColor: brand.cardBg,
           borderBottomWidth: 1,
-          borderBottomColor: colors.separator,
+          borderBottomColor: brand.borderColor,
           gap: spacing.sm,
         }}
       >
@@ -116,21 +209,81 @@ export default function InventoryScreen() {
           )}
         </View>
 
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder={isSw ? "Tafuta dawa, kundi au kategoria..." : "Search brand, lot # or category..."}
-          placeholderTextColor={colors.tertiaryLabel as string}
-          style={{
-            minHeight: 42,
-            borderRadius: radius.md,
-            borderCurve: "continuous",
-            backgroundColor: colors.tertiaryBackground,
-            paddingHorizontal: spacing.md,
-            color: colors.label,
-            fontSize: 14,
-          }}
-        />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+          <TextInput
+            value={search}
+            onChangeText={(t) => {
+              setSearch(t);
+              if (highlightedBatchId) setHighlightedBatchId(null);
+              if (scanBanner) setScanBanner(null);
+            }}
+            placeholder={isSw ? "Tafuta dawa, kundi au msimbopau..." : "Search brand, lot #, barcode..."}
+            placeholderTextColor={colors.tertiaryLabel as string}
+            style={{
+              flex: 1,
+              minHeight: 42,
+              borderRadius: radius.md,
+              borderCurve: "continuous",
+              backgroundColor: colors.tertiaryBackground,
+              paddingHorizontal: spacing.md,
+              color: colors.label,
+              fontSize: 14,
+            }}
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scan Barcode"
+            onPress={() => {
+              setPendingScanContext("inventory");
+              router.push("/scanner-modal?target=inventory");
+            }}
+            style={{
+              height: 42,
+              paddingHorizontal: 12,
+              borderRadius: radius.md,
+              borderCurve: "continuous",
+              backgroundColor: brand.accentSoft,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <PlatformIcon sf="barcode.viewfinder" md="qr-code-scanner" color={brand.accent} size={18} />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: brand.accent }}>
+              {isSw ? "Skani" : "Scan Barcode"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {scanBanner && (
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: radius.md,
+              backgroundColor: brand.successSoft,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: spacing.xs,
+            }}
+          >
+            <Text style={{ flex: 1, fontSize: 12, fontWeight: "700", color: brand.success }}>
+              {scanBanner}
+            </Text>
+            <Pressable
+              onPress={() => {
+                setScanBanner(null);
+                setHighlightedBatchId(null);
+                setSearch("");
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: brand.accent }}>
+                {isSw ? "Futa" : "Clear"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs }}>
           {(
@@ -166,19 +319,32 @@ export default function InventoryScreen() {
             );
           })}
         </ScrollView>
-        <ContextualHint
-          id="inventory-safety-v1"
-          text={
-            isSw
-              ? "Dawa za kuisha mapema hutoka kwanza, na zilizokwisha muda au kuwekwa karantini huzuiwa POS."
-              : "Earliest-expiry stock sells first automatically; expired or quarantined packs stay blocked at checkout."
-          }
-          accentColor={brand.accent}
-          tintBackground={brand.accentSoft}
-        />
+
+        {/* Web-Parity Stock Valuation & Risk Summary Bar */}
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          <View style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: brand.cardSubtleBg, borderWidth: 1, borderColor: brand.borderColor }}>
+            <Text style={{ fontSize: 10, color: brand.textMuted }}>AT COST</Text>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: brand.textPrimary }}>
+              {formatTzs(stockVal.atCost, { compact: true })}
+            </Text>
+          </View>
+          <View style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: brand.cardSubtleBg, borderWidth: 1, borderColor: brand.borderColor }}>
+            <Text style={{ fontSize: 10, color: brand.textMuted }}>RETAIL VALUE</Text>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: brand.accent }}>
+              {formatTzs(stockVal.atRetail, { compact: true })}
+            </Text>
+          </View>
+          <View style={{ flex: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md, backgroundColor: brand.cardSubtleBg, borderWidth: 1, borderColor: brand.borderColor }}>
+            <Text style={{ fontSize: 10, color: brand.textMuted }}>EXP &le;30D</Text>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: stockVal.expiring30Units > 0 ? brand.warning : brand.success }}>
+              {stockVal.expiring30Units} pcs
+            </Text>
+          </View>
+        </View>
       </View>
 
       <FlatList
+        ref={listRef}
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.md, gap: spacing.sm, paddingBottom: 40 }}
@@ -200,6 +366,7 @@ export default function InventoryScreen() {
           const isExpired = item.expiryDate < todayIso;
           const isSoon = !isExpired && item.expiryDate <= in30Iso;
           const isBusy = busyId === item.id;
+          const isHighlighted = highlightedBatchId === item.id;
           return (
             <View
               style={{
@@ -207,17 +374,25 @@ export default function InventoryScreen() {
                 borderRadius: radius.xl,
                 borderCurve: "continuous",
                 backgroundColor: colors.secondaryGroupedBackground,
+                borderWidth: isHighlighted ? 1.5 : 0,
+                borderColor: isHighlighted ? brand.accent : "transparent",
                 gap: spacing.xs,
                 opacity: isBusy ? 0.6 : 1,
               }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: spacing.sm }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={typography.headline}>{item.brandName}</Text>
+                <Pressable
+                  onPress={() => router.push(`/batch-detail?id=${encodeURIComponent(item.id)}`)}
+                  style={{ flex: 1 }}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={[typography.headline, { flexShrink: 1 }]}>{item.brandName}</Text>
+                    <PlatformIcon sf="qrcode" md="qr-code-2" color={brand.accent} size={15} />
+                  </View>
                   <Text style={typography.caption}>
                     {item.genericName} · {item.category} · Lot {item.batchNumber}
                   </Text>
-                </View>
+                </Pressable>
                 <View
                   style={{
                     paddingHorizontal: 8,

@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  buildInspectionDossierText,
+  dataUrlToBlob,
+  downloadCertificateProof,
+  triggerBlobDownload,
+  type ProofCertificate,
+} from "./downloadProof";
 import { hqSurfaceTokens } from "./hqSurface";
 import type { HqFleetAccount } from "./types";
-
-type ProofCertificate = HqFleetAccount["certificates"][number];
 
 interface ComplianceProofViewerModalProps {
   org: HqFleetAccount;
@@ -50,42 +55,29 @@ export default function ComplianceProofViewerModal({
   const hasPdfPreview = Boolean(
     certificate?.fileDataUrl?.startsWith("data:application/pdf")
   );
+  const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!hasPdfPreview || !certificate?.fileDataUrl) {
+      setPdfObjectUrl(null);
+      return;
+    }
+    const blob = dataUrlToBlob(certificate.fileDataUrl);
+    if (!blob) {
+      setPdfObjectUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    setPdfObjectUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [hasPdfPreview, certificate?.fileDataUrl]);
 
   const downloadInspectionRecord = () => {
-    const lines = [
-      "CERVOS PHARMA HQ - REGULATORY PERMIT INSPECTION RECORD",
-      `Organization: ${org.orgName} (${org.roleType})`,
-      `Account ID: ${org.id}`,
-      `Owner / Admin: ${org.fullName} <${org.email}>`,
-      `Region: ${org.region}`,
-      `Account Verification Status: ${org.verificationStatus}`,
-      `Network Unlocked: ${org.networkUnlocked ? "YES" : "NO"}`,
-      "------------------------------------------------------",
-      certificate
-        ? [
-            `Certificate ID: ${certificate.id}`,
-            `Document Type: ${certificate.docType}`,
-            `License / Permit Number: ${certificate.licenseNumber}`,
-            `Uploaded File Name: ${certificate.fileName}`,
-            `Uploaded At: ${certificate.uploadedAt}`,
-            `Certificate Review Status: ${certStatus}`,
-            certificate.reviewedBy ? `Reviewed By: ${certificate.reviewedBy}` : "",
-            certificate.reviewedAt ? `Reviewed At: ${certificate.reviewedAt}` : "",
-            certificate.reviewNote ? `Compliance Note: ${certificate.reviewNote}` : "",
-          ]
-            .filter(Boolean)
-            .join("\n")
-        : "No individual certificate attached on this organization yet.",
-    ];
-    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${org.orgName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-compliance-proof.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    const textBlob = new Blob([buildInspectionDossierText(org, certificate)], {
+      type: "text/plain;charset=utf-8",
+    });
+    const slug = org.orgName.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    triggerBlobDownload(textBlob, `${slug}-compliance-proof.txt`);
   };
 
   return (
@@ -188,13 +180,13 @@ export default function ComplianceProofViewerModal({
               </span>
               <div className="flex items-center gap-2">
                 {certificate.fileDataUrl && (
-                  <a
-                    href={certificate.fileDataUrl}
-                    download={certificate.fileName || "compliance-proof"}
-                    className={`px-3 py-1 rounded-full text-[11px] font-semibold ${t.pillCls}`}
+                  <button
+                    type="button"
+                    onClick={() => void downloadCertificateProof(org, certificate)}
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${t.primaryBtnCls}`}
                   >
-                    Download Attachment
-                  </a>
+                    Download Attachment ({certificate.fileName})
+                  </button>
                 )}
                 <button
                   type="button"
@@ -214,9 +206,9 @@ export default function ComplianceProofViewerModal({
                   className="max-h-[380px] w-auto object-contain"
                 />
               </div>
-            ) : hasPdfPreview && certificate.fileDataUrl ? (
+            ) : hasPdfPreview && (pdfObjectUrl || certificate.fileDataUrl) ? (
               <iframe
-                src={certificate.fileDataUrl}
+                src={pdfObjectUrl || certificate.fileDataUrl}
                 title={certificate.fileName}
                 className="w-full h-80 rounded-xl border border-slate-300 dark:border-slate-700 bg-white"
               />

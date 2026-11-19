@@ -8,6 +8,12 @@ import PinPad from "@/components/PinPad";
 import { authenticateWithPasskey, isPasskeySupported } from "@/lib/security/client-passkey";
 import { useWorkspaceTheme } from "@/lib/workspace/theme";
 import { useI18n } from "@/lib/i18n/context";
+import {
+  loadWebOfflineSnapshot,
+  saveWebOfflinePin,
+  saveWebOfflineSnapshot,
+  verifyWebOfflinePin,
+} from "@/lib/workspace/web-offline";
 
 interface GateStateResponse {
   authenticated: boolean;
@@ -68,6 +74,7 @@ function GateInner() {
       })
       .then((data: GateStateResponse | null) => {
         if (!data?.authenticated) return;
+        saveWebOfflineSnapshot(data);
         if (!data.account.onboardingDone) {
           router.replace("/app/onboarding");
           return;
@@ -115,7 +122,20 @@ function GateInner() {
           setStage("profile");
         }
       })
-      .catch(() => setErrorMsg("Unable to load security gate."));
+      .catch(() => {
+        const cached = loadWebOfflineSnapshot<GateStateResponse>();
+        if (cached?.account && cached.centres && cached.profiles) {
+          setState(cached);
+          setLangOverride(cached.account.lang);
+          setI18nLang(cached.account.lang);
+          const firstCentre = cached.centres[0]?.id || "";
+          setSelectedCentreId(firstCentre);
+          setSelectedProfileId(cached.profiles[0]?.id || "");
+          setStage("profile");
+          return;
+        }
+        setErrorMsg("Unable to load security gate.");
+      });
   }, [router, requestedStage]);
 
   const markJustLoggedIn = (profileOverride?: { centreId?: string; profileId?: string }) => {
@@ -187,6 +207,22 @@ function GateInner() {
     if (busy || pin.length < 4) return;
     setErrorMsg(null);
     setBusy(true);
+    const tryOfflinePin = () => {
+      if (verifyWebOfflinePin(selectedProfileId, pin)) {
+        markJustLoggedIn({ centreId: selectedCentreId, profileId: selectedProfileId });
+        router.push("/app");
+        return true;
+      }
+      return false;
+    };
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      if (!tryOfflinePin()) {
+        setErrorMsg("Offline PIN did not match the PIN last used in this browser.");
+        setPin("");
+      }
+      setBusy(false);
+      return;
+    }
     try {
       const res = await fetch("/api/workspace/gate", {
         method: "POST",
@@ -204,10 +240,13 @@ function GateInner() {
         setPin("");
         return;
       }
+      saveWebOfflinePin(selectedProfileId, pin);
       markJustLoggedIn({ centreId: selectedCentreId, profileId: selectedProfileId });
       router.push(out.redirectTo || "/app");
     } catch {
-      setErrorMsg("Network error.");
+      if (!tryOfflinePin()) {
+        setErrorMsg("Network error. Offline unlock requires a previously used PIN on this browser.");
+      }
     } finally {
       setBusy(false);
     }
@@ -454,14 +493,14 @@ function GateInner() {
         )}
 
         {stage === "profile" && (
-          <form onSubmit={unlockWithPin} className="space-y-5">
-            <div className="flex flex-wrap items-start justify-between gap-2">
+          <form onSubmit={unlockWithPin} className="space-y-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1039B9] mb-1">
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1039B9]">
                   {activeCentre?.name}
                 </div>
                 <h1
-                  className="text-xl font-bold"
+                  className="text-lg font-bold leading-tight"
                   style={{ fontFamily: "Outfit, Inter, sans-serif" }}
                 >
                   {isSw ? "Chagua Wasifu & Weka PIN" : "Select Profile & Enter PIN"}
@@ -471,14 +510,14 @@ function GateInner() {
                 <button
                   type="button"
                   onClick={() => switchStage("centre")}
-                  className="min-h-[44px] px-2.5 py-2 inline-flex items-center text-xs sm:text-[11px] font-semibold text-[#1039B9] hover:underline shrink-0 cursor-pointer"
+                  className="px-2.5 py-1.5 inline-flex items-center text-xs font-semibold text-[#1039B9] hover:underline shrink-0 cursor-pointer"
                 >
                   {isSw ? "Badili Tawi" : "Change Centre"}
                 </button>
               )}
             </div>
 
-            <div className="space-y-2.5">
+            <div className="flex flex-wrap gap-2">
               {(centreProfiles.length > 0 ? centreProfiles : state.profiles).map((prof) => {
                 const selected = selectedProfileId === prof.id;
                 return (
@@ -489,7 +528,7 @@ function GateInner() {
                       setSelectedProfileId(prof.id);
                       setErrorMsg(null);
                     }}
-                    className={`w-full min-h-[48px] p-3.5 rounded-md border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${selected
+                    className={`flex-1 min-w-[130px] px-3 py-2 rounded-lg border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${selected
                       ? isDark
                         ? "border-[#38BDF8] bg-[#1039B9]/20"
                         : "border-[#1039B9] bg-[#EFF6FF]"
@@ -499,12 +538,12 @@ function GateInner() {
                       }`}
                   >
                     <div className="min-w-0">
-                      <div className="text-xs font-bold">{prof.displayName}</div>
-                      <div className={`text-[10px] uppercase tracking-wider mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      <div className="text-xs font-bold truncate">{prof.displayName}</div>
+                      <div className={`text-[9px] uppercase tracking-wider truncate ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                         {prof.role.replace(/_/g, " ")}
                       </div>
                     </div>
-                    {selected && <span className="w-2.5 h-2.5 rounded-full bg-[#1039B9] shrink-0" />}
+                    {selected && <span className="w-2 h-2 rounded-full bg-[#1039B9] shrink-0" />}
                   </button>
                 );
               })}

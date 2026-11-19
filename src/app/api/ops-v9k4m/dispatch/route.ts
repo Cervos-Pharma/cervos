@@ -1203,7 +1203,6 @@ export async function POST(request: NextRequest) {
           const smsRes = await sendTextifySms({
             to: ownerPhone,
             message: `${localizedTitle}: ${localizedBody}`,
-            sender: "Nama",
           });
           if (smsRes.delivered) smsDeliveredCount += 1;
         }
@@ -1213,7 +1212,7 @@ export async function POST(request: NextRequest) {
         accountId: acc.id,
         actor: actorName,
         category: "COMPLIANCE",
-        action: `HQ ${deliveryChannel === "sms_textify" ? "SMS (Nama)" : deliveryChannel === "both" ? "notice + SMS" : "notice"} dispatched: ${title}`,
+        action: `HQ ${deliveryChannel === "sms_textify" ? "SMS" : deliveryChannel === "both" ? "notice + SMS" : "notice"} dispatched: ${title}`,
       });
       if (severity === "critical") {
         await dispatchExceptionNotification({

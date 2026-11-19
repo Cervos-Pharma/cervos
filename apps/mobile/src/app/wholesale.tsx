@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { formatTzs } from "@cervos/core";
@@ -13,14 +13,35 @@ type WholesaleTab = "catalog" | "orders";
 
 export default function WholesaleScreen() {
   const router = useRouter();
-  const { workspace, lang, capabilities, activeCentre, refreshState } = useMobileSession();
+  const {
+    workspace,
+    lang,
+    capabilities,
+    activeCentre,
+    pendingScannedCode,
+    pendingScanContext,
+    setPendingScannedCode,
+    setPendingScanContext,
+    refreshState,
+  } = useMobileSession();
   const brand = useBrandColors(workspace?.account?.customization?.brandAccent);
   const isSw = lang === "SW";
 
   const [tab, setTab] = useState<WholesaleTab>("catalog");
   const [search, setSearch] = useState("");
+  const [gs1Input, setGs1Input] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!pendingScannedCode || pendingScanContext !== "wholesale") return;
+    setTab("orders");
+    setGs1Input(pendingScannedCode);
+    setPendingScannedCode(null);
+    setPendingScanContext(null);
+    void playSoundCue("scan");
+    void triggerHaptic("success");
+  }, [pendingScannedCode, pendingScanContext, setPendingScannedCode, setPendingScanContext]);
 
   const catalog = workspace?.supplierCatalog ?? [];
   const orders = workspace?.wholesaleOrders ?? [];
@@ -85,6 +106,7 @@ export default function WholesaleScreen() {
       const res = await postWorkspaceAction({
         action: "confirm_grn_delivery",
         orderId,
+        ...(gs1Input.trim() ? { gs1Barcode: gs1Input.trim() } : {}),
       });
       if (!res.ok) {
         await playSoundCue("alert");
@@ -92,6 +114,7 @@ export default function WholesaleScreen() {
         setNotice({ ok: false, text: res.data?.error || "Delivery confirmation failed." });
         return;
       }
+      setGs1Input("");
       await playSoundCue("sale-complete");
       await triggerHaptic("success");
       setNotice({
@@ -187,9 +210,49 @@ export default function WholesaleScreen() {
           </View>
         )}
 
+        {tab === "orders" && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
+            <TextInput
+              value={gs1Input}
+              onChangeText={setGs1Input}
+              placeholder={isSw ? "Skani au weka GS1 GRN (hiari)..." : "GS1 / Lot Barcode for GRN receipt (optional)..."}
+              placeholderTextColor={colors.tertiaryLabel as string}
+              style={{
+                flex: 1,
+                minHeight: 40,
+                backgroundColor: colors.tertiaryBackground,
+                borderRadius: radius.md,
+                paddingHorizontal: spacing.sm,
+                color: colors.label,
+                fontSize: 13,
+              }}
+            />
+            <Pressable
+              onPress={() => {
+                setPendingScanContext("wholesale");
+                router.push("/scanner-modal?target=wholesale");
+              }}
+              style={{
+                height: 40,
+                paddingHorizontal: 11,
+                borderRadius: radius.md,
+                backgroundColor: brand.accentSoft,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+              }}
+            >
+              <PlatformIcon sf="barcode.viewfinder" md="qr-code-scanner" color={brand.accent} size={17} />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: brand.accent }}>
+                {isSw ? "Skani GS1" : "Scan GS1"}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {!networkUnlocked && canOrderDirect && (
           <Pressable
-            onPress={() => router.push("/settings?scope=support")}
+            onPress={() => router.push("/settings?scope=compliance")}
             style={{
               padding: spacing.sm,
               borderRadius: radius.md,

@@ -1,7 +1,8 @@
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { formatTzs } from "@cervos/core";
+import { buildReceiptQrPayload, formatTzs } from "@cervos/core";
 import { PrimaryButton } from "@/components/primary-button";
+import { QrMatrixView } from "@/components/qr-matrix-view";
 import { EmptyStateCard } from "@/components/state-views";
 import { useMobileSession } from "@/context/session-context";
 import { printReceiptNative, shareReceiptPdf } from "@/services/receipts";
@@ -13,7 +14,10 @@ export default function ReceiptSheetScreen() {
   const brand = useBrandColors(workspace?.account?.customization?.brandAccent);
   const isSw = lang === "SW";
 
-  const sale = scopedSales.find((s) => s.id === saleId) ?? scopedSales[0];
+  const sale =
+    scopedSales.find((s) => s.id === saleId) ??
+    workspace?.sales?.find((s) => s.id === saleId) ??
+    scopedSales[0];
 
   if (!sale) {
     return (
@@ -96,6 +100,41 @@ export default function ReceiptSheetScreen() {
           {sale.prescriptionRef ? ` · Rx Ref: ${sale.prescriptionRef}` : ""}
         </Text>
       </View>
+
+      {(() => {
+        const receiptNo = sale.receiptNumber || `RCP-${sale.id.slice(-6).toUpperCase()}`;
+        const qrPayload = buildReceiptQrPayload(receiptNo, sale.id);
+        return (
+          <View
+            style={{
+              padding: spacing.md,
+              borderRadius: radius.xl,
+              borderCurve: "continuous",
+              backgroundColor: colors.secondaryGroupedBackground,
+              borderWidth: 1,
+              borderColor: brand.staticBorder,
+              alignItems: "center",
+              gap: spacing.xs,
+            }}
+          >
+            <Text style={[typography.overline, { color: brand.accent }]}>
+              {isSw ? "MSIMBO WA UTHIBITISHO WA RISITI" : "RECEIPT VERIFICATION QR"}
+            </Text>
+            <QrMatrixView value={qrPayload} moduleSize={4} />
+            <Text
+              selectable
+              style={{
+                fontSize: 11,
+                fontWeight: "600",
+                color: colors.secondaryLabel,
+                textAlign: "center",
+              }}
+            >
+              {qrPayload}
+            </Text>
+          </View>
+        );
+      })()}
 
       <View style={{ gap: spacing.sm }}>
         <PrimaryButton

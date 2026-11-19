@@ -3,18 +3,26 @@ import { AppState, type AppStateStatus } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  DEFAULT_CLOUD_CATALOG,
+  type CloudCatalogProduct,
+  type OfflineMutationType,
+} from "@cervos/core";
+import {
   clampProfileCapabilities,
   type ProfileCapabilities,
   type WorkspaceProfileRole,
 } from "@/utils/permissions";
 import {
+  ApiError,
   fetchWorkspaceState,
   getStoredTokens,
   postWorkspaceAction,
   signOutWorkspace,
 } from "@/services/api";
 import {
+  applyOfflineMutationLocally,
   cacheWorkspaceSnapshot,
+  enqueueOfflineMutation,
   flushAndSyncOfflineQueue,
   getPendingQueueCount,
   loadCachedWorkspaceSnapshot,
@@ -24,6 +32,7 @@ import {
   type MobileStationPrefs,
 } from "@/services/offline-db";
 import { playSoundCue, triggerHaptic } from "@/services/sounds";
+import { CervosThemeProvider } from "@/theme";
 import type {
   AppLang,
   BranchChatMessage,
@@ -38,11 +47,14 @@ import type {
 
 const AUTO_CLOCK_OUT_IDLE_MS = 4 * 60 * 60 * 1000;
 
+export type ScanTarget = "pos" | "inventory" | "batch" | "receipts" | "wholesale";
+
 interface SessionContextValue {
   hydrated: boolean;
   isOnline: boolean;
   hasAccountToken: boolean;
   workspace: WorkspaceStateResponse | null;
+  cloudCatalog: CloudCatalogProduct[];
   isLoading: boolean;
   isFetching: boolean;
   loadError: string | null;
@@ -70,6 +82,16 @@ interface SessionContextValue {
   updatePrefs: (patch: Partial<MobileStationPrefs>) => void;
   pendingScannedCode: string | null;
   setPendingScannedCode: (code: string | null) => void;
+  pendingScanContext: ScanTarget | null;
+  setPendingScanContext: (target: ScanTarget | null) => void;
+  queueAndApplyOffline: (
+    type: OfflineMutationType,
+    payload: Record<string, unknown>
+  ) => Promise<{ idempotencyKey: string; nextSnapshot: WorkspaceStateResponse | null }>;
+  runOnlineOrQueue: (
+    actionPayload: Record<string, unknown>,
+    offlineSpec?: { type: OfflineMutationType; payload: Record<string, unknown> }
+  ) => Promise<{ ok: boolean; queued: boolean; error?: string; data?: Record<string, unknown> }>;
   refreshState: () => Promise<WorkspaceStateResponse | null>;
   syncNow: () => Promise<{ pushed: number; remaining: number }>;
   switchCentre: (centreId: string) => Promise<void>;
@@ -92,8 +114,19 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
   const [prefs, setPrefs] = useState<MobileStationPrefs>(() => loadStationPrefs());
   const [autoClockOutNotice, setAutoClockOutNotice] = useState<string | null>(null);
   const [pendingScannedCode, setPendingScannedCode] = useState<string | null>(null);
+  const [pendingScanContext, setPendingScanContext] = useState<ScanTarget | null>(null);
   const syncingRef = useRef(false);
   const autoClockCheckedRef = useRef(false);
+  const isOnlineRef = useRef(true);
+  const stationUnlockedRef = useRef(false);
+  const appStateRef = useRef<string>(AppState.currentState || "active");
+  const syncNowRef = useRef<(() => Promise<{ pushed: number; remaining: number }>) | null>(null);
+  const seenAlertIdsRef = useRef<Set<string> | null>(null);
+  const prevUnreadCountRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    stationUnlockedRef.current = stationUnlocked;
+  }, [stationUnlocked]);
 
   const updatePrefs = useCallback((patch: Partial<MobileStationPrefs>) => {
     const next = saveStationPrefs(patch);
@@ -119,7 +152,13 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
     })();
 
     const unsubNet = NetInfo.addEventListener((state) => {
-      setIsOnline(Boolean(state.isConnected ?? true));
+      const nextOnline = Boolean(state.isConnected ?? true);
+      const wasOnline = isOnlineRef.current;
+      isOnlineRef.current = nextOnline;
+      setIsOnline(nextOnline);
+      if (!wasOnline && nextOnline && stationUnlockedRef.current) {
+        void syncNowRef.current?.();
+      }
     });
 
     return () => {
@@ -190,20 +229,97 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
     }
   }, [refreshState]);
 
+  useEffect(() => {
+    syncNowRef.current = syncNow;
+  }, [syncNow]);
+
+  const queueAndApplyOffline = useCallback(
+    async (type: OfflineMutationType, payload: Record<string, unknown>) => {
+      const current = queryClient.getQueryData<WorkspaceStateResponse | null>(["workspaceState"]) ?? null;
+      const meta = await enqueueOfflineMutation(type, {
+        centreId:
+          (typeof payload.centreId === "string" && payload.centreId) ||
+          current?.activeCentreId ||
+          current?.activeProfile?.centreId,
+        profileId: current?.activeProfile?.id,
+        operatorName: current?.activeProfile?.displayName,
+        role: current?.activeProfile?.role,
+        ...payload,
+      });
+      const nextSnapshot = await applyOfflineMutationLocally(current, type, payload, meta);
+      if (nextSnapshot) {
+        queryClient.setQueryData(["workspaceState"], nextSnapshot);
+      }
+      const pending = await getPendingQueueCount();
+      setPendingSync(pending);
+      return { idempotencyKey: meta.idempotencyKey, nextSnapshot };
+    },
+    [queryClient]
+  );
+
+  const runOnlineOrQueue = useCallback(
+    async (
+      actionPayload: Record<string, unknown>,
+      offlineSpec?: { type: OfflineMutationType; payload: Record<string, unknown> }
+    ): Promise<{ ok: boolean; queued: boolean; error?: string; data?: Record<string, unknown> }> => {
+      if (!isOnlineRef.current) {
+        if (!offlineSpec) {
+          return { ok: false, queued: false, error: "Internet connection required for this action." };
+        }
+        const out = await queueAndApplyOffline(offlineSpec.type, offlineSpec.payload);
+        return { ok: true, queued: true, data: { idempotencyKey: out.idempotencyKey } };
+      }
+
+      try {
+        const res = await postWorkspaceAction<Record<string, unknown>>(actionPayload);
+        if (!res.ok) {
+          return {
+            ok: false,
+            queued: false,
+            error: res.data?.error || "Request failed.",
+            data: res.data,
+          };
+        }
+        await refreshState();
+        return { ok: true, queued: false, data: res.data };
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 0 && offlineSpec) {
+          const out = await queueAndApplyOffline(offlineSpec.type, offlineSpec.payload);
+          return { ok: true, queued: true, data: { idempotencyKey: out.idempotencyKey } };
+        }
+        return {
+          ok: false,
+          queued: false,
+          error: err instanceof Error ? err.message : "Network connection unavailable",
+        };
+      }
+    },
+    [queueAndApplyOffline, refreshState]
+  );
+
   const workspace = query.data ?? null;
   const activeProfile = workspace?.activeProfile ?? null;
 
-  // Background + foreground sync when active profile is unlocked
+  const cloudCatalog = useMemo<CloudCatalogProduct[]>(() => {
+    const remote = workspace?.cloudCatalog;
+    if (remote && remote.length > 0) return remote;
+    return DEFAULT_CLOUD_CATALOG;
+  }, [workspace?.cloudCatalog]);
+
+  // Foreground resume, network reconnect (via NetInfo), and 30s active foreground poll when unlocked & online
   useEffect(() => {
-    if (!activeProfile) return;
+    if (!stationUnlocked || !activeProfile) return;
     const timer = setInterval(() => {
-      if (isOnline) void syncNow();
+      if (appStateRef.current === "active" && isOnlineRef.current) {
+        void syncNow();
+      }
     }, 30_000);
 
     const sub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      appStateRef.current = nextState;
       if (nextState === "active") {
         saveStationPrefs({ lastActiveMs: Date.now() });
-        if (isOnline) void syncNow();
+        if (isOnlineRef.current) void syncNow();
       } else if (nextState === "background") {
         saveStationPrefs({ lastActiveMs: Date.now() });
       }
@@ -213,7 +329,45 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
       clearInterval(timer);
       sub.remove();
     };
-  }, [activeProfile, isOnline, syncNow]);
+  }, [stationUnlocked, activeProfile, syncNow]);
+
+  // Haptic + chime once per unseen HQ notice or workspace notification
+  useEffect(() => {
+    if (!stationUnlocked || !workspace) {
+      seenAlertIdsRef.current = null;
+      prevUnreadCountRef.current = null;
+      return;
+    }
+
+    const unreadHqIds = (workspace.hqMessages ?? [])
+      .filter((m) => !m.acknowledged)
+      .map((m) => `hq:${m.id}`);
+    const unreadNotifIds = (workspace.notifications ?? [])
+      .filter((n) => !n.read)
+      .map((n) => `notif:${n.id}`);
+    const currentIds = [...unreadHqIds, ...unreadNotifIds];
+
+    if (seenAlertIdsRef.current === null) {
+      seenAlertIdsRef.current = new Set(currentIds);
+      prevUnreadCountRef.current = currentIds.length;
+      return;
+    }
+
+    let hasNewUnseen = false;
+    for (const id of currentIds) {
+      if (!seenAlertIdsRef.current.has(id)) {
+        seenAlertIdsRef.current.add(id);
+        hasNewUnseen = true;
+      }
+    }
+    const prevCount = prevUnreadCountRef.current ?? 0;
+    prevUnreadCountRef.current = currentIds.length;
+
+    if (hasNewUnseen || currentIds.length > prevCount) {
+      void triggerHaptic("light");
+      void playSoundCue("notify");
+    }
+  }, [stationUnlocked, workspace]);
 
   const lang: AppLang =
     activeProfile?.profilePrefs?.preferredLang === "SW" || workspace?.account?.lang === "SW"
@@ -359,6 +513,19 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
     queryClient.setQueryData(["workspaceState"], null);
   }, [queryClient]);
 
+  const resolvedThemePref =
+    prefs.themePref !== "system"
+      ? prefs.themePref
+      : workspace?.activeProfile?.profilePrefs?.themePref ||
+        workspace?.account?.customization?.themePref ||
+        "system";
+  const resolvedFontScale =
+    prefs.fontScale !== "standard"
+      ? prefs.fontScale
+      : workspace?.activeProfile?.profilePrefs?.fontScale ||
+        workspace?.account?.customization?.fontScale ||
+        "standard";
+
   return (
     <SessionContext.Provider
       value={{
@@ -366,6 +533,7 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
         isOnline,
         hasAccountToken,
         workspace,
+        cloudCatalog,
         isLoading: query.isLoading,
         isFetching: query.isFetching,
         loadError: query.error ? query.error.message : null,
@@ -393,6 +561,10 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
         updatePrefs,
         pendingScannedCode,
         setPendingScannedCode,
+        pendingScanContext,
+        setPendingScanContext,
+        queueAndApplyOffline,
+        runOnlineOrQueue,
         refreshState,
         syncNow,
         switchCentre,
@@ -401,7 +573,13 @@ export function MobileSessionProvider({ children }: { children: React.ReactNode 
         signOut,
       }}
     >
-      {children}
+      <CervosThemeProvider
+        themePref={resolvedThemePref}
+        fontScale={resolvedFontScale}
+        orgAccentHex={workspace?.account?.customization?.brandAccent}
+      >
+        {children}
+      </CervosThemeProvider>
     </SessionContext.Provider>
   );
 }

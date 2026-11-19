@@ -1,14 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import Storage from "expo-sqlite/kv-store";
 import { PrimaryButton } from "@/components/primary-button";
 import { PlatformIcon } from "@/components/platform-icon";
 import { useMobileSession } from "@/context/session-context";
 import { postWorkspaceAction } from "@/services/api";
-import { enqueueOfflineMutation } from "@/services/offline-db";
 import { playSoundCue, triggerHaptic } from "@/services/sounds";
 import { colors, radius, spacing, typography, useBrandColors } from "@/theme";
+import { todayIsoDay } from "@/utils/intelligence";
+
+const SHIFT_DISMISS_PREFIX = "cervos_shift_dismissed_v1_";
+
+function readShiftDismissed(key: string): boolean {
+  if (!key) return false;
+  try {
+    return Storage.getItemSync(key) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export function ShiftLaunchBanner() {
+  const router = useRouter();
   const {
     workspace,
     lang,
@@ -17,14 +31,33 @@ export function ShiftLaunchBanner() {
     activeShift,
     autoClockOutNotice,
     dismissAutoClockOutNotice,
+    queueAndApplyOffline,
     refreshState,
-    syncNow,
   } = useMobileSession();
 
   const accentHex = workspace?.account?.customization?.brandAccent;
   const brand = useBrandColors(accentHex);
+  const profileId = workspace?.activeProfile?.id || "";
+  const todayIso = todayIsoDay();
+  const dismissKey = profileId ? `${SHIFT_DISMISS_PREFIX}${profileId}_${todayIso}` : "";
+
   const [busy, setBusy] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState<boolean>(() => readShiftDismissed(dismissKey));
+
+  useEffect(() => {
+    setDismissed(readShiftDismissed(dismissKey));
+  }, [dismissKey]);
+
+  const dismissForToday = () => {
+    if (dismissKey) {
+      try {
+        Storage.setItemSync(dismissKey, "1");
+      } catch {
+        // Ignore kv failure
+      }
+    }
+    setDismissed(true);
+  };
 
   const isSw = lang === "SW";
   const branchName = activeCentre?.name || workspace?.account?.orgName || "Station";
@@ -33,26 +66,30 @@ export function ShiftLaunchBanner() {
     if (busy) return;
     setBusy(true);
     try {
+      const payload = { clockType, centreId: activeCentre?.id, role: workspace?.activeProfile?.role };
       if (!isOnline) {
-        await enqueueOfflineMutation("shift_clock", {
-          clockType,
-          centreId: activeCentre?.id,
-        });
+        await queueAndApplyOffline("shift_clock", payload);
         await playSoundCue("shift-clock");
         await triggerHaptic("success");
         if (clockType === "in") setDismissed(true);
-        void syncNow();
         return;
       }
 
-      const res = await postWorkspaceAction({ action: "shift_clock", clockType });
-      if (res.ok) {
+      try {
+        const res = await postWorkspaceAction({ action: "shift_clock", clockType });
+        if (res.ok) {
+          await playSoundCue("shift-clock");
+          await triggerHaptic("success");
+          await refreshState();
+        } else {
+          await playSoundCue("alert");
+          await triggerHaptic("error");
+        }
+      } catch {
+        await queueAndApplyOffline("shift_clock", payload);
         await playSoundCue("shift-clock");
         await triggerHaptic("success");
-        await refreshState();
-      } else {
-        await playSoundCue("alert");
-        await triggerHaptic("error");
+        if (clockType === "in") setDismissed(true);
       }
     } finally {
       setBusy(false);
@@ -141,13 +178,21 @@ export function ShiftLaunchBanner() {
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.xs }}>
           {activeShift ? (
-            <PrimaryButton
-              title={isSw ? "Maliza Zamu (Clock Out)" : "Clock Out Now"}
-              variant="secondary"
-              loading={busy}
-              onPress={() => handleClock("out")}
-              style={{ flex: 1 }}
-            />
+            <>
+              <PrimaryButton
+                title={isSw ? "Maliza Zamu (Clock Out)" : "Clock Out Now"}
+                variant="secondary"
+                loading={busy}
+                onPress={() => handleClock("out")}
+                style={{ flex: 1 }}
+              />
+              <PrimaryButton
+                title={isSw ? "Hesabu & Funga" : "Reconcile & Close"}
+                variant="outline"
+                onPress={() => router.push("/shift-close")}
+                style={{ flex: 1 }}
+              />
+            </>
           ) : (
             <>
               <PrimaryButton
@@ -160,7 +205,7 @@ export function ShiftLaunchBanner() {
               <PrimaryButton
                 title={isSw ? "Sipo Zamu" : "Not Now"}
                 variant="outline"
-                onPress={() => setDismissed(true)}
+                onPress={dismissForToday}
               />
             </>
           )}

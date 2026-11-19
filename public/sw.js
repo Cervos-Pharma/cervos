@@ -19,11 +19,11 @@
  * Bump CACHE_VERSION whenever a precached entry changes so old copies are
  * dropped on activate.
  */
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const CACHE_NAME = `cervos-shell-${CACHE_VERSION}`;
 
-/** Assets needed to render *something* useful before any network succeeds. */
-const PRECACHE_URLS = ["/"];
+/** App shells and launch routes cached on install so offline boots open the real workspace UI. */
+const PRECACHE_URLS = ["/", "/app", "/app/gate"];
 
 /**
  * Routes that must never be served from cache.

@@ -1,6 +1,9 @@
+import type { MlDailyPoint, MlProduct } from "@cervos/core";
 import type { WorkspaceBatch, WorkspaceExpense, WorkspaceSale } from "@/types/workspace";
 
 const DAY_MS = 86_400_000;
+export const DEFAULT_STATION_LAT = -6.7924;
+export const DEFAULT_STATION_LNG = 39.2083;
 
 export function todayIsoDay(now = new Date()): string {
   const y = now.getFullYear();
@@ -141,4 +144,139 @@ export function computeStockHealth(
   }
 
   return { atCost, atRetail, expiring30Units, expiring30Cost, expiredCount, lowStockCount };
+}
+
+export function buildDailyRevenueSeries(
+  sales: readonly WorkspaceSale[],
+  days: number,
+  now = new Date()
+): MlDailyPoint[] {
+  const map = new Map<string, number>();
+  for (let i = days - 1; i >= 0; i--) {
+    map.set(todayIsoDay(new Date(now.getTime() - i * DAY_MS)), 0);
+  }
+  for (const s of sales) {
+    const day = todayIsoDay(new Date(s.createdAt));
+    if (!map.has(day)) continue;
+    map.set(day, (map.get(day) ?? 0) + s.totalTzs);
+  }
+  return Array.from(map.entries()).map(([date, revenue]) => ({ date, revenue }));
+}
+
+function ewma(values: readonly number[], alpha = 0.3): number {
+  if (values.length === 0) return 0;
+  let acc = values[0];
+  for (let i = 1; i < values.length; i++) acc = alpha * values[i] + (1 - alpha) * acc;
+  return acc;
+}
+
+export function buildMlProducts(
+  sales: readonly WorkspaceSale[],
+  batches: readonly WorkspaceBatch[],
+  windowDays = 30,
+  now = new Date()
+): MlProduct[] {
+  const todayIso = todayIsoDay(now);
+  const startIso = todayIsoDay(new Date(now.getTime() - (windowDays - 1) * DAY_MS));
+  const targetCover = 21;
+  const leadTime = 3;
+
+  const meta = new Map<string, { brandName: string; onHand: number }>();
+  for (const b of batches) {
+    const m = meta.get(b.productId) ?? { brandName: b.brandName, onHand: 0 };
+    if (!b.quarantined && b.expiryDate >= todayIso) m.onHand += b.quantity;
+    meta.set(b.productId, m);
+  }
+
+  const agg = new Map<string, { units: number; revenue: number; daily: Map<string, number> }>();
+  for (const s of sales) {
+    const day = todayIsoDay(new Date(s.createdAt));
+    if (day < startIso || day > todayIso) continue;
+    for (const l of s.lines ?? []) {
+      const a = agg.get(l.productId) ?? { units: 0, revenue: 0, daily: new Map<string, number>() };
+      a.units += l.qty;
+      a.revenue += l.qty * l.unitPriceTzs;
+      a.daily.set(day, (a.daily.get(day) ?? 0) + l.qty);
+      agg.set(l.productId, a);
+      if (!meta.has(l.productId)) {
+        meta.set(l.productId, { brandName: l.brandName, onHand: 0 });
+      }
+    }
+  }
+
+  const totalRevenue = Array.from(agg.values()).reduce((s, a) => s + a.revenue, 0) || 1;
+  const rows: Array<MlProduct & { revenueSharePct: number }> = [];
+
+  for (const [productId, m] of meta) {
+    const a = agg.get(productId) ?? { units: 0, revenue: 0, daily: new Map<string, number>() };
+    const dailySeries: number[] = [];
+    for (let i = windowDays - 1; i >= 0; i--) {
+      dailySeries.push(a.daily.get(todayIsoDay(new Date(now.getTime() - i * DAY_MS))) ?? 0);
+    }
+    const velocity = Math.max(ewma(dailySeries), (a.units / windowDays) * 0.5);
+    const last7 = dailySeries.slice(-7).reduce((x, y) => x + y, 0);
+    const prev7 = dailySeries.slice(-14, -7).reduce((x, y) => x + y, 0);
+    const cover = velocity > 0.01 ? m.onHand / velocity : null;
+    const reorder = Math.max(0, Math.ceil(velocity * (targetCover + leadTime) - m.onHand));
+    let status = "healthy";
+    if (a.units === 0 && m.onHand > 0) status = "dead_stock";
+    else if (cover !== null && cover <= leadTime + 4) status = "stockout_risk";
+    else if (cover !== null && cover > 90) status = "overstock";
+
+    rows.push({
+      productId,
+      brandName: m.brandName,
+      daysOfCover: cover === null ? null : Math.round(cover * 10) / 10,
+      trendPct: prev7 > 0 ? Math.round(((last7 - prev7) / prev7) * 100) : null,
+      abcClass: "C",
+      status,
+      reorderQty: reorder,
+      onHand: m.onHand,
+      unitsSold: a.units,
+      revenue: a.revenue,
+      revenueSharePct: Math.round((a.revenue / totalRevenue) * 1000) / 10,
+    });
+  }
+
+  rows.sort((x, y) => y.revenue - x.revenue);
+  let cumulative = 0;
+  for (const r of rows) {
+    cumulative += r.revenueSharePct;
+    r.abcClass = cumulative <= 80 ? "A" : cumulative <= 95 ? "B" : "C";
+  }
+  if (rows.length > 0 && rows[0].revenue > 0) rows[0].abcClass = "A";
+  return rows;
+}
+
+export function getOsmStationTileUrl(
+  lat?: number,
+  lng?: number,
+  zoom = 15,
+  isDark = false
+) {
+  const hasGeo =
+    typeof lat === "number" &&
+    typeof lng === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    (Math.abs(lat) > 0.001 || Math.abs(lng) > 0.001);
+  const safeLat = Math.max(-85, Math.min(85, hasGeo ? lat! : DEFAULT_STATION_LAT));
+  const safeLng = Math.max(-180, Math.min(180, hasGeo ? lng! : DEFAULT_STATION_LNG));
+  const n = 2 ** zoom;
+  const x = Math.floor(((safeLng + 180) / 360) * n);
+  const latRad = (safeLat * Math.PI) / 180;
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n
+  );
+
+  const sub = ["a", "b", "c", "d"][Math.abs(x + y) % 4];
+  const stylePath = isDark ? "dark_all" : "rastertiles/voyager";
+
+  return {
+    url: `https://${sub}.basemaps.cartocdn.com/${stylePath}/${zoom}/${x}/${y}.png`,
+    lat: safeLat,
+    lng: safeLng,
+    zoom,
+    isDefaultGeo: !hasGeo,
+  };
 }

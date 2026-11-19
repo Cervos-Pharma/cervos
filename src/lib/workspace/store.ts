@@ -13,7 +13,15 @@ import {
   type HqWorkerCapabilities,
   type HqWorkerRole,
 } from "@/lib/hq-workers";
+import {
+  DEFAULT_CLOUD_CATALOG,
+  inferCatalogSegment,
+  normalizeBarcode,
+  type CloudCatalogProduct,
+} from "@cervos/core";
 import type { WorkspaceSpineStore } from "@/lib/spine/types";
+
+export type { CloudCatalogProduct };
 
 export { clampProfileCapabilities, ROLE_PERMISSION_RULES, clampHqCapabilities };
 export type { ProfileCapabilities, WorkspaceProfileRole, HqWorkerCapabilities, HqWorkerRole };
@@ -205,6 +213,8 @@ export interface WorkspaceStockBatch {
   accountId: string;
   centreId: string;
   productId: string;
+  barcode?: string;
+  segment?: string;
   genericName: string;
   brandName: string;
   category: string;
@@ -562,6 +572,7 @@ export interface WorkspaceDbSnapshot {
   hqTeamNotes?: HqTeamNoteRecord[];
   savedCustomers?: SavedCustomerPreset[];
   shiftLogs?: WorkspaceShiftLog[];
+  cloudCatalog?: CloudCatalogProduct[];
   spine?: WorkspaceSpineStore;
 }
 
@@ -2139,6 +2150,85 @@ export function pushHqMessage(
     createdAt: item.createdAt,
   });
   return item;
+}
+
+export function ensureCloudCatalog(db: WorkspaceDbSnapshot): CloudCatalogProduct[] {
+  db.cloudCatalog ??= [];
+  if (db.cloudCatalog.length === 0) {
+    db.cloudCatalog = DEFAULT_CLOUD_CATALOG.map((item) => ({
+      ...item,
+      barcodes: [...item.barcodes],
+    }));
+  } else {
+    const existingIds = new Set(db.cloudCatalog.map((c) => c.id));
+    for (const seed of DEFAULT_CLOUD_CATALOG) {
+      if (!existingIds.has(seed.id)) {
+        db.cloudCatalog.push({ ...seed, barcodes: [...seed.barcodes] });
+      }
+    }
+  }
+  return db.cloudCatalog;
+}
+
+export function recordCloudCatalogProduct(
+  db: WorkspaceDbSnapshot,
+  input: {
+    barcode?: string;
+    brandName: string;
+    genericName: string;
+    category: string;
+    costPriceTzs?: number;
+    salePriceTzs?: number;
+    lowStockThreshold?: number;
+    requiresPrescription?: boolean;
+    isControlled?: boolean;
+  }
+): CloudCatalogProduct | null {
+  const catalog = ensureCloudCatalog(db);
+  const normCode = input.barcode ? normalizeBarcode(input.barcode) : "";
+  const cleanBrand = input.brandName.trim();
+  const cleanInn = (input.genericName || cleanBrand).trim();
+  if (cleanBrand.length < 2) return null;
+
+  const existing =
+    (normCode ? catalog.find((c) => c.barcodes.includes(normCode)) : undefined) ??
+    catalog.find(
+      (c) =>
+        c.brandName.toLowerCase() === cleanBrand.toLowerCase() ||
+        c.inn.toLowerCase() === cleanInn.toLowerCase()
+    );
+
+  const nowIso = new Date().toISOString();
+  if (existing) {
+    if (normCode && !existing.barcodes.includes(normCode)) {
+      existing.barcodes.push(normCode);
+    }
+    if (input.costPriceTzs && input.costPriceTzs > 0) existing.defaultCostTzs = input.costPriceTzs;
+    if (input.salePriceTzs && input.salePriceTzs > 0) existing.defaultSaleTzs = input.salePriceTzs;
+    if (input.lowStockThreshold && input.lowStockThreshold > 0) existing.defaultThreshold = input.lowStockThreshold;
+    existing.scanCount = (existing.scanCount ?? 0) + 1;
+    existing.updatedAt = nowIso;
+    return existing;
+  }
+
+  const created: CloudCatalogProduct = {
+    id: newId("cat"),
+    segment: inferCatalogSegment(input.category || cleanInn),
+    inn: cleanInn,
+    brandName: cleanBrand,
+    category: input.category.trim() || "Essential",
+    barcodes: normCode ? [normCode] : [],
+    defaultCostTzs: Math.max(50, Math.round(input.costPriceTzs || 2500)),
+    defaultSaleTzs: Math.max(100, Math.round(input.salePriceTzs || 3500)),
+    defaultThreshold: Math.max(1, Math.round(input.lowStockThreshold || 25)),
+    requiresPrescription: Boolean(input.requiresPrescription),
+    isControlled: Boolean(input.isControlled),
+    source: "branch",
+    scanCount: 1,
+    updatedAt: nowIso,
+  };
+  catalog.unshift(created);
+  return created;
 }
 
 export function publicAccountSummary(acc: WorkspaceAccount) {

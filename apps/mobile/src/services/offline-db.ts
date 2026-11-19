@@ -1,12 +1,19 @@
 import * as Notifications from "expo-notifications";
+import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
 import Storage from "expo-sqlite/kv-store";
+import {
+  applyOfflineMutationToSnapshot,
+  createOfflinePinVerifier,
+  verifyOfflinePinRecord,
+  type OfflineMutationType,
+} from "@cervos/core";
 import type { WorkspaceStateResponse } from "@/types/workspace";
 import { pullDeltaSync, pushDeltaSync } from "@/services/api";
 
 export interface QueuedMutation {
   idempotencyKey: string;
-  type: "sale" | "shift_clock";
+  type: OfflineMutationType;
   payloadJson: string;
   createdAt: string;
   synced: number;
@@ -19,6 +26,8 @@ export interface MobileStationPrefs {
   hapticsEnabled: boolean;
   orgScope: "all" | "branch";
   printerName: string;
+  themePref: "light" | "dark" | "system";
+  fontScale: "compact" | "standard" | "large";
   lastActiveMs: number;
 }
 
@@ -32,6 +41,8 @@ export const DEFAULT_STATION_PREFS: MobileStationPrefs = {
   hapticsEnabled: true,
   orgScope: "branch",
   printerName: "Mobile Print / Share PDF",
+  themePref: "system",
+  fontScale: "standard",
   lastActiveMs: Date.now(),
 };
 
@@ -53,6 +64,12 @@ export function loadStationPrefs(): MobileStationPrefs {
         typeof parsed.printerName === "string" && parsed.printerName.trim()
           ? parsed.printerName
           : DEFAULT_STATION_PREFS.printerName,
+      themePref:
+        parsed.themePref === "light" || parsed.themePref === "dark" ? parsed.themePref : "system",
+      fontScale:
+        parsed.fontScale === "compact" || parsed.fontScale === "large"
+          ? parsed.fontScale
+          : "standard",
       lastActiveMs: typeof parsed.lastActiveMs === "number" ? parsed.lastActiveMs : Date.now(),
     };
   } catch {
@@ -133,10 +150,46 @@ export async function loadCachedWorkspaceSnapshot(): Promise<WorkspaceStateRespo
   }
 }
 
+const OFFLINE_PIN_PREFIX = "cervos_off_pin_v1_";
+
+export async function saveOfflinePinVerifier(profileId: string, pin: string): Promise<void> {
+  if (!profileId || pin.trim().length < 4) return;
+  const verifier = createOfflinePinVerifier(profileId, pin);
+  const key = `${OFFLINE_PIN_PREFIX}${profileId}`;
+  try {
+    await SecureStore.setItemAsync(key, verifier);
+  } catch {
+    try {
+      Storage.setItemSync(key, verifier);
+    } catch {
+      // Non-fatal fallback failure
+    }
+  }
+}
+
+export async function verifyOfflinePin(profileId: string, pin: string): Promise<boolean> {
+  if (!profileId || pin.trim().length < 4) return false;
+  const key = `${OFFLINE_PIN_PREFIX}${profileId}`;
+  let record: string | null = null;
+  try {
+    record = await SecureStore.getItemAsync(key);
+  } catch {
+    record = null;
+  }
+  if (!record) {
+    try {
+      record = Storage.getItemSync(key);
+    } catch {
+      record = null;
+    }
+  }
+  return verifyOfflinePinRecord(record, profileId, pin);
+}
+
 export async function enqueueOfflineMutation(
-  type: "sale" | "shift_clock",
+  type: OfflineMutationType,
   payload: Record<string, unknown>
-): Promise<string> {
+): Promise<{ idempotencyKey: string; createdAt: string }> {
   const db = await getDb();
   const idempotencyKey = `mob_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const createdAt = new Date().toISOString();
@@ -144,7 +197,42 @@ export async function enqueueOfflineMutation(
     "INSERT OR IGNORE INTO sync_queue (idempotencyKey, type, payloadJson, createdAt, synced) VALUES (?, ?, ?, ?, 0)",
     [idempotencyKey, type, JSON.stringify({ ...payload, idempotencyKey, type, createdAt }), createdAt]
   );
-  return idempotencyKey;
+  return { idempotencyKey, createdAt };
+}
+
+export async function applyOfflineMutationLocally(
+  current: WorkspaceStateResponse | null,
+  type: OfflineMutationType,
+  payload: Record<string, unknown>,
+  meta: { idempotencyKey: string; createdAt: string }
+): Promise<WorkspaceStateResponse | null> {
+  const base = current ?? (await loadCachedWorkspaceSnapshot());
+  if (!base) return null;
+  const updated = applyOfflineMutationToSnapshot(base, {
+    ...payload,
+    idempotencyKey: meta.idempotencyKey,
+    type,
+    createdAt: meta.createdAt,
+    centreId:
+      (typeof payload.centreId === "string" && payload.centreId) ||
+      base.activeCentreId ||
+      base.activeProfile?.centreId ||
+      undefined,
+    profileId:
+      (typeof payload.profileId === "string" && payload.profileId) ||
+      base.activeProfile?.id ||
+      undefined,
+    operatorName:
+      (typeof payload.operatorName === "string" && payload.operatorName) ||
+      base.activeProfile?.displayName ||
+      undefined,
+    role:
+      (typeof payload.role === "string" && payload.role) ||
+      base.activeProfile?.role ||
+      undefined,
+  });
+  await cacheWorkspaceSnapshot(updated);
+  return updated;
 }
 
 export async function getPendingQueueCount(): Promise<number> {

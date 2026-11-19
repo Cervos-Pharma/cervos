@@ -18,7 +18,7 @@ export default function MoreHubScreen() {
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
-      style={{ flex: 1, backgroundColor: colors.groupedBackground }}
+      style={{ flex: 1, backgroundColor: brand.canvasBg }}
       contentContainerStyle={{ padding: spacing.md, paddingTop: 54, gap: spacing.md }}
     >
       <View style={{ gap: 2 }}>
@@ -61,6 +61,46 @@ export default function MoreHubScreen() {
               onPress={() => router.push("/wholesale")}
             >
               {isSw ? "Ununuzi wa Jumla (Wholesale)" : "Wholesale & Kasri"}
+            </ListItem>
+            <ListItem
+              supportingText={
+                isSw
+                  ? "Hesabu ya droo mwisho wa zamu & rekodi ya matumizi"
+                  : "Blind cash drawer count & 30d operating expenses"
+              }
+              onPress={() => router.push("/shift-close")}
+            >
+              {isSw ? "Funga Zamu & Matumizi" : "Shift Close & Expenses"}
+            </ListItem>
+            <ListItem
+              supportingText={
+                isSw
+                  ? "Wahudumu, ruhusa za PIN, maombi na matawi"
+                  : "Operators, permissions, Lounge approvals & branches"
+              }
+              onPress={() => router.push("/team")}
+            >
+              {isSw ? "Timu & Matawi" : "Team & Branches"}
+            </ListItem>
+            <ListItem
+              supportingText={
+                isSw
+                  ? "Kifurushi cha Cervos & malipo ya PayMe USSD"
+                  : "Active tier limits & PayMe mobile money checkout"
+              }
+              onPress={() => router.push("/billing")}
+            >
+              {isSw ? "Malipo & Kifurushi" : "Billing & Subscriptions"}
+            </ListItem>
+            <ListItem
+              supportingText={
+                isSw
+                  ? "Vibali vya TMDA / Pharmacy Council & ukaguzi"
+                  : "Submit operating permits & view compliance audit log"
+              }
+              onPress={() => router.push("/settings?scope=compliance")}
+            >
+              {isSw ? "Vibali & Ukaguzi" : "Permits & Audit Log"}
             </ListItem>
             <ListItem
               supportingText={

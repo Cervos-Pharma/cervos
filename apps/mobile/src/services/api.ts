@@ -1,6 +1,8 @@
 import { fetch } from "expo/fetch";
 import * as SecureStore from "expo-secure-store";
 import type {
+  CloudCatalogProduct,
+  ScanIntent,
   WorkspaceAuthRequestJoinPayload,
   WorkspaceAuthResponse,
   WorkspaceAuthSignInPayload,
@@ -225,4 +227,44 @@ export async function pushDeltaSync(mutations: Array<Record<string, unknown>>) {
     method: "POST",
     body: JSON.stringify({ mutations }),
   });
+}
+
+export async function fetchCloudCatalog(params?: {
+  barcode?: string;
+  q?: string;
+  segment?: string;
+}) {
+  const sp = new URLSearchParams();
+  if (params?.barcode) sp.set("barcode", params.barcode);
+  if (params?.q) sp.set("q", params.q);
+  if (params?.segment) sp.set("segment", params.segment);
+  const qs = sp.toString();
+  return apiRequest<{
+    ok?: boolean;
+    items?: CloudCatalogProduct[];
+    match?: CloudCatalogProduct | null;
+    intent?: ScanIntent;
+    totalCatalog?: number;
+    error?: string;
+  }>(`/api/workspace/catalog${qs ? `?${qs}` : ""}`, { method: "GET" });
+}
+
+export async function postCloudCatalogProduct(payload: {
+  barcode?: string;
+  brandName: string;
+  genericName?: string;
+  category?: string;
+  costPriceTzs?: number;
+  salePriceTzs?: number;
+  lowStockThreshold?: number;
+  requiresPrescription?: boolean;
+  isControlled?: boolean;
+}) {
+  return apiRequest<{ ok?: boolean; item?: CloudCatalogProduct; error?: string }>(
+    "/api/workspace/catalog",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
 }

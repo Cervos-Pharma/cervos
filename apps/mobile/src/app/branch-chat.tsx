@@ -32,6 +32,7 @@ export default function BranchChatScreen() {
     canManageAdmin,
     lang,
     refreshState,
+    runOnlineOrQueue,
   } = useMobileSession();
   const brand = useBrandColors(workspace?.account?.customization?.brandAccent);
   const isSw = lang === "SW";
@@ -104,15 +105,21 @@ export default function BranchChatScreen() {
     setBusy(true);
     setActionError(null);
     try {
-      const res = await postWorkspaceAction({
-        action: "send_branch_chat",
-        body: clean || selectedAttach?.title || "",
-        attachment: selectedAttach ?? undefined,
-        replyToId: replyingTo?.id,
-        centreId: activeCentre?.id,
-      });
-      if (!res.ok) {
-        setActionError(res.data?.error || "Could not send message.");
+      const msgText = clean || selectedAttach?.title || "";
+      const out = await runOnlineOrQueue(
+        {
+          action: "send_branch_chat",
+          body: msgText,
+          attachment: selectedAttach ?? undefined,
+          replyToId: replyingTo?.id,
+          centreId: activeCentre?.id,
+        },
+        selectedAttach || replyingTo
+          ? undefined
+          : { type: "branch_chat", payload: { text: msgText, centreId: activeCentre?.id } }
+      );
+      if (!out.ok) {
+        setActionError(out.error || "Could not send message.");
         await playSoundCue("alert");
         return;
       }
@@ -122,7 +129,6 @@ export default function BranchChatScreen() {
       setAttachPickerOpen(false);
       await playSoundCue("notify");
       await triggerHaptic("light");
-      await refreshState();
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 120);
     } finally {
       setBusy(false);

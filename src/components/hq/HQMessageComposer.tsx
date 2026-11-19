@@ -163,12 +163,12 @@ export default function HQMessageComposer({
                     accountId: targetAccountId,
                     force: true,
                   },
-                  "Dispatched Nama daily owner summary SMS & in-app digest"
+                  "Dispatched daily owner summary SMS & in-app digest"
                 )
               }
               className="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-semibold cursor-pointer disabled:opacity-50"
             >
-              Send Daily Owner Summary Now (Nama)
+              Send Daily Owner Summary Now
             </button>
             {TEMPLATES.map((tpl) => (
               <button
@@ -352,14 +352,14 @@ export default function HQMessageComposer({
 
         <div className="space-y-1.5 text-xs">
           <label className={`block text-[10px] font-bold uppercase ${mutedCls}`}>
-            Delivery Channel (Textify SMS Sender: &ldquo;Nama&rdquo;)
+            Delivery Channel (Textify SMS)
           </label>
           <div className="grid grid-cols-3 gap-2">
             {(
               [
                 { id: "in_app", label: "In-App Notice" },
-                { id: "sms_textify", label: "Textify SMS (Nama)" },
-                { id: "both", label: "In-App + SMS (Nama)" },
+                { id: "sms_textify", label: "Textify SMS" },
+                { id: "both", label: "In-App + SMS" },
               ] as const
             ).map((ch) => (
               <button
