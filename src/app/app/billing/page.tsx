@@ -9,7 +9,7 @@ import { useWorkspaceTheme } from "@/lib/workspace/theme";
 
 const MAX_FOREGROUND_POLLS = 12;
 const POLL_INTERVAL_MS = 4000;
-export const PENDING_PAYMENT_STORAGE_KEY = "cervos_pending_payment";
+const PENDING_PAYMENT_STORAGE_KEY = "cervos_pending_payment";
 
 interface BillingAccountSummary {
   id: string;

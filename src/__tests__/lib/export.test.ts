@@ -1,4 +1,7 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
+import React, { act } from "react";
+import { createRoot } from "react-dom/client";
+import TanzaniaGlobe from "@/components/TanzaniaGlobe";
 import { arrayToCSV, exportCleanPdfReport } from "@/lib/export";
 import {
   NATIVE_BRIDGE_EVENT,
@@ -213,5 +216,34 @@ describe("Two-Tier PWA <-> Native Hardware Bridge", () => {
       type: "native:sync_requested",
       eventId: "evt-unique-2",
     });
+  });
+});
+
+describe("TanzaniaGlobe SVG Fallback Integrity", () => {
+  it("preserves the Tanzania SVG fallback without wiping DOM children when WebGL/low-end switches on", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+
+    await act(async () => {
+      root.render(
+        React.createElement(TanzaniaGlobe, {
+          activePoints: [{ lat: -6.816, lng: 39.2803 }],
+        })
+      );
+    });
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+
+    const svg = host.querySelector('div[aria-label="Tanzania Mesh Globe"] svg');
+    expect(svg).not.toBeNull();
+    expect(host.querySelectorAll("path").length).toBeGreaterThanOrEqual(1);
+
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
   });
 });

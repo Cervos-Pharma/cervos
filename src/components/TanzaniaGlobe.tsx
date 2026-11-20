@@ -55,7 +55,7 @@ export default function TanzaniaGlobe({
   const [webglError, setWebglError] = useState(false);
 
   useEffect(() => {
-    if (isLowEnd) return;
+    if (isLowEnd || webglError) return;
     let mounted = true;
     const el = containerRef.current;
     if (!el) return;
@@ -71,15 +71,16 @@ export default function TanzaniaGlobe({
 
         // Wait one animation frame if layout dimensions are not measured yet
         const measureAndMount = () => {
-          if (!mounted || !containerRef.current) return;
-          const width = containerRef.current.clientWidth || 560;
-          const height = containerRef.current.clientHeight || 560;
-          if (width < 20 || height < 20) {
-            rafInitId = requestAnimationFrame(measureAndMount);
-            return;
-          }
+          try {
+            if (!mounted || !containerRef.current) return;
+            const width = containerRef.current.clientWidth || 560;
+            const height = containerRef.current.clientHeight || 560;
+            if (width < 20 || height < 20) {
+              rafInitId = requestAnimationFrame(measureAndMount);
+              return;
+            }
 
-          containerRef.current.innerHTML = "";
+            containerRef.current.innerHTML = "";
           const features = worldFeatures as GeoFeature[];
 
           const palette = invertTheme ? GLOBE_SHARED_TOKENS.dark : GLOBE_SHARED_TOKENS.light;
@@ -175,12 +176,18 @@ export default function TanzaniaGlobe({
 
           globeRef.current = world as unknown as typeof globeRef.current;
 
-          // Signal readiness after WebGL paints first frame
-          requestAnimationFrame(() => {
+            // Signal readiness after WebGL paints first frame
             requestAnimationFrame(() => {
-              if (mounted) onReadyRef.current?.();
+              requestAnimationFrame(() => {
+                if (mounted) onReadyRef.current?.();
+              });
             });
-          });
+          } catch {
+            if (mounted) {
+              setWebglError(true);
+              onReadyRef.current?.();
+            }
+          }
         };
 
         measureAndMount();
@@ -232,7 +239,7 @@ export default function TanzaniaGlobe({
       globeRef.current = null;
       if (el) el.innerHTML = "";
     };
-  }, [isLowEnd]);
+  }, [isLowEnd, webglError]);
 
   // React smoothly to active point changes
   useEffect(() => {
@@ -293,7 +300,11 @@ export default function TanzaniaGlobe({
 
   if (webglError || isLowEnd) {
     return (
-      <div className="w-full h-full flex items-center justify-center relative">
+      <div
+        key="globe-fallback"
+        className="w-full h-full flex items-center justify-center relative"
+        aria-label="Tanzania Mesh Globe"
+      >
         <div
           className={`relative w-[340px] h-[340px] sm:w-[480px] sm:h-[480px] rounded-full border shadow-xl flex items-center justify-center overflow-hidden ${
             invertTheme
@@ -324,6 +335,7 @@ export default function TanzaniaGlobe({
 
   return (
     <div
+      key="globe-canvas"
       ref={containerRef}
       className="w-full h-full block relative cursor-grab active:cursor-grabbing"
       aria-label="Tanzania Mesh Globe"
