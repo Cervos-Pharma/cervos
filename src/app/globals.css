@@ -669,6 +669,31 @@
   animation: globeSoftAppear 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes clayNodeFlicker {
+  0%, 100% { opacity: 0.55; }
+  14% { opacity: 1; }
+  22% { opacity: 0.68; }
+  31% { opacity: 0.96; }
+  46% { opacity: 0.58; }
+  63% { opacity: 0.88; }
+  79% { opacity: 0.64; }
+}
+
+.clay-node-flicker {
+  animation: clayNodeFlicker 5.6s ease-in-out infinite;
+  will-change: opacity;
+}
+
+.clay-node-halo {
+  filter: blur(2.2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clay-node-flicker {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-orbit-ring,
   .animate-orbit-ring-reverse,

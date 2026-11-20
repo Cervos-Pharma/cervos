@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import worldFeatures from "@/lib/world-geo.json";
 import { GLOBE_SHARED_TOKENS } from "@/lib/globe-theme";
 import { useIsLowEndDevice } from "@/lib/useDeviceTier";
+import ClayMeshFallback from "@/components/ClayMeshFallback";
 
 export interface ActiveStationPing {
   lat: number;
@@ -33,6 +34,10 @@ export default function TanzaniaGlobe({
   onReady,
 }: Props) {
   const isLowEnd = useIsLowEndDevice();
+  // Keep the 3D globe as the default view: low-end only disables auto-rotation,
+  // it must never swap the hero to the static SVG by itself.
+  const lowEndRef = useRef(isLowEnd);
+  lowEndRef.current = isLowEnd;
   const containerRef = useRef<HTMLDivElement>(null);
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
@@ -55,7 +60,7 @@ export default function TanzaniaGlobe({
   const [webglError, setWebglError] = useState(false);
 
   useEffect(() => {
-    if (isLowEnd || webglError) return;
+    if (webglError) return;
     let mounted = true;
     const el = containerRef.current;
     if (!el) return;
@@ -152,7 +157,7 @@ export default function TanzaniaGlobe({
           const controls = world.controls();
           if (controls) {
             controls.enableZoom = false;
-            controls.autoRotate = autoRotate;
+            controls.autoRotate = autoRotate && !lowEndRef.current;
             controls.autoRotateSpeed = autoRotateSpeed;
             controls.enableDamping = true;
             controls.dampingFactor = 0.08;
@@ -239,22 +244,21 @@ export default function TanzaniaGlobe({
       globeRef.current = null;
       if (el) el.innerHTML = "";
     };
-  }, [isLowEnd, webglError]);
+  }, [webglError]);
 
   // React smoothly to active point changes
   useEffect(() => {
-    if (!globeRef.current || isLowEnd) return;
+    if (!globeRef.current) return;
     try {
       globeRef.current.pointsData?.(activePoints);
       globeRef.current.ringsData?.(activePoints);
     } catch {
       /* ignore */
     }
-  }, [activePoints, isLowEnd]);
+  }, [activePoints]);
 
   // React smoothly to B&W invert & autoRotate updates without destroying WebGL context
   useEffect(() => {
-    if (isLowEnd) return;
     const world = globeRef.current;
     if (!world) return;
     try {
@@ -284,7 +288,7 @@ export default function TanzaniaGlobe({
       }
       const controls = world.controls?.();
       if (controls) {
-        controls.autoRotate = autoRotate;
+        controls.autoRotate = autoRotate && !isLowEnd;
         controls.autoRotateSpeed = autoRotateSpeed;
       }
     } catch {
@@ -293,42 +297,15 @@ export default function TanzaniaGlobe({
   }, [invertTheme, autoRotate, autoRotateSpeed, isLowEnd]);
 
   useEffect(() => {
-    if (webglError || isLowEnd) {
+    if (webglError) {
       onReadyRef.current?.();
     }
-  }, [webglError, isLowEnd]);
+  }, [webglError]);
 
-  if (webglError || isLowEnd) {
+  if (webglError) {
     return (
-      <div
-        key="globe-fallback"
-        className="w-full h-full flex items-center justify-center relative"
-        aria-label="Tanzania Mesh Globe"
-      >
-        <div
-          className={`relative w-[340px] h-[340px] sm:w-[480px] sm:h-[480px] rounded-full border shadow-xl flex items-center justify-center overflow-hidden ${
-            invertTheme
-              ? "border-neutral-700 bg-neutral-950 text-white"
-              : "border-slate-200 bg-gradient-to-br from-white via-[#EFF6FF] to-[#DBEAFE] text-[#1039B9]"
-          }`}
-          style={{
-            backgroundImage: invertTheme
-              ? "radial-gradient(circle, rgba(255,255,255,0.22) 1.5px, transparent 1.5px)"
-              : "radial-gradient(circle, rgba(16,57,185,0.22) 1.5px, transparent 1.5px)",
-            backgroundSize: "18px 18px",
-          }}
-        >
-          <svg viewBox="0 0 120 120" className="w-44 h-44 opacity-90" fill="none">
-            <path
-              d="M48 20 L65 24 L82 38 L86 58 L78 84 L62 96 L42 94 L30 78 L26 54 L34 32 Z"
-              fill={invertTheme ? "rgba(255,255,255,0.85)" : "rgba(16,57,185,0.75)"}
-            />
-            <circle cx="80" cy="52" r="3.5" fill={invertTheme ? "#FFFFFF" : "#10B981"} />
-            <circle cx="62" cy="36" r="3" fill={invertTheme ? "#FFFFFF" : "#10B981"} />
-            <circle cx="38" cy="34" r="3" fill={invertTheme ? "#FFFFFF" : "#10B981"} />
-            <circle cx="58" cy="54" r="3" fill={invertTheme ? "#FFFFFF" : "#10B981"} />
-          </svg>
-        </div>
+      <div key="globe-fallback" className="w-full h-full relative">
+        <ClayMeshFallback invertTheme={invertTheme} />
       </div>
     );
   }
