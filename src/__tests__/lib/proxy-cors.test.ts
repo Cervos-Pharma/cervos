@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
 import { proxy } from "@/proxy";
+import { GET as getPublicStats } from "@/app/api/public/stats/route";
 
 const ALLOWED = "http://tauri.localhost";
 
@@ -67,5 +68,29 @@ describe("Proxy CORS Handling", () => {
       const res = await proxy(optionsReq("/api/subscription/status", origin));
       expect(res.headers.get("access-control-allow-origin")).toBe(origin);
     }
+  });
+});
+
+describe("Public Network Stats Endpoint", () => {
+  it("hydrates live pharmacy, supplier, branch counts and markers from workspace DB without caching stale zero", async () => {
+    const req = new NextRequest("http://localhost:3000/api/public/stats", {
+      method: "GET",
+      headers: { "x-forwarded-for": "198.51.100.42" },
+    });
+    const res = await getPublicStats(req);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    const json = (await res.json()) as {
+      pharmacies: number;
+      suppliers: number;
+      branches: number;
+      markers: Array<{ lat: number; lng: number; status: string }>;
+    };
+    expect(json.pharmacies).toBeGreaterThanOrEqual(1);
+    expect(json.branches).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(json.markers)).toBe(true);
+    expect(json.markers.length).toBeGreaterThanOrEqual(1);
+    expect(typeof json.markers[0].lat).toBe("number");
+    expect(typeof json.markers[0].lng).toBe("number");
   });
 });

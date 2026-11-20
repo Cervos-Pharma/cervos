@@ -112,15 +112,17 @@ export default function CervosLandingPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [focusedFieldIndex]);
 
-  // Live Network Counter
+  // Live Network Counter (hydrated directly from /api/public/stats without fake pre-fetch number)
   const [stats, setStats] = useState<PublicStatsResponse>({
-    pharmacies: 4,
-    suppliers: 4,
-    branches: 8,
+    pharmacies: 0,
+    suppliers: 0,
+    branches: 0,
     downloads: 0,
-    markers: DEFAULT_ACTIVE_PINGS.map((p) => ({ ...p, status: "online" })),
+    markers: [],
   });
+  const [statsLoaded, setStatsLoaded] = useState(false);
   const [displayedCount, setDisplayedCount] = useState(0);
+  const displayedCountRef = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -130,7 +132,14 @@ export default function CervosLandingPage() {
         if (!res.ok) return;
         const json = (await res.json()) as PublicStatsResponse;
         if (active && typeof json.pharmacies === "number") {
-          setStats(json);
+          setStats((prev) => {
+            const prevTotal = prev.pharmacies + prev.suppliers;
+            const nextTotal = (json.pharmacies || 0) + (json.suppliers || 0);
+            // Never clobber an active non-zero DB snapshot with a transient zero response
+            if (prevTotal > 0 && nextTotal === 0) return prev;
+            return json;
+          });
+          setStatsLoaded(true);
         }
       } catch {
         /* keep current live snapshot */
@@ -138,16 +147,22 @@ export default function CervosLandingPage() {
     };
     loadStats();
     const timer = setInterval(loadStats, 15000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void loadStats();
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       active = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 
-  const totalBusinesses = Math.max(1, stats.pharmacies + stats.suppliers);
+  const totalBusinesses = stats.pharmacies + stats.suppliers;
 
   useEffect(() => {
-    const start = displayedCount;
+    if (!statsLoaded) return;
+    const start = displayedCountRef.current;
     const target = totalBusinesses;
     if (start === target) return;
     const duration = 650;
@@ -157,19 +172,28 @@ export default function CervosLandingPage() {
     const tick = (now: number) => {
       const progress = Math.min(1, (now - startTime) / duration);
       const eased = 1 - Math.pow(1 - progress, 3);
-      setDisplayedCount(Math.round(start + (target - start) * eased));
+      const next = Math.round(start + (target - start) * eased);
+      displayedCountRef.current = next;
+      setDisplayedCount(next);
       if (progress < 1) frameId = requestAnimationFrame(tick);
     };
     frameId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameId);
-  }, [totalBusinesses]);
+  }, [totalBusinesses, statsLoaded]);
 
-  const activeStationPings: ActiveStationPing[] = useMemo(() => {
-    const online = (stats.markers || [])
+  const liveOnlinePings: ActiveStationPing[] = useMemo(() => {
+    return (stats.markers || [])
       .filter((m) => m.status === "online" && typeof m.lat === "number" && typeof m.lng === "number")
       .map((m) => ({ lat: m.lat, lng: m.lng }));
-    return online.length > 0 ? online : DEFAULT_ACTIVE_PINGS;
   }, [stats.markers]);
+
+  const activeStationPings: ActiveStationPing[] = useMemo(() => {
+    if (liveOnlinePings.length > 0) return liveOnlinePings;
+    const fallbackMarkers = (stats.markers || [])
+      .filter((m) => typeof m.lat === "number" && typeof m.lng === "number")
+      .map((m) => ({ lat: m.lat, lng: m.lng }));
+    return fallbackMarkers.length > 0 ? fallbackMarkers : DEFAULT_ACTIVE_PINGS;
+  }, [liveOnlinePings, stats.markers]);
 
   const platformIcon = (id: string) => {
     if (id === "pwa") return <IconMobile className="w-5 h-5" />;
@@ -792,25 +816,50 @@ export default function CervosLandingPage() {
         <div className="max-w-6xl mx-auto px-5 sm:px-6 relative">
           <div className="grid grid-cols-1 lg:grid-cols-12 items-center min-h-[540px]">
             <div className="lg:col-span-5 relative z-20 pr-0 lg:pr-8">
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-[#006875] mb-3 block">
-                <FlipText text={isSw ? "TANZANIA NZIMA" : "ACROSS TANZANIA"} flipKey={lang} />
-              </span>
+              <div className="inline-flex items-center gap-2.5 px-3 py-1 rounded-full bg-white border border-emerald-200/90 shadow-[0_0_20px_rgba(16,185,129,0.22)] mb-4">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
+                </span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#00542C]">
+                  <FlipText text={isSw ? "MTANDAO HAI TANZANIA" : "LIVE ACROSS TANZANIA"} flipKey={lang} />
+                </span>
+              </div>
 
               <h2
-                className="text-3xl sm:text-4xl lg:text-[42px] font-bold tracking-tight text-[#0F172A] leading-[1.12] mb-4"
+                className="text-3xl sm:text-4xl lg:text-[42px] font-bold tracking-tight text-[#0F172A] leading-[1.15] mb-4"
                 style={{ fontFamily: "Outfit, Inter, sans-serif" }}
               >
                 {isSw ? (
                   <>
                     <FlipText text="Jiunge na maduka na wasambazaji" flipKey={lang} />{" "}
-                    <span className="text-[#1039B9] tabular-nums">{displayedCount}</span>{" "}
+                    <span className="relative inline-flex items-center justify-center mx-1 px-2.5 py-0.5 rounded-lg bg-[#1039B9]/10 border border-[#38BDF8]/45 text-[#1039B9] tabular-nums shadow-[0_0_22px_rgba(56,189,248,0.4)]">
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -inset-1 rounded-xl bg-gradient-to-r from-[#1039B9]/25 via-[#38BDF8]/30 to-[#10B981]/25 blur-md animate-pulse"
+                      />
+                      <span className="relative drop-shadow-[0_0_10px_rgba(16,57,185,0.28)]">
+                        {statsLoaded ? displayedCount : "\u2014"}
+                      </span>
+                    </span>{" "}
                     <FlipText text="kote Tanzania." flipKey={lang} />
                   </>
                 ) : (
                   <>
                     <FlipText text="Join" flipKey={lang} />{" "}
-                    <span className="text-[#1039B9] tabular-nums">{displayedCount}</span>{" "}
-                    <FlipText text="pharmacies and suppliers." flipKey={lang} />
+                    <span className="relative inline-flex items-center justify-center mx-1 px-2.5 py-0.5 rounded-lg bg-[#1039B9]/10 border border-[#38BDF8]/45 text-[#1039B9] tabular-nums shadow-[0_0_22px_rgba(56,189,248,0.4)]">
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -inset-1 rounded-xl bg-gradient-to-r from-[#1039B9]/25 via-[#38BDF8]/30 to-[#10B981]/25 blur-md animate-pulse"
+                      />
+                      <span className="relative drop-shadow-[0_0_10px_rgba(16,57,185,0.28)]">
+                        {statsLoaded ? displayedCount : "\u2014"}
+                      </span>
+                    </span>{" "}
+                    <FlipText
+                      text={statsLoaded && totalBusinesses === 1 ? "pharmacy or supplier." : "pharmacies and suppliers."}
+                      flipKey={lang}
+                    />
                   </>
                 )}
               </h2>
@@ -828,15 +877,15 @@ export default function CervosLandingPage() {
               </p>
 
               <div className="grid grid-cols-2 gap-4 pt-6 border-t border-[#E2E8F0] max-w-md">
-                <div className="p-4 rounded-md bg-white border border-[#E2E8F0] shadow-2xs">
+                <div className="p-4 rounded-md bg-white border border-emerald-200/80 shadow-[0_2px_16px_rgba(16,185,129,0.12)]">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.85)]" />
                     <span className="text-xs font-semibold text-[#475569]">
                       <FlipText text={isSw ? "Wazi Leo" : "Open Today"} flipKey={lang} />
                     </span>
                   </div>
                   <div className="text-2xl font-bold text-[#0F172A] tabular-nums">
-                    {activeStationPings.length}
+                    {statsLoaded ? (liveOnlinePings.length || stats.branches) : "\u2014"}
                   </div>
                 </div>
 
@@ -844,8 +893,8 @@ export default function CervosLandingPage() {
                   <div className="text-xs font-semibold text-[#475569] mb-1">
                     <FlipText text={isSw ? "Matawi" : "Locations"} flipKey={lang} />
                   </div>
-                  <div className="text-2xl font-bold text-[#1039B9] tabular-nums">
-                    {stats.branches}
+                  <div className="text-2xl font-bold text-[#1039B9] tabular-nums drop-shadow-[0_0_8px_rgba(16,57,185,0.2)]">
+                    {statsLoaded ? stats.branches : "\u2014"}
                   </div>
                 </div>
               </div>
