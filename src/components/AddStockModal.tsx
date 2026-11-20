@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { addPharmacyBranchBatch } from "@/lib/actions/branch";
 import { useI18n } from "@/lib/i18n/context";
+import { FORMULATIONS } from "@/types/shared";
 
 interface CatalogProduct {
   id: string;
@@ -41,6 +42,7 @@ export default function AddStockModal({
   const [genericName, setGenericName] = useState("");
   const [brandName, setBrandName] = useState("");
   const [category, setCategory] = useState("");
+  const [formulation, setFormulation] = useState("");
   const [quantity, setQuantity] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [salePrice, setSalePrice] = useState("");
@@ -57,6 +59,7 @@ export default function AddStockModal({
     setGenericName("");
     setBrandName("");
     setCategory("");
+    setFormulation("");
     setMode("existing");
   }
 
@@ -74,7 +77,7 @@ export default function AddStockModal({
     const result = await addPharmacyBranchBatch({
       branchId,
       productId: mode === "existing" ? productId : undefined,
-      newProduct: mode === "new" ? { genericName, brandName, category } : undefined,
+      newProduct: mode === "new" ? { genericName, brandName, category, formulation: formulation || undefined } : undefined,
       quantity: Number(quantity),
       expiryDate,
       costPrice: costPrice ? Number(costPrice) : undefined,
@@ -177,6 +180,18 @@ export default function AddStockModal({
                     placeholder={t("addstock.category")}
                     className="w-full px-3 py-2 bg-surface-base border border-outline-variant text-sm"
                   />
+                  <select
+                    value={formulation}
+                    onChange={(e) => setFormulation(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-base border border-outline-variant text-sm text-ink-deep"
+                  >
+                    <option value="">{t("addstock.formulation", "Select Formulation (e.g. Syrup, Tablet, Suppository)")}</option>
+                    {FORMULATIONS.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 

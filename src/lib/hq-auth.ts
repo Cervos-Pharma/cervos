@@ -35,10 +35,10 @@ export function isHqSecretConfigured(): boolean {
   const secret = (process.env.HQ_SECRET ?? "").trim();
   return Boolean(
     secret &&
-      secret !== PLACEHOLDER &&
-      !secret.includes("REPLACE-WITH") &&
-      !secret.includes("YOUR-") &&
-      secret.length >= 32
+    secret !== PLACEHOLDER &&
+    !secret.includes("REPLACE-WITH") &&
+    !secret.includes("YOUR-") &&
+    secret.length >= 32
   );
 }
 

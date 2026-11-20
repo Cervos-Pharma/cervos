@@ -37,6 +37,7 @@ import WebpPhotoInput from "@/components/WebpPhotoInput";
 import WorkspaceTour from "@/components/WorkspaceTour";
 import { loadHardwareConfig, type HardwareConfigState } from "@/lib/hardware/devices";
 import { playAppSound } from "@/lib/sounds";
+import { FORMULATIONS } from "@/types/shared";
 import {
   enqueueWebOfflineMutation,
   isOfflineNetworkError,
@@ -87,6 +88,7 @@ export interface DashboardBatch {
   genericName: string;
   brandName: string;
   category: string;
+  formulation?: string;
   batchNumber: string;
   quantity: number;
   costPriceTzs: number;
@@ -544,6 +546,7 @@ export default function PharmacyDashboard({
   const [editBatchBrand, setEditBatchBrand] = useState("");
   const [editBatchGeneric, setEditBatchGeneric] = useState("");
   const [editBatchCategory, setEditBatchCategory] = useState("");
+  const [editBatchFormulation, setEditBatchFormulation] = useState("");
   const [editBatchNumber, setEditBatchNumber] = useState("");
   const [editBatchQty, setEditBatchQty] = useState("");
   const [editBatchCost, setEditBatchCost] = useState("");
@@ -557,6 +560,7 @@ export default function PharmacyDashboard({
   // Add Stock rich fields
   const [newGeneric, setNewGeneric] = useState("");
   const [newCategory, setNewCategory] = useState("Essential");
+  const [newFormulation, setNewFormulation] = useState("Tablet");
   const [newCostPrice, setNewCostPrice] = useState("3200");
   const [newThreshold, setNewThreshold] = useState("25");
   const [newImageUrl, setNewImageUrl] = useState("");
@@ -827,6 +831,7 @@ export default function PharmacyDashboard({
     setEditBatchBrand(b.brandName);
     setEditBatchGeneric(b.genericName);
     setEditBatchCategory(b.category);
+    setEditBatchFormulation(b.formulation || "");
     setEditCustomCatMode(false);
     setEditBatchNumber(b.batchNumber);
     setEditBatchQty(String(b.quantity));
@@ -849,6 +854,7 @@ export default function PharmacyDashboard({
         brandName: editBatchBrand,
         genericName: editBatchGeneric,
         category: editBatchCategory,
+        formulation: editBatchFormulation,
         batchNumber: editBatchNumber,
         quantity: Number(editBatchQty) || 0,
         costPriceTzs: Number(editBatchCost) || focusedBatch.costPriceTzs,
@@ -2297,7 +2303,14 @@ export default function PharmacyDashboard({
                             <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: accent }}>
                               {isSw ? "KADI YA MAELEZO YA DAWA" : "PRODUCT & BATCH FOCUS CARD"}
                             </div>
-                            <h3 className="text-base font-bold">{focusedBatch.brandName} ({focusedBatch.genericName})</h3>
+                            <h3 className="text-base font-bold flex items-center gap-2 flex-wrap">
+                              <span>{focusedBatch.brandName} ({focusedBatch.genericName})</span>
+                              {focusedBatch.formulation && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                                  {focusedBatch.formulation}
+                                </span>
+                              )}
+                            </h3>
                             <div className={`text-[11px] ${mutedCls}`}>
                               {focusedBatch.category} &middot; Batch <span className="font-mono">{focusedBatch.batchNumber}</span> &middot;{" "}
                               {focusedBatch.requiresPrescription ? "Rx Prescription Required" : "OTC Unrestricted"}
@@ -2375,7 +2388,7 @@ export default function PharmacyDashboard({
                           <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: accent }}>
                             {isSw ? "Hariri Taarifa za Bidhaa & Kundi" : "Edit Product & Batch Fields"}
                           </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                             <div>
                               <label className={`block text-[10px] mb-1 ${mutedCls}`}>Brand Name</label>
                               <input type="text" value={editBatchBrand} onChange={(e) => setEditBatchBrand(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
@@ -2383,6 +2396,21 @@ export default function PharmacyDashboard({
                             <div>
                               <label className={`block text-[10px] mb-1 ${mutedCls}`}>Generic Name</label>
                               <input type="text" value={editBatchGeneric} onChange={(e) => setEditBatchGeneric(e.target.value)} className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`} />
+                            </div>
+                            <div>
+                              <label className={`block text-[10px] mb-1 ${mutedCls}`}>Formulation</label>
+                              <select
+                                value={editBatchFormulation}
+                                onChange={(e) => setEditBatchFormulation(e.target.value)}
+                                className={`w-full px-2.5 py-1.5 rounded-lg border ${inputCls}`}
+                              >
+                                <option value="">Select formulation</option>
+                                {FORMULATIONS.map((f) => (
+                                  <option key={f} value={f}>
+                                    {f}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                             <div>
                               <label className={`block text-[10px] mb-1 ${mutedCls}`}>Type / Category</label>
@@ -2546,7 +2574,13 @@ export default function PharmacyDashboard({
                             )}
                           </div>
                           <div className={`text-[11px] mt-0.5 ${mutedCls}`}>
-                            {b.genericName} &middot; {b.category} &middot; Exp <strong>{b.expiryDate}</strong> &middot; TZS{" "}
+                            {b.genericName}
+                            {b.formulation && (
+                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold text-[10px]">
+                                {b.formulation}
+                              </span>
+                            )}
+                            {" "}&middot; {b.category} &middot; Exp <strong>{b.expiryDate}</strong> &middot; TZS{" "}
                             {b.salePriceTzs.toLocaleString("en-US")}
                           </div>
                         </div>
@@ -2673,12 +2707,28 @@ export default function PharmacyDashboard({
                       className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div>
                       <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
                         Generic Name
                       </label>
                       <input type="text" value={newGeneric} onChange={(e) => setNewGeneric(e.target.value)} placeholder="Generic e.g. Azithromycin" className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`} />
+                    </div>
+                    <div>
+                      <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
+                        Formulation
+                      </label>
+                      <select
+                        value={newFormulation}
+                        onChange={(e) => setNewFormulation(e.target.value)}
+                        className={`w-full px-3 py-2 rounded-xl border text-xs ${inputCls}`}
+                      >
+                        {FORMULATIONS.map((f) => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${mutedCls}`}>
@@ -2820,6 +2870,7 @@ export default function PharmacyDashboard({
                           brandName: newBrand,
                           genericName: newGeneric.trim() || newBrand,
                           category: cleanCat,
+                          formulation: newFormulation,
                           quantity: Number(newQty) || 20,
                           costPriceTzs: Number(newCostPrice) || 2500,
                           salePriceTzs: Number(newPrice) || 3500,
@@ -2836,6 +2887,7 @@ export default function PharmacyDashboard({
                       );
                       setNewBrand("");
                       setNewGeneric("");
+                      setNewFormulation("Tablet");
                       setCustomCatMode(false);
                       setNewImageUrl("");
                       setNewLotGs1("");

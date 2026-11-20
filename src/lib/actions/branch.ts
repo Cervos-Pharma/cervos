@@ -32,6 +32,7 @@ export interface BatchRow {
   expiry_date: string | null;
   product_generic: string | null;
   product_brand: string | null;
+  product_formulation?: string | null;
 }
 
 /**
@@ -177,7 +178,7 @@ export async function getBranchInventory(): Promise<BatchRow[]> {
   const service = await createServiceClient();
   const { data } = await service
     .from("batches")
-    .select("id, product_id, quantity, cost_price, sale_price, expiry_date, products(generic_name, brand_name)")
+    .select("id, product_id, quantity, cost_price, sale_price, expiry_date, products(generic_name, brand_name, formulation)")
     .eq("branch_id", session.branch.id)
     .order("expiry_date", { ascending: true });
 
@@ -188,7 +189,7 @@ export async function getBranchInventory(): Promise<BatchRow[]> {
     cost_price: number | null;
     sale_price: number | null;
     expiry_date: string | null;
-    products: { generic_name: string; brand_name: string | null } | null;
+    products: { generic_name: string; brand_name: string | null; formulation: string | null } | null;
   }>).map((row) => ({
     id: row.id,
     product_id: row.product_id,
@@ -198,6 +199,7 @@ export async function getBranchInventory(): Promise<BatchRow[]> {
     expiry_date: row.expiry_date,
     product_generic: row.products?.generic_name ?? null,
     product_brand: row.products?.brand_name ?? null,
+    product_formulation: row.products?.formulation ?? null,
   }));
 }
 
@@ -393,7 +395,7 @@ export async function addBranchBatch(input: {
 export async function addPharmacyBranchBatch(input: {
   branchId: string;
   productId?: string;
-  newProduct?: { genericName: string; brandName?: string; category?: string };
+  newProduct?: { genericName: string; brandName?: string; category?: string; formulation?: string };
   quantity: number;
   expiryDate: string;
   costPrice?: number;
@@ -438,6 +440,7 @@ export async function addPharmacyBranchBatch(input: {
         generic_name: input.newProduct.genericName.trim(),
         brand_name: input.newProduct.brandName?.trim() || null,
         category: input.newProduct.category?.trim() || null,
+        formulation: input.newProduct.formulation?.trim() || null,
       })
       .select("id")
       .single();

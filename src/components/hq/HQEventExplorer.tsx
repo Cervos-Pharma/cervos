@@ -129,11 +129,10 @@ export default function HQEventExplorer({
         <button
           type="button"
           onClick={() => setCatFilter("ALL")}
-          className={`rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${
-            catFilter === "ALL"
-              ? "border-[#1039B9] ring-2 ring-[#1039B9]/15 " + cardCls
-              : chipCls
-          }`}
+          className={`rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${catFilter === "ALL"
+            ? "border-[#1039B9] ring-2 ring-[#1039B9]/15 " + cardCls
+            : chipCls
+            }`}
         >
           <div className={`text-[10px] font-bold uppercase tracking-wider ${mutedCls}`}>
             All Events
@@ -146,11 +145,10 @@ export default function HQEventExplorer({
             key={cat}
             type="button"
             onClick={() => setCatFilter(cat)}
-            className={`rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${
-              catFilter === cat
-                ? "border-[#1039B9] ring-2 ring-[#1039B9]/15 " + cardCls
-                : chipCls
-            }`}
+            className={`rounded-2xl border p-3.5 text-left transition-all cursor-pointer ${catFilter === cat
+              ? "border-[#1039B9] ring-2 ring-[#1039B9]/15 " + cardCls
+              : chipCls
+              }`}
           >
             <div className="flex items-center justify-between gap-1">
               <span className="text-[10px] font-mono font-bold uppercase">{cat}</span>
@@ -224,9 +222,8 @@ export default function HQEventExplorer({
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`px-2 py-0.5 rounded-full border font-mono text-[10px] font-bold ${
-                          CATEGORY_STYLE[ev.category]
-                        }`}
+                        className={`px-2 py-0.5 rounded-full border font-mono text-[10px] font-bold ${CATEGORY_STYLE[ev.category]
+                          }`}
                       >
                         {ev.category}
                       </span>

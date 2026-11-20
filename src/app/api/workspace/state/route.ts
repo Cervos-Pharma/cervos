@@ -1228,6 +1228,7 @@ export async function POST(request: NextRequest) {
         return noStoreJson({ error: "Medicine name is required." }, { status: 400 });
       }
       const resolvedCategory = sanitizeText(body.category, 40) || "Essential";
+      const formulation = sanitizeText(body.formulation, 40) || undefined;
       recordCustomDrugCategory(account, resolvedCategory);
       const segment = inferCatalogSegment(`${resolvedCategory} ${genericName} ${brandName}`);
       const catalogEntry = recordCloudCatalogProduct(db, {
@@ -1235,6 +1236,7 @@ export async function POST(request: NextRequest) {
         brandName,
         genericName,
         category: resolvedCategory,
+        formulation,
         costPriceTzs,
         salePriceTzs,
         lowStockThreshold,
@@ -1250,6 +1252,7 @@ export async function POST(request: NextRequest) {
         genericName,
         brandName,
         category: resolvedCategory,
+        formulation,
         batchNumber,
         quantity: qty,
         costPriceTzs,
@@ -1283,6 +1286,7 @@ export async function POST(request: NextRequest) {
       const brandName = sanitizeText(body.brandName, 80);
       const genericName = sanitizeText(body.genericName, 80);
       const category = sanitizeText(body.category, 40);
+      const formulation = sanitizeText(body.formulation, 40);
       const batchNumber = sanitizeText(body.batchNumber, 40);
       if (brandName.length >= 2) batch.brandName = brandName;
       if (genericName.length >= 2) batch.genericName = genericName;
@@ -1290,6 +1294,7 @@ export async function POST(request: NextRequest) {
         batch.category = category;
         recordCustomDrugCategory(account, category);
       }
+      if (body.formulation !== undefined) batch.formulation = formulation || undefined;
       if (batchNumber.length >= 2) batch.batchNumber = batchNumber;
       if (body.quantity !== undefined) batch.quantity = Math.max(0, Math.min(10000, Math.round(Number(body.quantity) || 0)));
       if (body.costPriceTzs !== undefined) batch.costPriceTzs = Math.max(50, Math.round(Number(body.costPriceTzs) || batch.costPriceTzs));

@@ -351,6 +351,8 @@ export interface CatalogProduct {
   sku: string;
   /** Therapeutic category. */
   category: string;
+  /** Pharmaceutical formulation (e.g. "Tablet", "Syrup", "Suppository"). */
+  formulation?: string;
   /** Pack size description, e.g. "30 tablets". */
   packSize: string;
   /** Unit price in the listing's currency. */
@@ -382,6 +384,8 @@ export interface MarketplaceProduct {
   genericName: string;
   /** Therapeutic category. */
   category: string;
+  /** Pharmaceutical formulation (e.g. "Tablet", "Syrup", "Suppository"). */
+  formulation?: string;
   /** Pack size description. */
   packSize: string;
   /** Unit price. */

@@ -26,6 +26,7 @@ export interface BatchRow {
   productName: string;
   genericName: string;
   category?: string;
+  formulation?: string;
   batchNo: string;
   /** Branch id */
   branchId?: string;
@@ -60,6 +61,7 @@ interface ProductSummary {
   productName: string;
   genericName: string;
   category: string;
+  formulation?: string;
   totalQuantity: number;
   batchCount: number;
   earliestExpiry: string;
@@ -145,6 +147,7 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
           productName: b.productName,
           genericName: b.genericName,
           category: b.category || "General",
+          formulation: b.formulation,
           totalQuantity: 0,
           batchCount: 0,
           earliestExpiry: b.expiryDate,
@@ -544,6 +547,11 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
                       <div className="font-semibold text-body-sm text-ink-deep">{row.productName}</div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="font-mono text-[11px] text-on-surface-variant">{row.genericName}</span>
+                        {row.formulation && (
+                          <span className="px-1.5 py-0.2 bg-primary-container/20 text-primary-container font-medium text-[10px] rounded border border-primary-container/30">
+                            {row.formulation}
+                          </span>
+                        )}
                         {row.category && (
                           <span className="px-1.5 py-0.2 bg-surface-container text-[10px] text-on-surface-variant rounded">
                             {row.category}
@@ -678,7 +686,14 @@ export default function InventoryTable({ batches, branches, initialBranchId }: I
                   >
                     <td className="px-4 py-3">
                       <div className="font-semibold text-body-sm text-ink-deep">{prod.productName}</div>
-                      <div className="font-mono text-[11px] text-on-surface-variant mt-0.5">{prod.genericName}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-mono text-[11px] text-on-surface-variant">{prod.genericName}</span>
+                        {prod.formulation && (
+                          <span className="px-1.5 py-0.2 bg-primary-container/20 text-primary-container font-medium text-[10px] rounded border border-primary-container/30">
+                            {prod.formulation}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-body-sm text-on-surface-variant">
                       <span className="px-2 py-0.5 bg-surface-container rounded text-xs">

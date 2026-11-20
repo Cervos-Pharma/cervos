@@ -28,6 +28,7 @@ export interface CloudCatalogProduct {
   category: string;
   strength?: string;
   form?: string;
+  formulation?: string;
   barcodes: string[];
   defaultCostTzs: number;
   defaultSaleTzs: number;

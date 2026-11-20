@@ -218,6 +218,7 @@ export interface WorkspaceStockBatch {
   genericName: string;
   brandName: string;
   category: string;
+  formulation?: string;
   batchNumber: string;
   quantity: number;
   costPriceTzs: number;
@@ -2177,6 +2178,7 @@ export function recordCloudCatalogProduct(
     brandName: string;
     genericName: string;
     category: string;
+    formulation?: string;
     costPriceTzs?: number;
     salePriceTzs?: number;
     lowStockThreshold?: number;
@@ -2203,6 +2205,10 @@ export function recordCloudCatalogProduct(
     if (normCode && !existing.barcodes.includes(normCode)) {
       existing.barcodes.push(normCode);
     }
+    if (input.formulation) {
+      existing.form = input.formulation;
+      existing.formulation = input.formulation;
+    }
     if (input.costPriceTzs && input.costPriceTzs > 0) existing.defaultCostTzs = input.costPriceTzs;
     if (input.salePriceTzs && input.salePriceTzs > 0) existing.defaultSaleTzs = input.salePriceTzs;
     if (input.lowStockThreshold && input.lowStockThreshold > 0) existing.defaultThreshold = input.lowStockThreshold;
@@ -2217,6 +2223,8 @@ export function recordCloudCatalogProduct(
     inn: cleanInn,
     brandName: cleanBrand,
     category: input.category.trim() || "Essential",
+    form: input.formulation || undefined,
+    formulation: input.formulation || undefined,
     barcodes: normCode ? [normCode] : [],
     defaultCostTzs: Math.max(50, Math.round(input.costPriceTzs || 2500)),
     defaultSaleTzs: Math.max(100, Math.round(input.salePriceTzs || 3500)),
