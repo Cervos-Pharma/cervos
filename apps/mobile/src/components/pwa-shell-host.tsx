@@ -221,8 +221,10 @@ export function PwaShellHost() {
 
   const handleShouldStartLoad = (request: { url: string }) => {
     const url = request.url || "";
+    const wwwBase = API_BASE.replace("://", "://www.");
     if (
       url.startsWith(API_BASE) ||
+      url.startsWith(wwwBase) ||
       url.startsWith("about:") ||
       url.startsWith("blob:") ||
       url.startsWith("data:")
@@ -237,7 +239,7 @@ export function PwaShellHost() {
   };
 
   return (
-    <SafeAreaView style={styles.root} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.root} edges={["top", "right", "bottom", "left"]}>
       <StatusBar barStyle="dark-content" />
 
       {!isOnline && (
@@ -269,8 +271,15 @@ export function PwaShellHost() {
           setLoading(false);
           setLoadError(syntheticEvent.nativeEvent?.description || "Unable to connect to Cervos server.");
         }}
+        onRenderProcessGone={() => {
+          setLoading(true);
+          webViewRef.current?.reload();
+        }}
+        originWhitelist={["https://*", "http://*", "about:*", "data:*", "blob:*"]}
         javaScriptEnabled
         domStorageEnabled
+        allowFileAccess
+        textZoom={100}
         cacheEnabled
         cacheMode={isOnline ? "LOAD_DEFAULT" : "LOAD_CACHE_ELSE_NETWORK"}
         sharedCookiesEnabled
